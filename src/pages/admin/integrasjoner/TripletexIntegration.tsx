@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { RefreshCw, CheckCircle, XCircle, Users, FolderOpen, Activity, Clock } from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, Users, FolderOpen, Activity, Clock, Settings, Eye, EyeOff } from 'lucide-react';
 import OnboardingDialog from '@/components/OnboardingDialog';
 
 const TripletexIntegration = () => {
@@ -20,6 +21,12 @@ const TripletexIntegration = () => {
   const [nightlySync, setNightlySync] = useState(false);
   const [tokenConfig, setTokenConfig] = useState<any>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showTokens, setShowTokens] = useState(false);
+  const [tokenForm, setTokenForm] = useState({
+    consumerToken: '',
+    employeeToken: '',
+    apiBaseUrl: 'https://api-test.tripletex.tech/v2'
+  });
 
   useEffect(() => {
     if (user) {
@@ -77,6 +84,17 @@ const TripletexIntegration = () => {
       if (data?.settings && typeof data.settings === 'object' && 'nightly_sync' in data.settings) {
         setNightlySync(data.settings.nightly_sync as boolean);
       }
+      
+      // Load existing tokens if they exist
+      if (data?.settings) {
+        const settings = data.settings as any;
+        setTokenForm({
+          consumerToken: settings.consumer_token || '',
+          employeeToken: settings.employee_token || '',
+          apiBaseUrl: settings.api_base_url || 'https://api-test.tripletex.tech/v2'
+        });
+      }
+      
       // Refresh token config when integration settings change
       checkTokenConfig();
     } catch (error) {
@@ -220,11 +238,67 @@ const TripletexIntegration = () => {
     loadUserProfile(); // Reload profile after onboarding
   };
 
+  const saveTokens = async () => {
+    if (!profile?.org_id) return;
+
+    if (!tokenForm.consumerToken.trim() || !tokenForm.employeeToken.trim()) {
+      toast({
+        title: "Manglende tokens",
+        description: "Både Consumer Token og Employee Token må fylles inn.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading({ ...loading, saveTokens: true });
+    try {
+      const settings = {
+        ...(integrationSettings?.settings || {}),
+        consumer_token: tokenForm.consumerToken.trim(),
+        employee_token: tokenForm.employeeToken.trim(),
+        api_base_url: tokenForm.apiBaseUrl.trim(),
+        nightly_sync: nightlySync
+      };
+
+      const { error } = await supabase
+        .from('integration_settings')
+        .upsert({
+          org_id: profile.org_id,
+          integration_type: 'tripletex',
+          settings,
+          aktiv: true
+        }, { 
+          onConflict: 'org_id,integration_type' 
+        });
+
+      if (error) throw error;
+
+      setIntegrationSettings({ ...integrationSettings, settings, aktiv: true });
+
+      toast({
+        title: "Tokens lagret",
+        description: "Tripletex API-tokens er oppdatert og lagret sikkert."
+      });
+
+      // Refresh token config to reflect changes
+      checkTokenConfig();
+    } catch (error: any) {
+      toast({
+        title: "Feil ved lagring av tokens",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading({ ...loading, saveTokens: false });
+    }
+  };
+
   const toggleNightlySync = async (enabled: boolean) => {
     if (!profile?.org_id) return;
 
     try {
       const settings = {
+        ...(integrationSettings?.settings || {}),
         nightly_sync: enabled,
         sync_time: '02:00'
       };
@@ -301,6 +375,96 @@ const TripletexIntegration = () => {
           </Badge>
         </div>
 
+        {/* API Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              API-konfigurasjon
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="apiBaseUrl">API Base URL</Label>
+              <Input
+                id="apiBaseUrl"
+                value={tokenForm.apiBaseUrl}
+                onChange={(e) => setTokenForm({ ...tokenForm, apiBaseUrl: e.target.value })}
+                placeholder="https://api-test.tripletex.tech/v2"
+              />
+              <p className="text-xs text-muted-foreground">
+                Test: https://api-test.tripletex.tech/v2 | Prod: https://api.tripletex.tech/v2
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="consumerToken">Consumer Token</Label>
+              <div className="relative">
+                <Input
+                  id="consumerToken"
+                  type={showTokens ? "text" : "password"}
+                  value={tokenForm.consumerToken}
+                  onChange={(e) => setTokenForm({ ...tokenForm, consumerToken: e.target.value })}
+                  placeholder="Din Consumer Token fra Tripletex"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowTokens(!showTokens)}
+                >
+                  {showTokens ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="employeeToken">Employee Token</Label>
+              <div className="relative">
+                <Input
+                  id="employeeToken"
+                  type={showTokens ? "text" : "password"}
+                  value={tokenForm.employeeToken}
+                  onChange={(e) => setTokenForm({ ...tokenForm, employeeToken: e.target.value })}
+                  placeholder="Din Employee Token fra Tripletex"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowTokens(!showTokens)}
+                >
+                  {showTokens ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-muted/50 p-3 rounded-lg text-sm">
+              <p className="font-medium mb-1">📋 Slik får du API-tokens fra Tripletex:</p>
+              <p className="text-muted-foreground">
+                1. Logg inn på Tripletex → Innstillinger → Integrasjoner<br/>
+                2. Opprett ny integrasjon → Velg "Egendefinert integrasjon"<br/>
+                3. Kopier Consumer Token og Employee Token herfra
+              </p>
+            </div>
+
+            <Button 
+              onClick={saveTokens}
+              disabled={loading.saveTokens}
+              className="w-full"
+            >
+              {loading.saveTokens ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4 mr-2" />
+              )}
+              Lagre API-konfigurasjon
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* API Session Test */}
         <Card>
           <CardHeader>
@@ -313,9 +477,9 @@ const TripletexIntegration = () => {
             <div className="flex items-center gap-4">
               <Button 
                 onClick={testAPISession}
-                disabled={loading.testSession || (!tokenConfig?.hasConsumerToken || !tokenConfig?.hasEmployeeToken)}
+                disabled={loading.testSession || (!tokenForm.consumerToken || !tokenForm.employeeToken)}
                 variant="outline"
-                title={(!tokenConfig?.hasConsumerToken || !tokenConfig?.hasEmployeeToken) ? "Fyll inn tokens først" : ""}
+                title={(!tokenForm.consumerToken || !tokenForm.employeeToken) ? "Fyll inn tokens først" : ""}
               >
                 {loading.testSession ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -454,14 +618,20 @@ const TripletexIntegration = () => {
             <div className="flex justify-between">
               <span>Consumer Token:</span>
               <Badge variant="outline">
-                {tokenConfig?.hasConsumerToken ? '✓ Konfigurert' : '✗ Mangler'}
+                {tokenForm.consumerToken ? '✓ Konfigurert' : '✗ Mangler'}
               </Badge>
             </div>
             <div className="flex justify-between">
               <span>Employee Token:</span>
               <Badge variant="outline">
-                {tokenConfig?.hasEmployeeToken ? '✓ Konfigurert' : '✗ Mangler'}
+                {tokenForm.employeeToken ? '✓ Konfigurert' : '✗ Mangler'}
               </Badge>
+            </div>
+            <div className="flex justify-between">
+              <span>API Base URL:</span>
+              <span className="text-sm text-muted-foreground">
+                {tokenForm.apiBaseUrl}
+              </span>
             </div>
             <div className="flex justify-between">
               <span>Sist synkronisert:</span>

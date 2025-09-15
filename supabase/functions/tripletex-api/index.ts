@@ -22,7 +22,27 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-async function getTripletexConfig(): Promise<TripletexConfig> {
+async function getTripletexConfig(orgId: string): Promise<TripletexConfig> {
+  // First, try to get tokens from integration settings for this org
+  const { data: settings } = await supabase
+    .from('integration_settings')
+    .select('settings')
+    .eq('org_id', orgId)
+    .eq('integration_type', 'tripletex')
+    .maybeSingle();
+
+  if (settings?.settings) {
+    const orgSettings = settings.settings as any;
+    if (orgSettings.consumer_token && orgSettings.employee_token) {
+      return {
+        consumerToken: orgSettings.consumer_token,
+        employeeToken: orgSettings.employee_token,
+        baseUrl: orgSettings.api_base_url || 'https://api-test.tripletex.tech/v2'
+      };
+    }
+  }
+
+  // Fallback to environment variables (legacy)
   return {
     consumerToken: Deno.env.get('TRIPLETEX_CONSUMER_TOKEN') ?? '',
     employeeToken: Deno.env.get('TRIPLETEX_EMPLOYEE_TOKEN') ?? '',
@@ -30,11 +50,11 @@ async function getTripletexConfig(): Promise<TripletexConfig> {
   };
 }
 
-async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: any): Promise<TripletexResponse> {
-  const config = await getTripletexConfig();
+async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: any, orgId?: string): Promise<TripletexResponse> {
+  const config = await getTripletexConfig(orgId || '');
   
   if (!config.consumerToken || !config.employeeToken) {
-    return { success: false, error: 'Tripletex tokens not configured' };
+    return { success: false, error: 'Tripletex tokens not configured for this organization' };
   }
 
   const url = `${config.baseUrl}${endpoint}`;
@@ -111,7 +131,7 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'check-config':
-        const config = await getTripletexConfig();
+        const config = await getTripletexConfig(orgId);
         result = {
           success: true,
           data: {
@@ -124,15 +144,15 @@ Deno.serve(async (req) => {
 
       case 'test-session':
         result = await callTripletexAPI('/token/session/:create', 'PUT', {
-          consumerToken: (await getTripletexConfig()).consumerToken,
-          employeeToken: (await getTripletexConfig()).employeeToken,
+          consumerToken: (await getTripletexConfig(orgId)).consumerToken,
+          employeeToken: (await getTripletexConfig(orgId)).employeeToken,
           expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 24 hours
-        });
+        }, orgId);
         break;
 
       case 'sync-employees':
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/employee?count=1000');
+          const response = await callTripletexAPI('/employee?count=1000', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             // Cache employees in database
             const employees = response.data.values.map((emp: any) => ({
