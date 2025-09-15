@@ -9,6 +9,8 @@ import { ChevronLeft, ChevronRight, Calendar, Eye } from 'lucide-react';
 import { getDateFromWeek, getWeekNumber, getPersonDisplayName } from '@/lib/displayNames';
 import DayCard from '@/components/DayCard';
 
+import OnboardingDialog from '@/components/OnboardingDialog';
+
 const MinUke = () => {
   const { year, week } = useParams<{ year: string; week: string }>();
   const navigate = useNavigate();
@@ -17,6 +19,7 @@ const MinUke = () => {
   const [person, setPerson] = useState<any>(null);
   const [showFullWeek, setShowFullWeek] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const currentYear = parseInt(year || new Date().getFullYear().toString());
   const currentWeek = parseInt(week || getWeekNumber(new Date()).toString());
@@ -36,9 +39,19 @@ const MinUke = () => {
         .from('profiles')
         .select('*, org:org_id (name)')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (profileError) throw profileError;
+      if (profileError && profileError.code !== 'PGRST116') {
+        throw profileError;
+      }
+
+      if (!profileData) {
+        console.warn('No profile found for user');
+        setShowOnboarding(true);
+        setLoading(false);
+        return;
+      }
+
       setProfile(profileData);
 
       // For now, assume user is also a person in the system
@@ -48,18 +61,24 @@ const MinUke = () => {
         .select('*')
         .eq('org_id', profileData.org_id)
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (personError) {
-        console.warn('No person found for user:', personError);
-      } else {
+      if (personError && personError.code !== 'PGRST116') {
+        console.warn('Error loading person:', personError);
+      } else if (personData) {
         setPerson(personData);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
+      setShowOnboarding(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    loadUserData();
   };
 
   const navigateWeek = (delta: number) => {
@@ -95,6 +114,10 @@ const MinUke = () => {
     return date.toDateString() === today.toDateString();
   };
 
+  if (showOnboarding) {
+    return <OnboardingDialog onComplete={handleOnboardingComplete} />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background p-4">
@@ -110,10 +133,14 @@ const MinUke = () => {
       <div className="min-h-screen bg-background p-4">
         <div className="max-w-7xl mx-auto">
           <Card>
-            <CardContent className="p-6">
-              <p className="text-center text-muted-foreground">
-                Du må være tilknyttet en organisasjon for å bruke denne funksjonen.
+            <CardContent className="p-6 text-center space-y-4">
+              <h2 className="text-xl font-semibold">Profil mangler</h2>
+              <p className="text-muted-foreground">
+                Du må opprette en profil og være tilknyttet en organisasjon for å bruke "Min uke".
               </p>
+              <Button onClick={() => setShowOnboarding(true)}>
+                Sett opp organisasjon
+              </Button>
             </CardContent>
           </Card>
         </div>
