@@ -88,6 +88,7 @@ export type Database = {
           created_at: string
           etternavn: string
           fornavn: string
+          forventet_dagstimer: number | null
           id: string
           org_id: string
           updated_at: string
@@ -97,6 +98,7 @@ export type Database = {
           created_at?: string
           etternavn: string
           fornavn: string
+          forventet_dagstimer?: number | null
           id?: string
           org_id: string
           updated_at?: string
@@ -106,6 +108,7 @@ export type Database = {
           created_at?: string
           etternavn?: string
           fornavn?: string
+          forventet_dagstimer?: number | null
           id?: string
           org_id?: string
           updated_at?: string
@@ -116,6 +119,62 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      person_prosjekt_pref: {
+        Row: {
+          id: string
+          last_aktivitet_id: string | null
+          org_id: string
+          person_id: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          last_aktivitet_id?: string | null
+          org_id: string
+          person_id: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          last_aktivitet_id?: string | null
+          org_id?: string
+          person_id?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "person_prosjekt_pref_last_aktivitet_id_fkey"
+            columns: ["last_aktivitet_id"]
+            isOneToOne: false
+            referencedRelation: "ttx_activity_cache"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_prosjekt_pref_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_prosjekt_pref_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "person"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_prosjekt_pref_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "ttx_project_cache"
             referencedColumns: ["id"]
           },
         ]
@@ -151,6 +210,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ttx_activity_cache: {
+        Row: {
+          aktiv: boolean | null
+          created_at: string
+          id: string
+          last_synced: string | null
+          navn: string
+          org_id: string
+          ttx_id: number | null
+          updated_at: string
+        }
+        Insert: {
+          aktiv?: boolean | null
+          created_at?: string
+          id?: string
+          last_synced?: string | null
+          navn: string
+          org_id: string
+          ttx_id?: number | null
+          updated_at?: string
+        }
+        Update: {
+          aktiv?: boolean | null
+          created_at?: string
+          id?: string
+          last_synced?: string | null
+          navn?: string
+          org_id?: string
+          ttx_id?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ttx_activity_cache_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "org"
@@ -304,6 +404,70 @@ export type Database = {
           },
           {
             foreignKeyName: "vakt_kommentar_vakt_id_fkey"
+            columns: ["vakt_id"]
+            isOneToOne: false
+            referencedRelation: "vakt"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vakt_timer: {
+        Row: {
+          aktivitet_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          lonnstype: string | null
+          notat: string | null
+          org_id: string
+          status: string | null
+          timer: number
+          updated_at: string
+          vakt_id: string
+        }
+        Insert: {
+          aktivitet_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lonnstype?: string | null
+          notat?: string | null
+          org_id: string
+          status?: string | null
+          timer: number
+          updated_at?: string
+          vakt_id: string
+        }
+        Update: {
+          aktivitet_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lonnstype?: string | null
+          notat?: string | null
+          org_id?: string
+          status?: string | null
+          timer?: number
+          updated_at?: string
+          vakt_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vakt_timer_aktivitet_id_fkey"
+            columns: ["aktivitet_id"]
+            isOneToOne: false
+            referencedRelation: "ttx_activity_cache"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vakt_timer_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vakt_timer_vakt_id_fkey"
             columns: ["vakt_id"]
             isOneToOne: false
             referencedRelation: "vakt"
