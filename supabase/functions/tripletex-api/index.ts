@@ -97,7 +97,7 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
   const expirationDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   console.log('Creating new Tripletex session for org', orgId, 'expiring', expirationDate);
 
-  const resp = await fetch(`${config.baseUrl}/token/session/:create`, {
+  const resp = await fetch(`${config.baseUrl}/token/session/create`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
