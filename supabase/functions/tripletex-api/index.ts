@@ -94,15 +94,14 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
   }
 
   // Create new session
-  const expirationDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const defaultDays = Number(Deno.env.get('SESSION_DEFAULT_DAYS') ?? '7');
+  const expirationDate = new Date(Date.now() + defaultDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   console.log('Creating new Tripletex session for org', orgId, 'expiring', expirationDate);
 
   const resp = await fetch(`${config.baseUrl}/token/session/create`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Basic ${btoa(`${config.consumerToken}:${config.employeeToken}`)}` },
     body: JSON.stringify({
-      consumerToken: config.consumerToken,
-      employeeToken: config.employeeToken,
       expirationDate
     })
   });
