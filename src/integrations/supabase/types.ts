@@ -58,6 +58,44 @@ export type Database = {
           },
         ]
       }
+      integration_settings: {
+        Row: {
+          aktiv: boolean | null
+          created_at: string
+          id: string
+          integration_type: string
+          org_id: string
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          aktiv?: boolean | null
+          created_at?: string
+          id?: string
+          integration_type: string
+          org_id: string
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          aktiv?: boolean | null
+          created_at?: string
+          id?: string
+          integration_type?: string
+          org_id?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org: {
         Row: {
           created_at: string
@@ -86,31 +124,37 @@ export type Database = {
         Row: {
           aktiv: boolean
           created_at: string
+          epost: string | null
           etternavn: string
           fornavn: string
           forventet_dagstimer: number | null
           id: string
           org_id: string
+          tripletex_employee_id: number | null
           updated_at: string
         }
         Insert: {
           aktiv?: boolean
           created_at?: string
+          epost?: string | null
           etternavn: string
           fornavn: string
           forventet_dagstimer?: number | null
           id?: string
           org_id: string
+          tripletex_employee_id?: number | null
           updated_at?: string
         }
         Update: {
           aktiv?: boolean
           created_at?: string
+          epost?: string | null
           etternavn?: string
           fornavn?: string
           forventet_dagstimer?: number | null
           id?: string
           org_id?: string
+          tripletex_employee_id?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -258,6 +302,53 @@ export type Database = {
           },
         ]
       }
+      ttx_employee_cache: {
+        Row: {
+          aktiv: boolean | null
+          created_at: string
+          epost: string | null
+          etternavn: string
+          fornavn: string
+          id: string
+          last_synced: string | null
+          org_id: string
+          tripletex_employee_id: number
+          updated_at: string
+        }
+        Insert: {
+          aktiv?: boolean | null
+          created_at?: string
+          epost?: string | null
+          etternavn: string
+          fornavn: string
+          id?: string
+          last_synced?: string | null
+          org_id: string
+          tripletex_employee_id: number
+          updated_at?: string
+        }
+        Update: {
+          aktiv?: boolean | null
+          created_at?: string
+          epost?: string | null
+          etternavn?: string
+          fornavn?: string
+          id?: string
+          last_synced?: string | null
+          org_id?: string
+          tripletex_employee_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ttx_employee_cache_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ttx_project_cache: {
         Row: {
           created_at: string
@@ -268,6 +359,7 @@ export type Database = {
           org_id: string
           project_name: string | null
           project_number: number | null
+          tripletex_project_id: number | null
           updated_at: string
         }
         Insert: {
@@ -279,6 +371,7 @@ export type Database = {
           org_id: string
           project_name?: string | null
           project_number?: number | null
+          tripletex_project_id?: number | null
           updated_at?: string
         }
         Update: {
@@ -290,6 +383,7 @@ export type Database = {
           org_id?: string
           project_name?: string | null
           project_number?: number | null
+          tripletex_project_id?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -315,6 +409,7 @@ export type Database = {
           slutt_tid: string | null
           start_tid: string | null
           timer: number | null
+          tripletex_project_id: number | null
           updated_at: string
         }
         Insert: {
@@ -329,6 +424,7 @@ export type Database = {
           slutt_tid?: string | null
           start_tid?: string | null
           timer?: number | null
+          tripletex_project_id?: number | null
           updated_at?: string
         }
         Update: {
@@ -343,6 +439,7 @@ export type Database = {
           slutt_tid?: string | null
           start_tid?: string | null
           timer?: number | null
+          tripletex_project_id?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -414,40 +511,49 @@ export type Database = {
       vakt_timer: {
         Row: {
           aktivitet_id: string | null
+          client_reference: string | null
           created_at: string
           created_by: string | null
           id: string
+          kilde: string | null
           lonnstype: string | null
           notat: string | null
           org_id: string
           status: string | null
           timer: number
+          tripletex_entry_id: number | null
           updated_at: string
           vakt_id: string
         }
         Insert: {
           aktivitet_id?: string | null
+          client_reference?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          kilde?: string | null
           lonnstype?: string | null
           notat?: string | null
           org_id: string
           status?: string | null
           timer: number
+          tripletex_entry_id?: number | null
           updated_at?: string
           vakt_id: string
         }
         Update: {
           aktivitet_id?: string | null
+          client_reference?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          kilde?: string | null
           lonnstype?: string | null
           notat?: string | null
           org_id?: string
           status?: string | null
           timer?: number
+          tripletex_entry_id?: number | null
           updated_at?: string
           vakt_id?: string
         }
@@ -531,7 +637,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_client_reference: {
+        Args: { org_uuid: string; timer_uuid: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
