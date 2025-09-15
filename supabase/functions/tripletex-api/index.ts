@@ -117,8 +117,28 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get('action');
-    const orgId = url.searchParams.get('orgId');
+    // Try to extract action and orgId from URL or request body (supports both styles)
+    let action = url.searchParams.get('action');
+    let orgId = url.searchParams.get('orgId');
+
+    let payload: any = {};
+    try {
+      // Try to read JSON body once and reuse for all cases
+      payload = await req.json();
+    } catch (_) {
+      // No JSON body provided
+    }
+
+    if (!action) {
+      if (payload?.action) action = payload.action;
+      else if (payload?.params) {
+        const p = new URLSearchParams(payload.params as string);
+        action = p.get('action') || action;
+        orgId = orgId || p.get('orgId') || undefined;
+      }
+    }
+
+    if (!orgId && payload?.orgId) orgId = payload.orgId;
 
     if (!action || !orgId) {
       return new Response(JSON.stringify({ error: 'Missing action or orgId parameter' }), {
@@ -250,7 +270,7 @@ Deno.serve(async (req) => {
 
       case 'search-projects':
         const query = url.searchParams.get('q') || '';
-        result = await callTripletexAPI(`/project?count=50&displayName=${encodeURIComponent(query)}`);
+        result = await callTripletexAPI(`/project?count=50&displayName=${encodeURIComponent(query)}`, 'GET', undefined, orgId);
         
         // Cache search results
         if (result.success && result.data?.values) {
@@ -274,8 +294,8 @@ Deno.serve(async (req) => {
         break;
 
       case 'export-timesheet':
-        const requestBody = await req.json();
-        const { timesheetEntries, dryRun = false } = requestBody;
+        const timesheetEntries = payload?.timesheetEntries;
+        const dryRun = payload?.dryRun === true;
 
         if (!timesheetEntries || !Array.isArray(timesheetEntries)) {
           return new Response(JSON.stringify({ error: 'Missing timesheetEntries array' }), {
@@ -395,8 +415,7 @@ Deno.serve(async (req) => {
         break;
 
       case 'verify-timesheet-entry':
-        const verifyBody = await req.json();
-        const { tripletexEntryId } = verifyBody;
+        const tripletexEntryId = payload?.tripletexEntryId;
 
         if (!tripletexEntryId) {
           return new Response(JSON.stringify({ error: 'Missing tripletexEntryId' }), {
@@ -405,7 +424,7 @@ Deno.serve(async (req) => {
           });
         }
 
-        const verifyResult = await callTripletexAPI(`/timesheet/hours/${tripletexEntryId}`);
+        const verifyResult = await callTripletexAPI(`/timesheet/hours/${tripletexEntryId}`, 'GET', undefined, orgId);
         result = { 
           success: true, 
           data: { 
