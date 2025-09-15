@@ -43,6 +43,21 @@ function safeBody(body: any) {
   return out;
 }
 
+// NEW: decode base64-JSON -> .token if applicable
+function maybeDecodeToken(raw: string): string {
+  if (!raw) return raw;
+  const s = raw.trim();
+  const looksB64 = /^[A-Za-z0-9+/=]+$/.test(s) && s.length % 4 === 0;
+  if (!looksB64) return s;
+  try {
+    const txt = atob(s);
+    const obj = JSON.parse(txt);
+    return (obj && typeof obj.token === 'string' && obj.token) ? obj.token : s;
+  } catch {
+    return s;
+  }
+}
+
 async function getTripletexConfig(orgId: string): Promise<TripletexConfig> {
   console.log('getTripletexConfig called with orgId:', orgId);
   
@@ -117,29 +132,36 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
   // Create new session
   const defaultDays = Number(Deno.env.get('SESSION_DEFAULT_DAYS') ?? '7');
   const expirationDate = new Date(Date.now() + defaultDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  // Decode tokens if they are base64-JSON
+  const consumerPlain = maybeDecodeToken(config.consumerToken);
+  const employeePlain = maybeDecodeToken(config.employeeToken);
+
+  // Build URL with query params (robust against body parsing issues)
+  const sessionUrl = new URL(`${config.baseUrl}/token/session/:create`);
+  sessionUrl.searchParams.set('consumerToken', consumerPlain);
+  sessionUrl.searchParams.set('employeeToken', employeePlain);
+  sessionUrl.searchParams.set('expirationDate', expirationDate);
+
   console.log('Creating new Tripletex session for org', orgId, 'expiring', expirationDate);
   console.log('Tripletex session request', {
-    url: `${config.baseUrl}/token/session/:create`,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: { consumerToken: '***masked***', employeeToken: '***masked***', expirationDate }
+    url: sessionUrl.toString(),
+    method: 'PUT'
   });
 
-  const resp = await fetch(`${config.baseUrl}/token/session/:create`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      consumerToken: config.consumerToken,
-      employeeToken: config.employeeToken,
-      expirationDate
-    })
+  const resp = await fetch(sessionUrl.toString(), {
+    method: 'PUT'
+    // no headers/body needed when using query params
   });
 
-  const data = await resp.json();
-  console.log('Tripletex session response', { status: resp.status, data });
+  const text = await resp.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch {}
+
+  console.log('Tripletex session response', { status: resp.status, bodyLen: text.length });
   if (!resp.ok) {
-    console.error('Failed to create Tripletex session:', { status: resp.status, data });
-    throw new Error(data?.message || 'Failed to create Tripletex session');
+    console.error('Failed to create Tripletex session:', { status: resp.status, body: text.slice(0, 500) });
+    throw new Error(data?.message || text || `Failed to create Tripletex session (HTTP ${resp.status})`);
   }
 
   // Try multiple shapes just in case
@@ -201,21 +223,30 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
       body: body ? JSON.stringify(body) : undefined
     });
 
-    const responseData = await response.json();
+    const text = await response.text();
+    let responseData: any = {};
+    try { responseData = JSON.parse(text); } catch {}
+
     console.log('Tripletex API response', { status: response.status, url });
 
     if (!response.ok) {
+      // Optional: throw on 429/5xx to let exponentialBackoff handle it
+      if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
+        const err: any = new Error(responseData?.message || `HTTP ${response.status}`);
+        err.status = response.status;
+        throw err;
+      }
       console.error('Tripletex API error:', response.status, responseData);
       return { 
         success: false, 
-        error: responseData.message || `HTTP ${response.status}` 
+        error: responseData?.message || `HTTP ${response.status}` 
       };
     }
 
     return { success: true, data: responseData };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Network error calling Tripletex API:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message ?? String(error) };
   }
 }
 
@@ -225,11 +256,11 @@ async function exponentialBackoff(fn: () => Promise<any>, maxRetries: number = 3
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
-    } catch (error) {
+    } catch (error: any) {
       if (i === maxRetries - 1) throw error;
       
-      // Check if it's a rate limit error (429) or server error (5xx)
-      if (error.status === 429 || (error.status >= 500 && error.status < 600)) {
+      const status = error?.status;
+      if (status === 429 || (status >= 500 && status < 600)) {
         console.log(`Retrying after ${delay}ms (attempt ${i + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2; // Exponential backoff
@@ -297,8 +328,8 @@ Deno.serve(async (req) => {
         try {
           const session = await getOrCreateSession(orgId);
           result = { success: true, data: { token: session.token, expirationDate: session.expirationDate } };
-        } catch (e) {
-          result = { success: false, error: (e as any).message || 'Failed to create session' };
+        } catch (e: any) {
+          result = { success: false, error: e.message || 'Failed to create session' };
         }
         break;
 
@@ -451,7 +482,8 @@ Deno.serve(async (req) => {
             const { data: activityData } = await supabase
               .from('ttx_activity_cache')
               .select('ttx_id')
-              .eq('id', entry.activityId)
+-             .eq('id', entry.activityId)
++             .eq('ttx_id', entry.activityId)
               .eq('org_id', orgId)
               .single();
 
@@ -533,7 +565,7 @@ Deno.serve(async (req) => {
                 });
               }
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error(`Error exporting timesheet entry ${entry.id}:`, error);
             exportResults.push({ 
               id: entry.id, 
@@ -577,7 +609,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in tripletex-api function:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
