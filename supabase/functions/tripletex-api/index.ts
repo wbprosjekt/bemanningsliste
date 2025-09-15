@@ -37,21 +37,30 @@ async function getTripletexConfig(orgId: string): Promise<TripletexConfig> {
 
   if (settings?.settings) {
     const orgSettings = settings.settings as any;
+    console.log('Processing org settings:', orgSettings);
     if (orgSettings.consumer_token && orgSettings.employee_token) {
-      return {
+      const config = {
         consumerToken: orgSettings.consumer_token,
         employeeToken: orgSettings.employee_token,
         baseUrl: orgSettings.api_base_url || 'https://api-test.tripletex.tech/v2'
       };
+      console.log('Returning config:', config);
+      return config;
     }
   }
 
   // Fallback to environment variables (legacy)
-  return {
+  const fallbackConfig = {
     consumerToken: Deno.env.get('TRIPLETEX_CONSUMER_TOKEN') ?? '',
     employeeToken: Deno.env.get('TRIPLETEX_EMPLOYEE_TOKEN') ?? '',
     baseUrl: Deno.env.get('TRIPLETEX_API_BASE') ?? 'https://api-test.tripletex.tech/v2'
   };
+  console.log('Using fallback config (env vars):', {
+    hasConsumerToken: !!fallbackConfig.consumerToken,
+    hasEmployeeToken: !!fallbackConfig.employeeToken,
+    baseUrl: fallbackConfig.baseUrl
+  });
+  return fallbackConfig;
 }
 
 async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: any, orgId?: string): Promise<TripletexResponse> {
@@ -167,9 +176,12 @@ Deno.serve(async (req) => {
         break;
 
       case 'test-session':
+        const config = await getTripletexConfig(orgId);
+        console.log('Config for test-session:', config);
+        
         result = await callTripletexAPI('/token/session/:create', 'PUT', {
-          consumerToken: (await getTripletexConfig(orgId)).consumerToken,
-          employeeToken: (await getTripletexConfig(orgId)).employeeToken,
+          consumerToken: config.consumerToken,
+          employeeToken: config.employeeToken,
           expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 24 hours
         }, orgId);
         break;
