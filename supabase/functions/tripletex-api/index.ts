@@ -23,13 +23,17 @@ const supabase = createClient(
 );
 
 async function getTripletexConfig(orgId: string): Promise<TripletexConfig> {
+  console.log('getTripletexConfig called with orgId:', orgId);
+  
   // First, try to get tokens from integration settings for this org
-  const { data: settings } = await supabase
+  const { data: settings, error } = await supabase
     .from('integration_settings')
     .select('settings')
     .eq('org_id', orgId)
     .eq('integration_type', 'tripletex')
     .maybeSingle();
+  
+  console.log('Integration settings query result:', { settings, error });
 
   if (settings?.settings) {
     const orgSettings = settings.settings as any;
