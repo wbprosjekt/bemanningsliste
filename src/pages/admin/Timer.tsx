@@ -18,7 +18,8 @@ import {
   User,
   MessageSquare,
   Paperclip,
-  RefreshCw
+  RefreshCw,
+  Download
 } from 'lucide-react';
 import { getPersonDisplayName, formatTimeValue } from '@/lib/displayNames';
 
@@ -321,6 +322,48 @@ const AdminTimer = () => {
       <Badge variant="outline">Intern</Badge>;
   };
 
+  const exportWeekCSV = async () => {
+    try {
+      const csvData = timerEntries.map(entry => ({
+        Ansatt: entry.vakt?.person ? 
+          getPersonDisplayName(entry.vakt.person.fornavn, entry.vakt.person.etternavn) : 
+          'Ukjent',
+        Dato: entry.vakt?.dato || '',
+        Prosjektnr: entry.vakt?.ttx_project_cache?.project_number || '',
+        Prosjektnavn: entry.vakt?.ttx_project_cache?.project_name || '',
+        Aktivitet: entry.ttx_activity_cache?.navn || '',
+        Lønnstype: entry.lonnstype,
+        Timer: entry.timer,
+        Notat: entry.notat || '',
+        Status: entry.status,
+        Kilde: entry.kilde,
+        Farge: '' // Could add project color here
+      }));
+
+      const csvContent = [
+        Object.keys(csvData[0] || {}).join(';'),
+        ...csvData.map(row => Object.values(row).join(';'))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `timer-eksport-${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+
+      toast({
+        title: "Eksport fullført",
+        description: "CSV-fil er lastet ned"
+      });
+    } catch (error) {
+      toast({
+        title: "Eksport feilet", 
+        description: "Kunne ikke eksportere data",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (!profile) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -439,6 +482,10 @@ const AdminTimer = () => {
                         <Send className="h-4 w-4 mr-2" />
                       )}
                       Send til Tripletex
+                    </Button>
+                    <Button onClick={exportWeekCSV} variant="outline" size="sm">
+                      <Download className="h-4 w-4 mr-2" />
+                      Eksporter CSV
                     </Button>
                   </div>
                 )}

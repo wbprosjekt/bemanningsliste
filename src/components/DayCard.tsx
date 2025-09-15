@@ -173,6 +173,17 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0 }: DayCardProps) 
 
   const getExpectedHours = () => {
     if (vakter.length === 0) return forventetTimer;
+    
+    // Check if this is a holiday/weekend and should have 0 expected hours
+    const dayOfWeek = date.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    
+    // TODO: Check against kalender_dag table for holidays
+    // For now, weekends have 0 expected hours
+    if (isWeekend) {
+      return 0;
+    }
+    
     return vakter[0]?.person?.forventet_dagstimer || forventetTimer;
   };
 
@@ -181,7 +192,14 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0 }: DayCardProps) 
     const expectedHours = getExpectedHours();
     const hasEntries = vakter.some(v => v.vakt_timer.length > 0);
 
-    if (!hasEntries && vakter.length > 0) {
+    // Don't show "Mangler timer" for holidays/weekends with 0 expected hours
+    if (expectedHours === 0) {
+      if (!hasEntries) {
+        return <Badge variant="outline">🌙 Helligdag/helg</Badge>;
+      }
+    }
+
+    if (!hasEntries && vakter.length > 0 && expectedHours > 0) {
       return <Badge variant="secondary">🟡 Mangler timer</Badge>;
     }
 

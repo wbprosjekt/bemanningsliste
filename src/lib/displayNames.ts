@@ -38,3 +38,59 @@ export const getDateFromWeek = (year: number, week: number): Date => {
   }
   return ISOweekStart;
 };
+
+// Holiday and calendar utilities
+export const isHoliday = async (date: Date, orgId?: string): Promise<{ isHoliday: boolean; name?: string }> => {
+  // This would connect to kalender_dag table
+  // For now, return basic weekend check
+  const dayOfWeek = date.getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  
+  return {
+    isHoliday: isWeekend,
+    name: isWeekend ? (dayOfWeek === 0 ? 'Søndag' : 'Lørdag') : undefined
+  };
+};
+
+// Project color utilities
+export const generateProjectColor = (projectId: number): string => {
+  // Generate deterministic color from project ID
+  const colors = [
+    '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+    '#06B6D4', '#84CC16', '#F97316', '#EC4899', '#6366F1'
+  ];
+  
+  return colors[projectId % colors.length];
+};
+
+export const getContrastColor = (hexColor: string): string => {
+  // Convert hex to RGB
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+  
+  // Calculate luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  
+  // Return black or white based on luminance
+  return luminance > 0.5 ? '#000000' : '#FFFFFF';
+};
+
+// Expected hours calculation with holiday support
+export const getExpectedHoursForDate = (
+  date: Date, 
+  defaultHours: number = 8.0, 
+  holidayHours: number = 0,
+  isHoliday: boolean = false
+): number => {
+  if (isHoliday) {
+    return holidayHours;
+  }
+  
+  const dayOfWeek = date.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) { // Weekend
+    return 0;
+  }
+  
+  return defaultHours;
+};
