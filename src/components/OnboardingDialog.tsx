@@ -35,42 +35,33 @@ const OnboardingDialog = ({ onComplete }: OnboardingDialogProps) => {
 
     setLoading(true);
     try {
-      // 1. Opprett organisasjon
-      const { data: orgData, error: orgError } = await supabase
-        .from('org')
-        .insert({
-          name: formData.orgName.trim(),
-          org_nr: formData.orgNumber.trim() || null
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.functions.invoke('onboarding-setup', {
+        body: {
+          orgName: formData.orgName.trim(),
+          orgNumber: formData.orgNumber.trim() || null,
+          displayName: formData.displayName.trim(),
+          role: formData.role,
+        },
+      });
 
-      if (orgError) throw orgError;
+      if (error) throw error;
 
-      // 2. Opprett profil
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          user_id: user.id,
-          org_id: orgData.id,
-          display_name: formData.displayName.trim(),
-          role: formData.role
-        });
-
-      if (profileError) throw profileError;
+      if (!data?.ok) {
+        throw new Error(data?.message || 'Kunne ikke fullføre oppsett');
+      }
 
       toast({
-        title: "Velkommen!",
-        description: `${formData.orgName} er opprettet og du er nå klar til å bruke systemet.`
+        title: 'Velkommen!',
+        description: `${formData.orgName} er opprettet og du er nå klar til å bruke systemet.`,
       });
 
       onComplete();
     } catch (error: any) {
       console.error('Setup error:', error);
       toast({
-        title: "Feil ved oppsett",
+        title: 'Feil ved oppsett',
         description: error.message,
-        variant: "destructive"
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
