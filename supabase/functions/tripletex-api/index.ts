@@ -26,7 +26,7 @@ async function getTripletexConfig(): Promise<TripletexConfig> {
   return {
     consumerToken: Deno.env.get('TRIPLETEX_CONSUMER_TOKEN') ?? '',
     employeeToken: Deno.env.get('TRIPLETEX_EMPLOYEE_TOKEN') ?? '',
-    baseUrl: 'https://tripletex.no/v2'
+    baseUrl: Deno.env.get('TRIPLETEX_API_BASE') ?? 'https://api-test.tripletex.tech/v2'
   };
 }
 
@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
 
       case 'export-timesheet':
         const requestBody = await req.json();
-        const { timesheetEntries } = requestBody;
+        const { timesheetEntries, dryRun = false } = requestBody;
 
         if (!timesheetEntries || !Array.isArray(timesheetEntries)) {
           return new Response(JSON.stringify({ error: 'Missing timesheetEntries array' }), {
@@ -256,17 +256,60 @@ Deno.serve(async (req) => {
 
         for (const entry of timesheetEntries) {
           try {
+            // Map employee and activity IDs from cache tables
+            const { data: employeeData } = await supabase
+              .from('person')
+              .select('tripletex_employee_id')
+              .eq('id', entry.personId)
+              .eq('org_id', orgId)
+              .single();
+
+            const { data: activityData } = await supabase
+              .from('ttx_activity_cache')
+              .select('ttx_id')
+              .eq('id', entry.activityId)
+              .eq('org_id', orgId)
+              .single();
+
+            if (!employeeData?.tripletex_employee_id) {
+              exportResults.push({ 
+                id: entry.id, 
+                success: false, 
+                error: 'Ansatt ikke koblet til Tripletex - synkroniser ansatte først' 
+              });
+              continue;
+            }
+
+            if (!activityData?.ttx_id) {
+              exportResults.push({ 
+                id: entry.id, 
+                success: false, 
+                error: 'Aktivitet ikke funnet - synkroniser aktiviteter først' 
+              });
+              continue;
+            }
+
             const clientReference = `${orgId}-${entry.id}`;
             
             const timesheetData = {
-              employee: { id: entry.employeeId },
+              employee: { id: employeeData.tripletex_employee_id },
               project: { id: entry.projectId },
-              activity: { id: entry.activityId },
+              activity: { id: activityData.ttx_id },
               date: entry.date,
               hours: entry.hours,
               comment: entry.comment || '',
               clientReference: clientReference
             };
+
+            if (dryRun) {
+              exportResults.push({ 
+                id: entry.id, 
+                success: true, 
+                dryRun: true,
+                payload: timesheetData
+              });
+              continue;
+            }
 
             const exportResult = await exponentialBackoff(async () => {
               return await callTripletexAPI('/timesheet/hours', 'POST', timesheetData);
@@ -290,7 +333,8 @@ Deno.serve(async (req) => {
               });
             } else {
               // Handle period locked error specifically
-              if (exportResult.error?.includes('locked') || exportResult.error?.includes('låst')) {
+              if (exportResult.error?.includes('locked') || exportResult.error?.includes('låst') || 
+                  exportResult.error?.includes('period is closed')) {
                 exportResults.push({ 
                   id: entry.id, 
                   success: false, 
@@ -316,6 +360,27 @@ Deno.serve(async (req) => {
         }
 
         result = { success: true, data: { results: exportResults } };
+        break;
+
+      case 'verify-timesheet-entry':
+        const verifyBody = await req.json();
+        const { tripletexEntryId } = verifyBody;
+
+        if (!tripletexEntryId) {
+          return new Response(JSON.stringify({ error: 'Missing tripletexEntryId' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const verifyResult = await callTripletexAPI(`/timesheet/hours/${tripletexEntryId}`);
+        result = { 
+          success: true, 
+          data: { 
+            exists: verifyResult.success,
+            entry: verifyResult.data?.value || null 
+          }
+        };
         break;
 
       default:

@@ -243,22 +243,49 @@ const AdminTimer = () => {
         return;
       }
 
-      // Prepare timesheet entries for export
-      const timesheetEntries = selectedTimerEntries.map(entry => ({
-        id: entry.id,
-        employeeId: 1, // TODO: Map from person to Tripletex employee ID
-        projectId: entry.vakt?.ttx_project_cache?.project_number || 1,
-        activityId: 1, // TODO: Map from ttx_activity_cache
-        date: entry.vakt?.dato,
-        hours: entry.timer,
-        comment: entry.notat || '',
-        clientReference: `${profile.org_id}-${entry.id}` // Idempotency key
-      }));
+      // Get vakt IDs from selected entries
+      const vaktIds = selectedTimerEntries
+        .map(e => {
+          // Extract vakt ID from the vakt object structure
+          if (typeof e.vakt === 'object' && e.vakt !== null) {
+            // The vakt object should have an id property or we need to find it differently
+            return (e.vakt as any).id;
+          }
+          return null;
+        })
+        .filter(id => id !== null);
+
+      // Get person mappings for vakt entries
+      const { data: vaktData } = await supabase
+        .from('vakt')
+        .select('id, person_id')
+        .in('id', vaktIds)
+        .eq('org_id', profile.org_id);
+
+      const vaktToPersonMap = new Map(vaktData?.map(v => [v.id, v.person_id]) || []);
+
+      // Prepare timesheet entries for export with proper mapping
+      const timesheetEntries = selectedTimerEntries.map(entry => {
+        const vaktId = (entry.vakt as any)?.id;
+        const personId = vaktToPersonMap.get(vaktId) || '';
+        
+        return {
+          id: entry.id,
+          personId: personId,
+          projectId: entry.vakt?.ttx_project_cache?.project_number || '',
+          activityId: entry.ttx_activity_cache ? (entry.ttx_activity_cache as any).ttx_id || '' : '',
+          date: entry.vakt?.dato,
+          hours: entry.timer,
+          comment: entry.notat || '',
+          clientReference: `${profile.org_id}-${entry.id}` // Idempotency key
+        };
+      });
 
       const requestBody = { 
-        action: dryRunMode ? 'dry-run-export' : 'export-timesheet',
+        action: 'export-timesheet',
         orgId: profile.org_id,
-        timesheetEntries 
+        timesheetEntries,
+        dryRun: dryRunMode
       };
 
       if (dryRunMode) {
@@ -703,7 +730,8 @@ const AdminTimer = () => {
                     <TableHead className="text-right">Timer</TableHead>
                     <TableHead>Notat</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Status/Aksjon</TableHead>
+                    <TableHead>Kilde</TableHead>
+                    <TableHead>Aksjon</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -766,12 +794,25 @@ const AdminTimer = () => {
                       <TableCell>
                         {getKildeBadge(entry.kilde)}
                       </TableCell>
+                      <TableCell>
+                        {entry.status === 'sendt' && entry.tripletex_entry_id && (
+                          <Button
+                            onClick={() => checkTripletexStatus(entry.id)}
+                            size="sm"
+                            variant="outline"
+                            className="h-8 w-8 p-0"
+                            title="Hent status fra Tripletex"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   
                   {timerEntries.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                         Ingen timer funnet med gjeldende filtre.
                       </TableCell>
                     </TableRow>

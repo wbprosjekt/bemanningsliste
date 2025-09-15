@@ -92,21 +92,48 @@ const TripletexIntegration = () => {
       const result = await callTripletexAPI('test-session');
       
       if (result?.success) {
-        setSessionInfo(result.data);
+        setSessionInfo({
+          ...result.data,
+          testedAt: new Date().toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' })
+        });
+        
+        const expiresAt = result.data?.expirationDate ? 
+          new Date(result.data.expirationDate).toLocaleDateString('no-NO') :
+          'Ukjent';
+        
         toast({
-          title: "API-sesjon OK",
-          description: "Tripletex API er tilgjengelig og tokens er gyldige."
+          title: "Sesjon opprettet",
+          description: `API-tilkobling OK - gyldig til ${expiresAt}`
         });
       } else {
+        // Handle specific error types
+        const errorMsg = result?.error || "Ukjent feil";
+        let title = "API-sesjon feilet";
+        let description = errorMsg;
+        
+        if (errorMsg.includes('401') || errorMsg.includes('403') || errorMsg.includes('Unauthorized')) {
+          title = "Ugyldige nøkler";
+          description = "API-nøklene er ikke gyldige eller mangler tilgang";
+        } else if (errorMsg.includes('429')) {
+          title = "Rate-limit";
+          description = "For mange forespørsler - prøv igjen om litt";
+        } else if (errorMsg.includes('5')) {
+          title = "Tripletex utilgjengelig"; 
+          description = "Tripletex API er midlertidig utilgjengelig";
+        } else if (errorMsg.includes('not configured')) {
+          title = "Tokens mangler";
+          description = "Tripletex consumer/employee tokens er ikke konfigurert";
+        }
+        
         toast({
-          title: "API-sesjon feilet",
-          description: result?.error || "Ukjent feil",
+          title,
+          description,
           variant: "destructive"
         });
       }
     } catch (error: any) {
       toast({
-        title: "API-test feilet",
+        title: "Kunne ikke opprette sesjon",
         description: error.message,
         variant: "destructive"
       });
@@ -228,8 +255,9 @@ const TripletexIntegration = () => {
             <div className="flex items-center gap-4">
               <Button 
                 onClick={testAPISession}
-                disabled={loading.testSession}
+                disabled={loading.testSession || (!process.env.TRIPLETEX_CONSUMER_TOKEN && !process.env.TRIPLETEX_EMPLOYEE_TOKEN)}
                 variant="outline"
+                title={(!process.env.TRIPLETEX_CONSUMER_TOKEN && !process.env.TRIPLETEX_EMPLOYEE_TOKEN) ? "Fyll inn tokens først" : ""}
               >
                 {loading.testSession ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -247,6 +275,11 @@ const TripletexIntegration = () => {
                   {sessionInfo.expirationDate && (
                     <span className="text-sm text-muted-foreground">
                       Utløper: {new Date(sessionInfo.expirationDate).toLocaleDateString('no-NO')}
+                    </span>
+                  )}
+                  {sessionInfo.testedAt && (
+                    <span className="text-sm text-muted-foreground">
+                      Sist testet {sessionInfo.testedAt}
                     </span>
                   )}
                 </div>
