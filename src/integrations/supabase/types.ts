@@ -261,6 +261,41 @@ export type Database = {
           },
         ]
       }
+      sync_log: {
+        Row: {
+          completed_at: string
+          created_at: string
+          id: string
+          org_id: string
+          results: Json
+          sync_type: string
+        }
+        Insert: {
+          completed_at?: string
+          created_at?: string
+          id?: string
+          org_id: string
+          results?: Json
+          sync_type: string
+        }
+        Update: {
+          completed_at?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          results?: Json
+          sync_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_log_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ttx_activity_cache: {
         Row: {
           aktiv: boolean | null

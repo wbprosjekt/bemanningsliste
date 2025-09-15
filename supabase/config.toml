@@ -1,1 +1,7 @@
 project_id = "jlndohflirfixbinqdwe"
+
+[functions.tripletex-api]
+verify_jwt = false
+
+[functions.nightly-sync]
+verify_jwt = false
