@@ -130,7 +130,9 @@ export type Database = {
           forventet_dagstimer: number | null
           id: string
           org_id: string
+          person_type: string | null
           tripletex_employee_id: number | null
+          underleverandor_id: string | null
           updated_at: string
         }
         Insert: {
@@ -142,7 +144,9 @@ export type Database = {
           forventet_dagstimer?: number | null
           id?: string
           org_id: string
+          person_type?: string | null
           tripletex_employee_id?: number | null
+          underleverandor_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -154,7 +158,9 @@ export type Database = {
           forventet_dagstimer?: number | null
           id?: string
           org_id?: string
+          person_type?: string | null
           tripletex_employee_id?: number | null
+          underleverandor_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -163,6 +169,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_underleverandor_id_fkey"
+            columns: ["underleverandor_id"]
+            isOneToOne: false
+            referencedRelation: "underleverandorer"
             referencedColumns: ["id"]
           },
         ]
@@ -424,6 +437,62 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "ttx_project_cache_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      underleverandorer: {
+        Row: {
+          adresse: string | null
+          aktiv: boolean | null
+          created_at: string
+          epost: string | null
+          id: string
+          kontaktperson: string | null
+          navn: string
+          notater: string | null
+          org_id: string
+          organisasjonsnummer: string | null
+          telefon: string | null
+          timepris: number | null
+          updated_at: string
+        }
+        Insert: {
+          adresse?: string | null
+          aktiv?: boolean | null
+          created_at?: string
+          epost?: string | null
+          id?: string
+          kontaktperson?: string | null
+          navn: string
+          notater?: string | null
+          org_id: string
+          organisasjonsnummer?: string | null
+          telefon?: string | null
+          timepris?: number | null
+          updated_at?: string
+        }
+        Update: {
+          adresse?: string | null
+          aktiv?: boolean | null
+          created_at?: string
+          epost?: string | null
+          id?: string
+          kontaktperson?: string | null
+          navn?: string
+          notater?: string | null
+          org_id?: string
+          organisasjonsnummer?: string | null
+          telefon?: string | null
+          timepris?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "underleverandorer_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "org"

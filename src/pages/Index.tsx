@@ -66,16 +66,30 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate('/admin/timer')}>
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate('/admin/brukere')}>
             <CardHeader>
-              <CardTitle>👥 Timer - Godkjenning</CardTitle>
+              <CardTitle>👥 Brukerhåndtering</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-4">
                 Admin-verktøy
               </p>
               <p className="text-sm">
-                Godkjenn og send timelister til Tripletex.
+                Se alle brukere i systemet og administrer tilganger.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate('/admin/underleverandorer')}>
+            <CardHeader>
+              <CardTitle>🏢 Underleverandører</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Bemanningsressurser
+              </p>
+              <p className="text-sm">
+                Administrer underleverandører for bemanningslisten.
               </p>
             </CardContent>
           </Card>

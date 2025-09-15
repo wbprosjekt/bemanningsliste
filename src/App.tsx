@@ -9,6 +9,8 @@ import Auth from "./pages/Auth";
 import MinUke from "./pages/MinUke";
 import TripletexIntegration from "./pages/admin/integrasjoner/TripletexIntegration";
 import AdminTimer from "./pages/admin/Timer";
+import AdminBrukere from "./pages/admin/Brukere";
+import AdminUnderleverandorer from "./pages/admin/Underleverandorer";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +28,8 @@ const App = () => (
             <Route path="/min/uke/:year-:week" element={<MinUke />} />
             <Route path="/admin/integrasjoner/tripletex" element={<TripletexIntegration />} />
             <Route path="/admin/timer" element={<AdminTimer />} />
+            <Route path="/admin/brukere" element={<AdminBrukere />} />
+            <Route path="/admin/underleverandorer" element={<AdminUnderleverandorer />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
