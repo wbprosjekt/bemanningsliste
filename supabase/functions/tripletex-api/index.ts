@@ -63,18 +63,104 @@ async function getTripletexConfig(orgId: string): Promise<TripletexConfig> {
   return fallbackConfig;
 }
 
+// Create or reuse a Tripletex session token for this org
+async function getOrCreateSession(orgId: string): Promise<{ token: string; expirationDate: string }> {
+  const config = await getTripletexConfig(orgId);
+  if (!config.consumerToken || !config.employeeToken) {
+    throw new Error('Tripletex tokens not configured for this organization');
+  }
+
+  // Read existing settings to check cached session
+  const { data: row, error: readErr } = await supabase
+    .from('integration_settings')
+    .select('id, settings')
+    .eq('org_id', orgId)
+    .eq('integration_type', 'tripletex')
+    .maybeSingle();
+
+  if (readErr) {
+    console.error('Error reading integration settings for session:', readErr);
+  }
+
+  const currentSettings = (row?.settings as any) || {};
+  const now = new Date();
+
+  if (currentSettings.session_token && currentSettings.session_expires_at) {
+    const expiresAt = new Date(currentSettings.session_expires_at);
+    // Add 60s safety margin
+    if (expiresAt.getTime() - 60000 > now.getTime()) {
+      return { token: String(currentSettings.session_token), expirationDate: expiresAt.toISOString().split('T')[0] };
+    }
+  }
+
+  // Create new session
+  const expirationDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  console.log('Creating new Tripletex session for org', orgId, 'expiring', expirationDate);
+
+  const resp = await fetch(`${config.baseUrl}/token/session/:create`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      consumerToken: config.consumerToken,
+      employeeToken: config.employeeToken,
+      expirationDate
+    })
+  });
+
+  const data = await resp.json();
+  if (!resp.ok) {
+    console.error('Failed to create Tripletex session:', data);
+    throw new Error(data?.message || 'Failed to create Tripletex session');
+  }
+
+  // Try multiple shapes just in case
+  const token = data?.value?.token ?? data?.token ?? data?.value?.[0]?.token;
+  const exp = data?.value?.expirationDate ?? data?.expirationDate ?? expirationDate;
+
+  if (!token) {
+    console.error('Tripletex session response missing token:', data);
+    throw new Error('Tripletex session response missing token');
+  }
+
+  // Persist session token into settings
+  const newSettings = {
+    ...currentSettings,
+    session_token: token,
+    session_expires_at: exp
+  };
+
+  const { error: writeErr } = await supabase
+    .from('integration_settings')
+    .update({ settings: newSettings })
+    .eq('id', row?.id as string);
+
+  if (writeErr) {
+    console.error('Failed saving session token to settings:', writeErr);
+  }
+
+  return { token: String(token), expirationDate: String(exp) };
+}
+
 async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: any, orgId?: string): Promise<TripletexResponse> {
   const config = await getTripletexConfig(orgId || '');
-  
   if (!config.consumerToken || !config.employeeToken) {
     return { success: false, error: 'Tripletex tokens not configured for this organization' };
   }
-
   const url = `${config.baseUrl}${endpoint}`;
-  const headers: Record<string, string> = {
-    'Authorization': `Basic ${btoa(`${config.consumerToken}:${config.employeeToken}`)}`,
-    'Content-Type': 'application/json'
-  };
+  let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  // Use session token for all non-session endpoints
+  if (!endpoint.startsWith('/token/session')) {
+    try {
+      const session = await getOrCreateSession(orgId!);
+      headers = {
+        ...headers,
+        Authorization: `Basic ${btoa(`0:${session.token}`)}`
+      };
+    } catch (e) {
+      return { success: false, error: (e as any).message || 'Failed to create session' };
+    }
+  }
 
   try {
     console.log(`Calling Tripletex API: ${method} ${url}`);
@@ -176,14 +262,12 @@ Deno.serve(async (req) => {
         break;
 
       case 'test-session':
-        const sessionConfig = await getTripletexConfig(orgId);
-        console.log('Config for test-session:', sessionConfig);
-        
-        result = await callTripletexAPI('/token/session/:create', 'PUT', {
-          consumerToken: sessionConfig.consumerToken,
-          employeeToken: sessionConfig.employeeToken,
-          expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 24 hours
-        }, orgId);
+        try {
+          const session = await getOrCreateSession(orgId);
+          result = { success: true, data: { token: session.token, expirationDate: session.expirationDate } };
+        } catch (e) {
+          result = { success: false, error: (e as any).message || 'Failed to create session' };
+        }
         break;
 
       case 'sync-employees':
@@ -222,7 +306,7 @@ Deno.serve(async (req) => {
 
       case 'sync-projects':
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/project?count=1000');
+          const response = await callTripletexAPI('/project?count=1000', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             // Cache projects in database
             const projects = response.data.values.map((proj: any) => ({
@@ -255,7 +339,7 @@ Deno.serve(async (req) => {
 
       case 'sync-activities':
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/activity?count=1000');
+          const response = await callTripletexAPI('/activity?count=1000', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             // Cache activities in database
             const activities = response.data.values.map((act: any) => ({
@@ -380,7 +464,7 @@ Deno.serve(async (req) => {
             }
 
             const exportResult = await exponentialBackoff(async () => {
-              return await callTripletexAPI('/timesheet/hours', 'POST', timesheetData);
+              return await callTripletexAPI('/timesheet/hours', 'POST', timesheetData, orgId);
             });
 
             if (exportResult.success) {
