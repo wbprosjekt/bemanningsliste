@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import MinUke from "./pages/MinUke";
 import TripletexIntegration from "./pages/admin/integrasjoner/TripletexIntegration";
+import Uke from "./pages/Uke";
 import AdminTimer from "./pages/admin/Timer";
 import AdminBrukere from "./pages/admin/Brukere";
 import AdminUnderleverandorer from "./pages/admin/Underleverandorer";
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/min/uke/:year-:week" element={<MinUke />} />
+            <Route path="/uke/:year-:week" element={<Uke />} />
             <Route path="/admin/integrasjoner/tripletex" element={<TripletexIntegration />} />
             <Route path="/admin/timer" element={<AdminTimer />} />
             <Route path="/admin/brukere" element={<AdminBrukere />} />

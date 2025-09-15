@@ -14,6 +14,12 @@ interface DayCardProps {
   orgId: string;
   personId?: string;
   forventetTimer?: number;
+  calendarDays?: Array<{
+    dato: string;
+    is_holiday: boolean;
+    is_weekend: boolean;
+    holiday_name: string | null;
+  }>;
 }
 
 interface VaktWithTimer {
@@ -38,7 +44,7 @@ interface VaktWithTimer {
   }>;
 }
 
-const DayCard = ({ date, orgId, personId, forventetTimer = 8.0 }: DayCardProps) => {
+const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: DayCardProps) => {
   const [vakter, setVakter] = useState<VaktWithTimer[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVakt, setSelectedVakt] = useState<string | null>(null);
@@ -171,21 +177,20 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0 }: DayCardProps) 
     }, 0);
   };
 
-  const getExpectedHours = () => {
-    if (vakter.length === 0) return forventetTimer;
-    
-    // Check if this is a holiday/weekend and should have 0 expected hours
-    const dayOfWeek = date.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    
-    // TODO: Check against kalender_dag table for holidays
-    // For now, weekends have 0 expected hours
-    if (isWeekend) {
-      return 0;
-    }
-    
-    return vakter[0]?.person?.forventet_dagstimer || forventetTimer;
-  };
+          const getExpectedHours = () => {
+            if (vakter.length === 0) return forventetTimer;
+            
+            // Check against kalender_dag table for holidays
+            const dateStr = date.toISOString().split('T')[0];
+            const calendarDay = calendarDays?.find(d => d.dato === dateStr);
+            
+            if (calendarDay?.is_holiday || calendarDay?.is_weekend) {
+              // TODO: Get from admin settings - default_expected_hours_on_holidays
+              return 0;
+            }
+            
+            return vakter[0]?.person?.forventet_dagstimer || forventetTimer;
+          };
 
   const getStatusChip = () => {
     const totalHours = getTotalHours();

@@ -96,6 +96,33 @@ export type Database = {
           },
         ]
       }
+      kalender_dag: {
+        Row: {
+          dato: string
+          holiday_name: string | null
+          is_holiday: boolean
+          is_weekend: boolean
+          iso_ar: number
+          iso_uke: number
+        }
+        Insert: {
+          dato: string
+          holiday_name?: string | null
+          is_holiday?: boolean
+          is_weekend?: boolean
+          iso_ar: number
+          iso_uke: number
+        }
+        Update: {
+          dato?: string
+          holiday_name?: string | null
+          is_holiday?: boolean
+          is_weekend?: boolean
+          iso_ar?: number
+          iso_uke?: number
+        }
+        Relationships: []
+      }
       org: {
         Row: {
           created_at: string
@@ -267,6 +294,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_color: {
+        Row: {
+          hex: string
+          org_id: string
+          tripletex_project_id: number
+          updated_at: string
+        }
+        Insert: {
+          hex: string
+          org_id: string
+          tripletex_project_id: number
+          updated_at?: string
+        }
+        Update: {
+          hex?: string
+          org_id?: string
+          tripletex_project_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_color_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "org"
@@ -743,6 +799,10 @@ export type Database = {
     Functions: {
       generate_client_reference: {
         Args: { org_uuid: string; timer_uuid: string }
+        Returns: string
+      }
+      get_user_org_id: {
+        Args: Record<PropertyKey, never>
         Returns: string
       }
     }

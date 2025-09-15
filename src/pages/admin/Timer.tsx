@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,7 +20,9 @@ import {
   MessageSquare,
   Paperclip,
   RefreshCw,
-  Download
+  Download,
+  FileText,
+  AlertTriangle
 } from 'lucide-react';
 import { getPersonDisplayName, formatTimeValue } from '@/lib/displayNames';
 
@@ -62,6 +65,8 @@ const AdminTimer = () => {
     dateFrom: '',
     dateTo: ''
   });
+  const [dryRunMode, setDryRunMode] = useState(false);
+  const [periodLockBanner, setPeriodLockBanner] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -242,19 +247,32 @@ const AdminTimer = () => {
       const timesheetEntries = selectedTimerEntries.map(entry => ({
         id: entry.id,
         employeeId: 1, // TODO: Map from person to Tripletex employee ID
-        projectId: entry.vakt?.ttx_project_cache?.project_number || 1, // TODO: Use actual Tripletex project ID
+        projectId: entry.vakt?.ttx_project_cache?.project_number || 1,
         activityId: 1, // TODO: Map from ttx_activity_cache
         date: entry.vakt?.dato,
         hours: entry.timer,
-        comment: entry.notat || ''
+        comment: entry.notat || '',
+        clientReference: `${profile.org_id}-${entry.id}` // Idempotency key
       }));
 
+      const requestBody = { 
+        action: dryRunMode ? 'dry-run-export' : 'export-timesheet',
+        orgId: profile.org_id,
+        timesheetEntries 
+      };
+
+      if (dryRunMode) {
+        console.log('Dry-run mode - would send:', requestBody);
+        toast({
+          title: "Dry-run utført",
+          description: `Ville sendt ${selectedTimerEntries.length} timer til Tripletex (ingen data sendt)`,
+        });
+        setSelectedEntries(new Set());
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('tripletex-api', {
-        body: { 
-          action: 'export-timesheet',
-          orgId: profile.org_id,
-          timesheetEntries 
-        }
+        body: requestBody
       });
 
       if (error) throw error;
@@ -263,6 +281,24 @@ const AdminTimer = () => {
       const successful = results.filter((r: any) => r.success);
       const failed = results.filter((r: any) => !r.success);
 
+      // Handle period locked errors
+      const periodLockedErrors = failed.filter((r: any) => 
+        r.errorType === 'period_locked' || r.error?.includes('period is locked')
+      );
+      
+      if (periodLockedErrors.length > 0) {
+        // Don't change status for period locked entries
+        const firstPeriodError = periodLockedErrors[0];
+        const weekInfo = firstPeriodError.weekNumber || 'ukjent';
+        setPeriodLockBanner(`Uke ${weekInfo} er låst i Tripletex – åpne perioden i Tripletex for å eksportere timer.`);
+        
+        toast({
+          title: "Periode låst i Tripletex",
+          description: `${periodLockedErrors.length} timer kunne ikke sendes fordi perioden er låst`,
+          variant: "destructive"
+        });
+      }
+
       if (successful.length > 0) {
         toast({
           title: "Eksport fullført",
@@ -270,24 +306,12 @@ const AdminTimer = () => {
         });
       }
 
-      if (failed.length > 0) {
-        const periodLockedErrors = failed.filter((r: any) => r.errorType === 'period_locked');
-        
-        if (periodLockedErrors.length > 0) {
-          toast({
-            title: "Periode låst i Tripletex",
-            description: "Noen timer kunne ikke sendes fordi perioden er låst - kontakt lønn.",
-            variant: "destructive"
-          });
-        }
-
-        if (failed.length > periodLockedErrors.length) {
-          toast({
-            title: "Noen timer feilet",
-            description: `${failed.length - periodLockedErrors.length} timer kunne ikke sendes på grunn av feil.`,
-            variant: "destructive"
-          });
-        }
+      if (failed.length > periodLockedErrors.length) {
+        toast({
+          title: "Noen timer feilet",
+          description: `${failed.length - periodLockedErrors.length} timer kunne ikke sendes på grunn av andre feil.`,
+          variant: "destructive"
+        });
       }
 
       setSelectedEntries(new Set());
@@ -300,6 +324,49 @@ const AdminTimer = () => {
       });
     } finally {
       setActionLoading({ ...actionLoading, export: false });
+    }
+  };
+
+  const checkTripletexStatus = async (entryId: string) => {
+    try {
+      const entry = timerEntries.find(e => e.id === entryId);
+      if (!entry?.tripletex_entry_id) {
+        toast({
+          title: "Ingen Tripletex ID",
+          description: "Denne oppføringen har ikke blitt sendt til Tripletex ennå",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('tripletex-api', {
+        body: { 
+          action: 'verify-timesheet-entry',
+          orgId: profile.org_id,
+          tripletexEntryId: entry.tripletex_entry_id
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.exists) {
+        toast({
+          title: "Status bekreftet",
+          description: `Oppføringen eksisterer i Tripletex (ID: ${entry.tripletex_entry_id})`
+        });
+      } else {
+        toast({
+          title: "Ikke funnet i Tripletex",
+          description: "Oppføringen ble ikke funnet i Tripletex - kan være slettet eller ikke synkronisert",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Status-sjekk feilet",
+        description: error.message,
+        variant: "destructive"
+      });
     }
   };
 
@@ -333,16 +400,17 @@ const AdminTimer = () => {
         Prosjektnavn: entry.vakt?.ttx_project_cache?.project_name || '',
         Aktivitet: entry.ttx_activity_cache?.navn || '',
         Lønnstype: entry.lonnstype,
-        Timer: entry.timer,
+        Timer: formatTimeValue(entry.timer),
         Notat: entry.notat || '',
         Status: entry.status,
         Kilde: entry.kilde,
-        Farge: '' // Could add project color here
+        TripletexID: entry.tripletex_entry_id || '',
+        Farge: '' // Could add project color here if needed
       }));
 
       const csvContent = [
-        Object.keys(csvData[0] || {}).join(';'),
-        ...csvData.map(row => Object.values(row).join(';'))
+        'Ansatt;Dato;Prosjektnr;Prosjektnavn;Aktivitet;Lønnstype;Timer;Notat;Status;Kilde;TripletexID;Farge',
+        ...csvData.map(row => Object.values(row).map(v => `"${v}"`).join(';'))
       ].join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -353,12 +421,90 @@ const AdminTimer = () => {
 
       toast({
         title: "Eksport fullført",
-        description: "CSV-fil er lastet ned"
+        description: `Eksporterte ${csvData.length} timeroppføringer til CSV`
       });
     } catch (error) {
       toast({
         title: "Eksport feilet", 
         description: "Kunne ikke eksportere data",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const exportMonthCSV = async () => {
+    try {
+      // Get month range
+      const today = new Date();
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+      const { data: monthData } = await supabase
+        .from('vakt_timer')
+        .select(`
+          id,
+          timer,
+          notat,
+          status,
+          lonnstype,
+          kilde,
+          tripletex_entry_id,
+          created_at,
+          vakt:vakt_id (
+            dato,
+            person:person_id (
+              fornavn,
+              etternavn
+            ),
+            ttx_project_cache:project_id (
+              project_name,
+              project_number
+            )
+          ),
+          ttx_activity_cache:aktivitet_id (
+            navn
+          )
+        `)
+        .eq('org_id', profile.org_id)
+        .gte('vakt.dato', startOfMonth.toISOString().split('T')[0])
+        .lte('vakt.dato', endOfMonth.toISOString().split('T')[0])
+        .order('created_at', { ascending: false });
+
+      const csvData = (monthData || []).map(entry => ({
+        Ansatt: entry.vakt?.person ? 
+          getPersonDisplayName(entry.vakt.person.fornavn, entry.vakt.person.etternavn) : 
+          'Ukjent',
+        Dato: entry.vakt?.dato || '',
+        Prosjektnr: entry.vakt?.ttx_project_cache?.project_number || '',
+        Prosjektnavn: entry.vakt?.ttx_project_cache?.project_name || '',
+        Aktivitet: entry.ttx_activity_cache?.navn || '',
+        Lønnstype: entry.lonnstype,
+        Timer: formatTimeValue(entry.timer),
+        Notat: entry.notat || '',
+        Status: entry.status,
+        Kilde: entry.kilde,
+        TripletexID: entry.tripletex_entry_id || ''
+      }));
+
+      const csvContent = [
+        'Ansatt;Dato;Prosjektnr;Prosjektnavn;Aktivitet;Lønnstype;Timer;Notat;Status;Kilde;TripletexID',
+        ...csvData.map(row => Object.values(row).map(v => `"${v}"`).join(';'))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `timer-måned-${startOfMonth.toISOString().split('T')[0]}.csv`;
+      link.click();
+
+      toast({
+        title: "Måned eksportert",
+        description: `Eksporterte ${csvData.length} oppføringer for ${startOfMonth.toLocaleDateString('no-NO', { month: 'long', year: 'numeric' })}`
+      });
+    } catch (error) {
+      toast({
+        title: "Månedseksport feilet",
+        description: "Kunne ikke eksportere månedsdata",
         variant: "destructive"
       });
     }
@@ -387,6 +533,29 @@ const AdminTimer = () => {
             Oppdater
           </Button>
         </div>
+
+        {/* Period Lock Banner */}
+        {periodLockBanner && (
+          <Card className="border-red-500 bg-red-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-red-700">
+                <AlertTriangle className="h-5 w-5" />
+                <div>
+                  <div className="font-medium">Periode låst i Tripletex</div>
+                  <div className="text-sm">{periodLockBanner}</div>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="ml-auto"
+                  onClick={() => setPeriodLockBanner(null)}
+                >
+                  Lukk
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Filters */}
         <Card>
@@ -458,6 +627,16 @@ const AdminTimer = () => {
                 </span>
                 {selectedEntries.size > 0 && (
                   <div className="flex gap-2">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="dry-run"
+                        checked={dryRunMode}
+                        onCheckedChange={setDryRunMode}
+                      />
+                      <label htmlFor="dry-run" className="text-sm">
+                        Dry-run (kun validering)
+                      </label>
+                    </div>
                     <Button
                       onClick={markAsApproved}
                       disabled={actionLoading.approve}
@@ -481,11 +660,15 @@ const AdminTimer = () => {
                       ) : (
                         <Send className="h-4 w-4 mr-2" />
                       )}
-                      Send til Tripletex
+                      {dryRunMode ? 'Test eksport' : 'Send til Tripletex'}
                     </Button>
                     <Button onClick={exportWeekCSV} variant="outline" size="sm">
                       <Download className="h-4 w-4 mr-2" />
                       Eksporter CSV
+                    </Button>
+                    <Button onClick={exportMonthCSV} variant="outline" size="sm">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Måned CSV
                     </Button>
                   </div>
                 )}
@@ -520,7 +703,7 @@ const AdminTimer = () => {
                     <TableHead className="text-right">Timer</TableHead>
                     <TableHead>Notat</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Kilde</TableHead>
+                    <TableHead>Status/Aksjon</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
