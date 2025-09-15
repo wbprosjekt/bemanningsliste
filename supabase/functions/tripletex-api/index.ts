@@ -110,6 +110,18 @@ Deno.serve(async (req) => {
     let result: TripletexResponse;
 
     switch (action) {
+      case 'check-config':
+        const config = await getTripletexConfig();
+        result = {
+          success: true,
+          data: {
+            hasConsumerToken: !!config.consumerToken,
+            hasEmployeeToken: !!config.employeeToken,
+            baseUrl: config.baseUrl
+          }
+        };
+        break;
+
       case 'test-session':
         result = await callTripletexAPI('/token/session/:create', 'PUT', {
           consumerToken: (await getTripletexConfig()).consumerToken,

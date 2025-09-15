@@ -17,11 +17,13 @@ const TripletexIntegration = () => {
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
   const [nightlySync, setNightlySync] = useState(false);
+  const [tokenConfig, setTokenConfig] = useState<any>(null);
 
   useEffect(() => {
     if (user) {
       loadUserProfile();
       loadIntegrationSettings();
+      checkTokenConfig();
     }
   }, [user]);
 
@@ -59,6 +61,8 @@ const TripletexIntegration = () => {
       if (data?.settings && typeof data.settings === 'object' && 'nightly_sync' in data.settings) {
         setNightlySync(data.settings.nightly_sync as boolean);
       }
+      // Refresh token config when integration settings change
+      checkTokenConfig();
     } catch (error) {
       console.error('Error loading integration settings:', error);
     }
@@ -182,6 +186,19 @@ const TripletexIntegration = () => {
     }
   };
 
+  const checkTokenConfig = async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      const result = await callTripletexAPI('check-config');
+      if (result?.success) {
+        setTokenConfig(result.data);
+      }
+    } catch (error) {
+      console.error('Error checking token config:', error);
+    }
+  };
+
   const toggleNightlySync = async (enabled: boolean) => {
     if (!profile?.org_id) return;
 
@@ -255,9 +272,9 @@ const TripletexIntegration = () => {
             <div className="flex items-center gap-4">
               <Button 
                 onClick={testAPISession}
-                disabled={loading.testSession || (!process.env.TRIPLETEX_CONSUMER_TOKEN && !process.env.TRIPLETEX_EMPLOYEE_TOKEN)}
+                disabled={loading.testSession || (!tokenConfig?.hasConsumerToken || !tokenConfig?.hasEmployeeToken)}
                 variant="outline"
-                title={(!process.env.TRIPLETEX_CONSUMER_TOKEN && !process.env.TRIPLETEX_EMPLOYEE_TOKEN) ? "Fyll inn tokens først" : ""}
+                title={(!tokenConfig?.hasConsumerToken || !tokenConfig?.hasEmployeeToken) ? "Fyll inn tokens først" : ""}
               >
                 {loading.testSession ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -396,13 +413,13 @@ const TripletexIntegration = () => {
             <div className="flex justify-between">
               <span>Consumer Token:</span>
               <Badge variant="outline">
-                {process.env.TRIPLETEX_CONSUMER_TOKEN ? '✓ Konfigurert' : '✗ Mangler'}
+                {tokenConfig?.hasConsumerToken ? '✓ Konfigurert' : '✗ Mangler'}
               </Badge>
             </div>
             <div className="flex justify-between">
               <span>Employee Token:</span>
               <Badge variant="outline">
-                {process.env.TRIPLETEX_EMPLOYEE_TOKEN ? '✓ Konfigurert' : '✗ Mangler'}
+                {tokenConfig?.hasEmployeeToken ? '✓ Konfigurert' : '✗ Mangler'}
               </Badge>
             </div>
             <div className="flex justify-between">
