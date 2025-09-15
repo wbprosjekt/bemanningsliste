@@ -22,6 +22,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { getPersonDisplayName } from '@/lib/displayNames';
+import OnboardingDialog from '@/components/OnboardingDialog';
 
 interface UserProfile {
   id: string;
@@ -53,6 +54,7 @@ const AdminBrukere = () => {
     role: 'user',
     display_name: ''
   });
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -77,6 +79,12 @@ const AdminBrukere = () => {
         .maybeSingle();
 
       if (error && error.code !== 'PGRST116') throw error;
+      
+      if (!data) {
+        setShowOnboarding(true);
+        return;
+      }
+      
       setProfile(data);
 
       if (!data) {
@@ -85,9 +93,11 @@ const AdminBrukere = () => {
           description: "Du må opprette en profil før du kan bruke admin-sider.",
           variant: "destructive"
         });
+        setShowOnboarding(true);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
+      setShowOnboarding(true);
     }
   };
 
@@ -207,6 +217,11 @@ const AdminBrukere = () => {
     }
   };
 
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    loadUserProfile();
+  };
+
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'admin':
@@ -240,6 +255,10 @@ const AdminBrukere = () => {
     user.person?.etternavn?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  if (showOnboarding) {
+    return <OnboardingDialog onComplete={handleOnboardingComplete} />;
+  }
+
   if (!profile) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -248,7 +267,7 @@ const AdminBrukere = () => {
           <p className="text-muted-foreground">
             Du må opprette en profil og være tilknyttet en organisasjon før du kan bruke admin-sidene.
           </p>
-          <Button onClick={() => (window.location.href = '/')}>Gå til hovedsiden</Button>
+          <Button onClick={() => setShowOnboarding(true)}>Sett opp organisasjon</Button>
         </div>
       </div>
     );

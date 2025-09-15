@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { RefreshCw, CheckCircle, XCircle, Users, FolderOpen, Activity, Clock } from 'lucide-react';
+import OnboardingDialog from '@/components/OnboardingDialog';
 
 const TripletexIntegration = () => {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ const TripletexIntegration = () => {
   const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
   const [nightlySync, setNightlySync] = useState(false);
   const [tokenConfig, setTokenConfig] = useState<any>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -41,6 +43,11 @@ const TripletexIntegration = () => {
         throw error;
       }
       
+      if (!data) {
+        setShowOnboarding(true);
+        return;
+      }
+      
       setProfile(data);
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -49,6 +56,7 @@ const TripletexIntegration = () => {
         description: "Du må opprette en profil før du kan bruke integrasjoner.",
         variant: "destructive"
       });
+      setShowOnboarding(true);
     }
   };
 
@@ -207,6 +215,11 @@ const TripletexIntegration = () => {
     }
   };
 
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    loadUserProfile(); // Reload profile after onboarding
+  };
+
   const toggleNightlySync = async (enabled: boolean) => {
     if (!profile?.org_id) return;
 
@@ -245,6 +258,10 @@ const TripletexIntegration = () => {
     }
   };
 
+  if (showOnboarding) {
+    return <OnboardingDialog onComplete={handleOnboardingComplete} />;
+  }
+
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -261,8 +278,8 @@ const TripletexIntegration = () => {
           <p className="text-muted-foreground">
             Du må opprette en profil og være tilknyttet en organisasjon før du kan bruke integrasjoner.
           </p>
-          <Button onClick={() => window.location.href = '/'}>
-            Gå til hovedsiden
+          <Button onClick={() => setShowOnboarding(true)}>
+            Sett opp organisasjon
           </Button>
         </div>
       </div>
