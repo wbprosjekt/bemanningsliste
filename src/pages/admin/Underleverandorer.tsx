@@ -80,9 +80,9 @@ const AdminUnderleverandorer = () => {
         .from('profiles')
         .select('*, org:org_id (id, name)')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
       setProfile(data);
     } catch (error) {
       console.error('Error loading profile:', error);

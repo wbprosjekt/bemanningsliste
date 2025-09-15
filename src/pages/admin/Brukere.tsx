@@ -74,10 +74,18 @@ const AdminBrukere = () => {
         .from('profiles')
         .select('*, org:org_id (id, name)')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
       setProfile(data);
+
+      if (!data) {
+        toast({
+          title: "Profil mangler",
+          description: "Du må opprette en profil før du kan bruke admin-sider.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error('Error loading profile:', error);
     }
@@ -235,7 +243,13 @@ const AdminBrukere = () => {
   if (!profile) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">Laster...</div>
+        <div className="text-center space-y-4">
+          <h2 className="text-xl font-semibold">Profil mangler</h2>
+          <p className="text-muted-foreground">
+            Du må opprette en profil og være tilknyttet en organisasjon før du kan bruke admin-sidene.
+          </p>
+          <Button onClick={() => (window.location.href = '/')}>Gå til hovedsiden</Button>
+        </div>
       </div>
     );
   }
