@@ -22,6 +22,27 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
+// Helper utilities for safe logging
+function maskToken(token: string): string {
+  if (!token) return '';
+  return token.length <= 8 ? '****' : `${token.slice(0, 4)}...${token.slice(-4)}`;
+}
+
+function maskAuthHeader(auth?: string): string {
+  if (!auth) return '';
+  if (auth.startsWith('Basic ')) return 'Basic ****';
+  return '****';
+}
+
+function safeBody(body: any) {
+  if (!body) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(body)) {
+    out[k] = k.toLowerCase().includes('token') ? '***masked***' : (body as any)[k];
+  }
+  return out;
+}
+
 async function getTripletexConfig(orgId: string): Promise<TripletexConfig> {
   console.log('getTripletexConfig called with orgId:', orgId);
   
@@ -37,14 +58,14 @@ async function getTripletexConfig(orgId: string): Promise<TripletexConfig> {
 
   if (settings?.settings) {
     const orgSettings = settings.settings as any;
-    console.log('Processing org settings:', orgSettings);
+    console.log('Processing org settings:', { ...orgSettings, consumer_token: orgSettings.consumer_token ? '***masked***' : undefined, employee_token: orgSettings.employee_token ? '***masked***' : undefined });
     if (orgSettings.consumer_token && orgSettings.employee_token) {
       const config = {
         consumerToken: orgSettings.consumer_token,
         employeeToken: orgSettings.employee_token,
         baseUrl: orgSettings.api_base_url || 'https://api-test.tripletex.tech/v2'
       };
-      console.log('Returning config:', config);
+      console.log('Returning config:', { hasConsumerToken: !!config.consumerToken, hasEmployeeToken: !!config.employeeToken, baseUrl: config.baseUrl });
       return config;
     }
   }
@@ -97,6 +118,12 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
   const defaultDays = Number(Deno.env.get('SESSION_DEFAULT_DAYS') ?? '7');
   const expirationDate = new Date(Date.now() + defaultDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   console.log('Creating new Tripletex session for org', orgId, 'expiring', expirationDate);
+  console.log('Tripletex session request', {
+    url: `${config.baseUrl}/token/session/create`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: { consumerToken: '***masked***', employeeToken: '***masked***', expirationDate }
+  });
 
   const resp = await fetch(`${config.baseUrl}/token/session/create`, {
     method: 'PUT',
@@ -109,8 +136,9 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
   });
 
   const data = await resp.json();
+  console.log('Tripletex session response', { status: resp.status, data });
   if (!resp.ok) {
-    console.error('Failed to create Tripletex session:', data);
+    console.error('Failed to create Tripletex session:', { status: resp.status, data });
     throw new Error(data?.message || 'Failed to create Tripletex session');
   }
 
@@ -165,6 +193,7 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
 
   try {
     console.log(`Calling Tripletex API: ${method} ${url}`);
+    console.log('Tripletex request headers', { hasAuth: !!headers.Authorization, auth: maskAuthHeader(headers.Authorization) });
     
     const response = await fetch(url, {
       method,
@@ -173,6 +202,7 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
     });
 
     const responseData = await response.json();
+    console.log('Tripletex API response', { status: response.status, url });
 
     if (!response.ok) {
       console.error('Tripletex API error:', response.status, responseData);
@@ -247,6 +277,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    console.log('tripletex-api invoked', { action, orgId });
     let result: TripletexResponse;
 
     switch (action) {
