@@ -100,8 +100,10 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
 
   const resp = await fetch(`${config.baseUrl}/token/session/create`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Basic ${btoa(`${config.consumerToken}:${config.employeeToken}`)}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      consumerToken: config.consumerToken,
+      employeeToken: config.employeeToken,
       expirationDate
     })
   });
