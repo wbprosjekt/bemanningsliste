@@ -66,30 +66,30 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          <Card className="opacity-60">
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate('/admin/timer')}>
             <CardHeader>
-              <CardTitle>👥 Administrasjon</CardTitle>
+              <CardTitle>👥 Timer - Godkjenning</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-4">
-                Kommer snart
+                Admin-verktøy
               </p>
               <p className="text-sm">
-                Admin-grensesnitt for bemanningsplanlegging.
+                Godkjenn og send timelister til Tripletex.
               </p>
             </CardContent>
           </Card>
 
-          <Card className="opacity-60">
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate('/admin/integrasjoner/tripletex')}>
             <CardHeader>
-              <CardTitle>🔧 Integrasjoner</CardTitle>
+              <CardTitle>🔧 Tripletex-integrasjon</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-4">
-                Kommer snart
+                Integrasjonsoppsett
               </p>
               <p className="text-sm">
-                Tripletex-synkronisering og andre integrasjoner.
+                Administrer API-tilkobling og synkronisering.
               </p>
             </CardContent>
           </Card>

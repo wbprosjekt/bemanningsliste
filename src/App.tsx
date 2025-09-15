@@ -7,6 +7,8 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import MinUke from "./pages/MinUke";
+import TripletexIntegration from "./pages/admin/integrasjoner/TripletexIntegration";
+import AdminTimer from "./pages/admin/Timer";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +24,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/min/uke/:year-:week" element={<MinUke />} />
+            <Route path="/admin/integrasjoner/tripletex" element={<TripletexIntegration />} />
+            <Route path="/admin/timer" element={<AdminTimer />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
