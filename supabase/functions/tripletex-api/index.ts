@@ -164,24 +164,24 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'check-config':
-        const config = await getTripletexConfig(orgId);
+        const checkConfig = await getTripletexConfig(orgId);
         result = {
           success: true,
           data: {
-            hasConsumerToken: !!config.consumerToken,
-            hasEmployeeToken: !!config.employeeToken,
-            baseUrl: config.baseUrl
+            hasConsumerToken: !!checkConfig.consumerToken,
+            hasEmployeeToken: !!checkConfig.employeeToken,
+            baseUrl: checkConfig.baseUrl
           }
         };
         break;
 
       case 'test-session':
-        const config = await getTripletexConfig(orgId);
-        console.log('Config for test-session:', config);
+        const sessionConfig = await getTripletexConfig(orgId);
+        console.log('Config for test-session:', sessionConfig);
         
         result = await callTripletexAPI('/token/session/:create', 'PUT', {
-          consumerToken: config.consumerToken,
-          employeeToken: config.employeeToken,
+          consumerToken: sessionConfig.consumerToken,
+          employeeToken: sessionConfig.employeeToken,
           expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 24 hours
         }, orgId);
         break;
