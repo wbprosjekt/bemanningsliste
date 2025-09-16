@@ -52,6 +52,12 @@ interface StaffingEntry {
     activity_name: string;
     lonnstype: string;
     notat?: string;
+    is_overtime?: boolean;
+    approved_at?: string;
+    approved_by?: string;
+    tripletex_synced_at?: string;
+    tripletex_entry_id?: number;
+    sync_error?: string;
   }>;
   totalHours: number;
   status: 'missing' | 'draft' | 'ready' | 'approved' | 'sent';
@@ -90,6 +96,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     currentColor: string;
   } | null>(null);
   const [calendarDays, setCalendarDays] = useState<Record<string, { isWeekend: boolean; isHoliday: boolean }>>({});
+  const [sendingToTripletex, setSendingToTripletex] = useState<Set<string>>(new Set());
 
   const toDateKey = (d: Date): string => {
     try {
@@ -260,6 +267,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             status,
             lonnstype,
             notat,
+            is_overtime,
+            approved_at,
+            approved_by,
+            tripletex_synced_at,
+            tripletex_entry_id,
+            sync_error,
             ttx_activity_cache:aktivitet_id (
               navn
             )
@@ -727,6 +740,105 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  const sendToTripletex = async (entry: StaffingEntry) => {
+    if (!entry.project?.tripletex_project_id) {
+      toast({
+        title: "Kan ikke sende til Tripletex",
+        description: "Prosjektet mangler Tripletex ID",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSendingToTripletex(prev => new Set(prev).add(entry.id));
+
+    try {
+      for (const activity of entry.activities) {
+        const { data, error } = await supabase.functions.invoke('tripletex-api', {
+          body: {
+            action: 'send_timesheet_entry',
+            vakt_timer_id: activity.id,
+            employee_id: entry.person.id,
+            project_id: entry.project.tripletex_project_id,
+            activity_id: null, // Will need to map this properly
+            hours: activity.timer,
+            date: entry.date,
+            is_overtime: activity.is_overtime || false,
+            description: activity.notat || '',
+            orgId: profile.org_id
+          }
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Failed to send to Tripletex');
+        }
+
+        if (!data?.success) {
+          throw new Error(data?.error || 'Failed to send to Tripletex');
+        }
+      }
+
+      toast({
+        title: "Timer sendt til Tripletex",
+        description: `${entry.activities.length} timer sendt for ${entry.project.project_name}`
+      });
+
+      loadStaffingData(); // Refresh to show updated sync status
+    } catch (error: any) {
+      console.error('Error sending to Tripletex:', error);
+      toast({
+        title: "Feil ved sending til Tripletex",
+        description: error.message || "Ukjent feil oppstod",
+        variant: "destructive"
+      });
+    } finally {
+      setSendingToTripletex(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.id);
+        return newSet;
+      });
+    }
+  };
+
+  const unapproveSelectedEntries = async () => {
+    try {
+      const entryIds = Array.from(selectedEntries);
+      const timerIds = staffingData
+        .filter(e => entryIds.includes(e.id))
+        .flatMap(e => e.activities.map(a => a.id));
+
+      const { data, error } = await supabase.functions.invoke('tripletex-api', {
+        body: {
+          action: 'unapprove_timesheet_entries', 
+          entry_ids: timerIds,
+          orgId: profile.org_id
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to unapprove entries');
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to unapprove entries');
+      }
+
+      toast({
+        title: "Godkjenning trukket tilbake",
+        description: `${entryIds.length} oppføringer satt tilbake til utkast`
+      });
+
+      setSelectedEntries(new Set());
+      loadStaffingData();
+    } catch (error: any) {
+      toast({
+        title: "Tilbaketrekking feilet", 
+        description: error.message || "Ukjent feil oppstod",
+        variant: "destructive"
+      });
+    }
+  };
+
   const approveSelectedEntries = async () => {
     try {
       const entryIds = Array.from(selectedEntries);
@@ -810,6 +922,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
             Godkjenn ({selectedEntries.size})
+          </Button>
+          <Button onClick={unapproveSelectedEntries} disabled={selectedEntries.size === 0} variant="outline">
+            Trekk tilbake godkjenning ({selectedEntries.size})
           </Button>
         </div>
       </div>
@@ -963,22 +1078,42 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                       >
                                         <X className="h-2 w-2" />
                                       </button>
-                                      <button
-                                        onClick={(e) => handleProjectColorClick(entry.project, e)}
-                                        className="bg-white rounded-full p-1 shadow-md border"
-                                        title="Endre farge"
-                                      >
-                                        <Palette className="h-2 w-2 text-gray-600" />
-                                      </button>
+                                       <button
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           sendToTripletex(entry);
+                                         }}
+                                         className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20"
+                                         title="Send til Tripletex"
+                                         disabled={sendingToTripletex.has(entry.id)}
+                                       >
+                                         <Send className="h-2 w-2" />
+                                       </button>
+                                       <button
+                                         onClick={(e) => handleProjectColorClick(entry.project, e)}
+                                         className="bg-white rounded-full p-1 shadow-md border"
+                                         title="Endre farge"
+                                       >
+                                         <Palette className="h-2 w-2 text-gray-600" />
+                                       </button>
                                     </div>
-                                    <div className="font-semibold truncate">
-                                      {entry.project?.project_name}
-                                    </div>
-                                    {entry.totalHours > 0 && (
-                                      <div className="text-xs opacity-90">
-                                        {formatTimeValue(entry.totalHours)} t
-                                      </div>
-                                    )}
+                                     <div className="font-semibold truncate">
+                                       {entry.project?.project_name}
+                                       {entry.activities.some(a => a.tripletex_synced_at) && (
+                                         <span className="ml-1 text-xs">✓</span>
+                                       )}
+                                       {entry.activities.some(a => a.sync_error) && (
+                                         <span className="ml-1 text-xs text-red-300" title={entry.activities.find(a => a.sync_error)?.sync_error}>⚠</span>
+                                       )}
+                                     </div>
+                                     {entry.totalHours > 0 && (
+                                       <div className="text-xs opacity-90">
+                                         {formatTimeValue(entry.totalHours)} t
+                                         {entry.activities.some(a => a.is_overtime) && (
+                                           <span className="ml-1 text-yellow-200" title="Inneholder overtid">⚡</span>
+                                         )}
+                                       </div>
+                                     )}
                                     {entry.activities.length > 0 && (
                                       <div className="text-xs opacity-75 truncate">
                                         {entry.activities[0].activity_name}

@@ -671,49 +671,64 @@ export type Database = {
       vakt_timer: {
         Row: {
           aktivitet_id: string | null
+          approved_at: string | null
+          approved_by: string | null
           client_reference: string | null
           created_at: string
           created_by: string | null
           id: string
+          is_overtime: boolean | null
           kilde: string | null
           lonnstype: string | null
           notat: string | null
           org_id: string
           status: string | null
+          sync_error: string | null
           timer: number
           tripletex_entry_id: number | null
+          tripletex_synced_at: string | null
           updated_at: string
           vakt_id: string
         }
         Insert: {
           aktivitet_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           client_reference?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          is_overtime?: boolean | null
           kilde?: string | null
           lonnstype?: string | null
           notat?: string | null
           org_id: string
           status?: string | null
+          sync_error?: string | null
           timer: number
           tripletex_entry_id?: number | null
+          tripletex_synced_at?: string | null
           updated_at?: string
           vakt_id: string
         }
         Update: {
           aktivitet_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           client_reference?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          is_overtime?: boolean | null
           kilde?: string | null
           lonnstype?: string | null
           notat?: string | null
           org_id?: string
           status?: string | null
+          sync_error?: string | null
           timer?: number
           tripletex_entry_id?: number | null
+          tripletex_synced_at?: string | null
           updated_at?: string
           vakt_id?: string
         }

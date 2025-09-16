@@ -708,6 +708,190 @@ Deno.serve(async (req) => {
         };
         break;
 
+      case 'send_timesheet_entry':
+        const { vakt_timer_id, employee_id, project_id, activity_id, hours, date, is_overtime, description } = payload;
+        
+        if (!vakt_timer_id || !employee_id || !project_id || !hours || !date) {
+          result = { success: false, error: 'Missing required fields for timesheet entry' };
+          break;
+        }
+
+        result = await exponentialBackoff(async () => {
+          // Format date for Tripletex API (YYYY-MM-DD)
+          const entryDate = new Date(date).toISOString().split('T')[0];
+          
+          const timesheetEntry = {
+            date: entryDate,
+            employee: { id: employee_id },
+            project: { id: project_id },
+            activity: activity_id ? { id: activity_id } : undefined,
+            hours: parseFloat(hours.toString()),
+            comment: description || '',
+            // Tripletex uses different properties for overtime
+            hourlyRate: is_overtime ? { id: 2 } : { id: 1 } // Assuming 1=normal, 2=overtime
+          };
+
+          console.log('Sending timesheet entry to Tripletex:', { ...timesheetEntry, employee: '***', project: '***' });
+
+          const response = await callTripletexAPI('/timesheet/entry', 'POST', timesheetEntry, orgId);
+          if (response.success && response.data?.value?.id) {
+            // Update local vakt_timer with Tripletex ID and sync timestamp
+            const { error: updateError } = await supabase
+              .from('vakt_timer')
+              .update({
+                tripletex_entry_id: response.data.value.id,
+                tripletex_synced_at: new Date().toISOString(),
+                sync_error: null,
+                status: 'sendt'
+              })
+              .eq('id', vakt_timer_id);
+
+            if (updateError) {
+              console.error('Failed to update vakt_timer after sync:', updateError);
+              return { 
+                success: true, // Tripletex succeeded, but local update failed
+                data: response.data, 
+                warning: 'Timesheet created in Tripletex but local sync status not updated' 
+              };
+            }
+
+            return { 
+              success: true, 
+              data: { 
+                tripletex_id: response.data.value.id,
+                message: 'Timesheet entry created successfully'
+              } 
+            };
+          }
+
+          // Handle sync error
+          if (vakt_timer_id) {
+            await supabase
+              .from('vakt_timer')
+              .update({
+                sync_error: response.error || 'Unknown error',
+                tripletex_synced_at: null
+              })
+              .eq('id', vakt_timer_id);
+          }
+
+          return response;
+        });
+        break;
+
+      case 'approve_timesheet_entries':
+        const { entry_ids, approved_by_user_id } = payload;
+        
+        if (!entry_ids || !Array.isArray(entry_ids) || entry_ids.length === 0) {
+          result = { success: false, error: 'Missing or invalid entry_ids array' };
+          break;
+        }
+
+        try {
+          const { error: approveError } = await supabase
+            .from('vakt_timer')
+            .update({
+              status: 'godkjent',
+              approved_at: new Date().toISOString(),
+              approved_by: approved_by_user_id
+            })
+            .in('id', entry_ids)
+            .eq('org_id', orgId);
+
+          if (approveError) {
+            result = { success: false, error: `Failed to approve entries: ${approveError.message}` };
+          } else {
+            result = { 
+              success: true, 
+              data: { 
+                approved_count: entry_ids.length,
+                message: `${entry_ids.length} timesheet entries approved`
+              } 
+            };
+          }
+        } catch (e: any) {
+          result = { success: false, error: e.message || 'Failed to approve entries' };
+        }
+        break;
+
+      case 'unapprove_timesheet_entries':
+        const { entry_ids: unapproveIds } = payload;
+        
+        if (!unapproveIds || !Array.isArray(unapproveIds) || unapproveIds.length === 0) {
+          result = { success: false, error: 'Missing or invalid entry_ids array' };
+          break;
+        }
+
+        try {
+          const { error: unapproveError } = await supabase
+            .from('vakt_timer')
+            .update({
+              status: 'utkast',
+              approved_at: null,
+              approved_by: null
+            })
+            .in('id', unapproveIds)
+            .eq('org_id', orgId);
+
+          if (unapproveError) {
+            result = { success: false, error: `Failed to unapprove entries: ${unapproveError.message}` };
+          } else {
+            result = { 
+              success: true, 
+              data: { 
+                unapproved_count: unapproveIds.length,
+                message: `${unapproveIds.length} timesheet entries set back to draft`
+              } 
+            };
+          }
+        } catch (e: any) {
+          result = { success: false, error: e.message || 'Failed to unapprove entries' };
+        }
+        break;
+
+      case 'delete_timesheet_entry':
+        const { tripletex_entry_id, vakt_timer_id: deleteVaktTimerId } = payload;
+        
+        if (!tripletex_entry_id && !deleteVaktTimerId) {
+          result = { success: false, error: 'Missing tripletex_entry_id or vakt_timer_id' };
+          break;
+        }
+
+        result = await exponentialBackoff(async () => {
+          let deleteResponse = { success: true };
+          
+          // Delete from Tripletex if we have the ID
+          if (tripletex_entry_id) {
+            deleteResponse = await callTripletexAPI(`/timesheet/entry/${tripletex_entry_id}`, 'DELETE', undefined, orgId);
+          }
+
+          if (deleteResponse.success && deleteVaktTimerId) {
+            // Update local entry to mark as deleted/reset sync status
+            const { error: updateError } = await supabase
+              .from('vakt_timer')
+              .update({
+                tripletex_entry_id: null,
+                tripletex_synced_at: null,
+                sync_error: null,
+                status: 'utkast'
+              })
+              .eq('id', deleteVaktTimerId);
+
+            if (updateError) {
+              console.error('Failed to update local entry after Tripletex deletion:', updateError);
+              return { 
+                success: true,
+                warning: 'Entry deleted from Tripletex but local status not updated'
+              };
+            }
+          }
+
+          return deleteResponse.success 
+            ? { success: true, data: { message: 'Timesheet entry deleted successfully' } }
+            : deleteResponse;
+        });
+        break;
+
       case 'get_project_details':
         const projectId = payload?.project_id;
         

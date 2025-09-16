@@ -35,6 +35,9 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
+  // Calculate if this is overtime based on lonnstype
+  const isOvertime = lonnstype === 'overtid';
+
   // Calculate total timer value from hours and minutes
   const timer = hours + (minutes / 60);
 
@@ -106,7 +109,8 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
         aktivitet_id: aktivitetId,
         notat: notat || null,
         status,
-        lonnstype
+        lonnstype,
+        is_overtime: isOvertime
       };
 
       let result;
@@ -220,6 +224,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           </div>
           <div className="text-center text-sm text-muted-foreground">
             Total: {formatTimeValue(timer)} timer
+            {isOvertime && <span className="ml-2 text-yellow-600">⚡ Overtid</span>}
           </div>
         </div>
 
@@ -246,12 +251,17 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background border z-50">
-              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="normal">Normal arbeidstid</SelectItem>
               <SelectItem value="overtid">Overtid</SelectItem>
-              <SelectItem value="helg">Helg</SelectItem>
+              <SelectItem value="helg">Helgearbeid</SelectItem>
               <SelectItem value="ferie">Ferie</SelectItem>
             </SelectContent>
           </Select>
+          {isOvertime && (
+            <div className="text-sm text-yellow-600 flex items-center gap-1">
+              ⚡ Overtid - vil bli registrert som overtidslønn
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
