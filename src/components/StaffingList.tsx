@@ -88,7 +88,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     tripletexProjectId: number;
     currentColor: string;
   } | null>(null);
-  
+  const [calendarDays, setCalendarDays] = useState<Record<string, { isWeekend: boolean; isHoliday: boolean }>>({});
   // Get multiple weeks of data
   const getMultipleWeeksData = (): WeekData[] => {
     const weeks: WeekData[] = [];
@@ -146,6 +146,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       loadActivities();
       loadEmployees();
       loadProjectColors();
+      loadCalendarDays();
     }
   }, [profile, startWeek, startYear, weeksToShow]);
 
@@ -225,52 +226,54 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         allDates.forEach(date => {
           const dateStr = date.toISOString().split('T')[0];
           
-          // Find existing vakt for this employee/date
-          const existingVakt = vaktData?.find(v => 
+          // Find all vakter for this employee/date
+          const matchingVakts = (vaktData || []).filter(v => 
             v.person_id === employee.id && v.dato === dateStr
           );
 
-          if (existingVakt) {
-            // Use existing data
-            const totalHours = existingVakt.vakt_timer.reduce((sum: number, timer: any) => sum + timer.timer, 0);
-            
-            let status: StaffingEntry['status'] = 'missing';
-            if (existingVakt.vakt_timer.length > 0) {
-              const allApproved = existingVakt.vakt_timer.every((t: any) => t.status === 'godkjent');
-              const allSent = existingVakt.vakt_timer.every((t: any) => t.status === 'sendt');
+          if (matchingVakts.length > 0) {
+            matchingVakts.forEach(existingVakt => {
+              // Use existing data
+              const totalHours = existingVakt.vakt_timer.reduce((sum: number, timer: any) => sum + timer.timer, 0);
               
-              if (allSent) status = 'sent';
-              else if (allApproved) status = 'approved';
-              else if (existingVakt.vakt_timer.some((t: any) => t.status === 'klar')) status = 'ready';
-              else status = 'draft';
-            }
+              let status: StaffingEntry['status'] = 'missing';
+              if (existingVakt.vakt_timer.length > 0) {
+                const allApproved = existingVakt.vakt_timer.every((t: any) => t.status === 'godkjent');
+                const allSent = existingVakt.vakt_timer.every((t: any) => t.status === 'sendt');
+                
+                if (allSent) status = 'sent';
+                else if (allApproved) status = 'approved';
+                else if (existingVakt.vakt_timer.some((t: any) => t.status === 'klar')) status = 'ready';
+                else status = 'draft';
+              }
 
-            transformedData.push({
-              id: existingVakt.id,
-              date: dateStr,
-              person: {
-                id: employee.id,
-                fornavn: employee.fornavn,
-                etternavn: employee.etternavn,
-                forventet_dagstimer: employee.forventet_dagstimer || 8
-              },
-              project: existingVakt.ttx_project_cache ? {
-                id: existingVakt.ttx_project_cache.id,
-                tripletex_project_id: existingVakt.ttx_project_cache.tripletex_project_id,
-                project_name: existingVakt.ttx_project_cache.project_name,
-                project_number: existingVakt.ttx_project_cache.project_number,
-                color: projectColors[existingVakt.ttx_project_cache.tripletex_project_id]
-              } : null,
-              activities: existingVakt.vakt_timer.map((timer: any) => ({
-                id: timer.id,
-                timer: timer.timer,
-                status: timer.status,
-                activity_name: timer.ttx_activity_cache?.navn || 'Ingen aktivitet',
-                lonnstype: timer.lonnstype,
-                notat: timer.notat
-              })),
-              totalHours,
-              status
+              transformedData.push({
+                id: existingVakt.id,
+                date: dateStr,
+                person: {
+                  id: employee.id,
+                  fornavn: employee.fornavn,
+                  etternavn: employee.etternavn,
+                  forventet_dagstimer: employee.forventet_dagstimer || 8
+                },
+                project: existingVakt.ttx_project_cache ? {
+                  id: existingVakt.ttx_project_cache.id,
+                  tripletex_project_id: existingVakt.ttx_project_cache.tripletex_project_id,
+                  project_name: existingVakt.ttx_project_cache.project_name,
+                  project_number: existingVakt.ttx_project_cache.project_number,
+                  color: projectColors[existingVakt.ttx_project_cache.tripletex_project_id]
+                } : null,
+                activities: existingVakt.vakt_timer.map((timer: any) => ({
+                  id: timer.id,
+                  timer: timer.timer,
+                  status: timer.status,
+                  activity_name: timer.ttx_activity_cache?.navn || 'Ingen aktivitet',
+                  lonnstype: timer.lonnstype,
+                  notat: timer.notat
+                })),
+                totalHours,
+                status
+              });
             });
           } else {
             // Create empty entry for employee/date combination
@@ -380,6 +383,25 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  const loadCalendarDays = async () => {
+    try {
+      const dateStrings = allDates.map(d => d.toISOString().split('T')[0]);
+      const { data, error } = await supabase
+        .from('kalender_dag')
+        .select('dato, is_weekend, is_holiday')
+        .in('dato', dateStrings);
+
+      if (error) throw error;
+
+      const map: Record<string, { isWeekend: boolean; isHoliday: boolean }> = {};
+      data?.forEach((d: any) => {
+        map[d.dato] = { isWeekend: d.is_weekend, isHoliday: d.is_holiday };
+      });
+      setCalendarDays(map);
+    } catch (error) {
+      console.error('Error loading calendar days:', error);
+    }
+  };
   const getProjectColor = (tripletexProjectId?: number) => {
     if (!tripletexProjectId) return '#94a3b8';
     return projectColors[tripletexProjectId] || generateProjectColor(tripletexProjectId);
@@ -791,6 +813,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                         {weekData.dates.map(date => {
                           const dateStr = date.toISOString().split('T')[0];
                           const dayEntries = employeeEntries.filter(e => e.date === dateStr && e.project);
+                          const isFreeDay = !!(calendarDays[dateStr]?.isWeekend || calendarDays[dateStr]?.isHoliday);
                           
                           return (
                             <td 
@@ -833,6 +856,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 }
                               }}
                             >
+                              {isFreeDay && (
+                                <div className="absolute inset-0 bg-red-500/10 pointer-events-none rounded-sm" />
+                              )}
                               <div className="flex flex-col gap-1">
                                 {dayEntries.map((entry) => (
                                   <div
