@@ -720,10 +720,11 @@ Deno.serve(async (req) => {
 
         result = await exponentialBackoff(async () => {
           // Preflight checks - validate all IDs exist in Tripletex before sending hours
-          console.log('Running preflight checks for employee, project, and activity IDs');
+          console.log('Preflight IDs', { employeeId: employee_id, projectId: project_id, activityId: activity_id });
           
           // Check employee exists
           const employeeCheck = await callTripletexAPI(`/employee/${employee_id}`, 'GET', undefined, orgId);
+          console.log('Preflight employee ->', employeeCheck.success ? 200 : 404);
           if (!employeeCheck.success) {
             return {
               success: false,
@@ -735,6 +736,7 @@ Deno.serve(async (req) => {
           
           // Check project exists
           const projectCheck = await callTripletexAPI(`/project/${project_id}`, 'GET', undefined, orgId);
+          console.log('Preflight project  ->', projectCheck.success ? 200 : 404);
           if (!projectCheck.success) {
             return {
               success: false,
@@ -747,6 +749,7 @@ Deno.serve(async (req) => {
           // Check activity exists (if provided)
           if (activity_id) {
             const activityCheck = await callTripletexAPI(`/activity/${activity_id}`, 'GET', undefined, orgId);
+            console.log('Preflight activity ->', activityCheck.success ? 200 : 404);
             if (!activityCheck.success) {
               return {
                 success: false,
