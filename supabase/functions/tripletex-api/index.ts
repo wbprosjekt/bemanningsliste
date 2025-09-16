@@ -719,27 +719,37 @@ Deno.serve(async (req) => {
         result = await exponentialBackoff(async () => {
           // Format date for Tripletex API (YYYY-MM-DD)
           const entryDate = new Date(date).toISOString().split('T')[0];
-          
-          const timesheetEntry = {
+
+          // Build payload according to Tripletex /timesheet/hours spec
+          const clientReference = `${orgId}-${vakt_timer_id}`;
+          const hoursItem: any = {
             date: entryDate,
             employee: { id: parseInt(employee_id.toString()) },
             project: { id: parseInt(project_id.toString()) },
-            activity: activity_id ? { id: parseInt(activity_id.toString()) } : undefined,
-            hours: parseFloat(hours.toString()),
-            comment: description || '',
-            // Tripletex uses different properties for overtime
-            hourlyRate: is_overtime ? { id: 2 } : { id: 1 } // Assuming 1=normal, 2=overtime
+            ...(activity_id ? { activity: { id: parseInt(activity_id.toString()) } } : {}),
+            count: parseFloat(hours.toString()),
+            description: description || '',
+            hourType: { id: is_overtime ? 2 : 1 },
+            clientReference,
           };
 
-          console.log('Sending timesheet entry to Tripletex:', { ...timesheetEntry, employee: '***', project: '***' });
+          const hoursPayload = { hours: [hoursItem] };
 
-          const response = await callTripletexAPI('/timesheet/entry', 'POST', timesheetEntry, orgId);
-          if (response.success && response.data?.value?.id) {
+          console.log('Sending timesheet hours to Tripletex:', { ...hoursItem, employee: '***', project: '***' });
+
+          const response = await callTripletexAPI('/timesheet/hours', 'POST', hoursPayload, orgId);
+
+          // Extract created id (API returns value array)
+          const value = (response as any).data?.value;
+          const created = Array.isArray(value) ? value[0] : value;
+          const createdId = created?.id;
+
+          if (response.success && createdId) {
             // Update local vakt_timer with Tripletex ID and sync timestamp
             const { error: updateError } = await supabase
               .from('vakt_timer')
               .update({
-                tripletex_entry_id: response.data.value.id,
+                tripletex_entry_id: createdId,
                 tripletex_synced_at: new Date().toISOString(),
                 sync_error: null,
                 status: 'sendt'
@@ -748,19 +758,19 @@ Deno.serve(async (req) => {
 
             if (updateError) {
               console.error('Failed to update vakt_timer after sync:', updateError);
-              return { 
+              return {
                 success: true, // Tripletex succeeded, but local update failed
-                data: response.data, 
-                warning: 'Timesheet created in Tripletex but local sync status not updated' 
+                data: response.data,
+                warning: 'Timesheet created in Tripletex but local sync status not updated'
               };
             }
 
-            return { 
-              success: true, 
-              data: { 
-                tripletex_id: response.data.value.id,
-                message: 'Timesheet entry created successfully'
-              } 
+            return {
+              success: true,
+              data: {
+                tripletex_id: createdId,
+                message: 'Timesheet hours created successfully'
+              }
             };
           }
 
