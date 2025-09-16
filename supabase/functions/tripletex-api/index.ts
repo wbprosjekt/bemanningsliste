@@ -519,8 +519,7 @@ Deno.serve(async (req) => {
             const { data: activityData } = await supabase
               .from('ttx_activity_cache')
               .select('ttx_id')
--             .eq('id', entry.activityId)
-+             .eq('ttx_id', entry.activityId)
+              .eq('ttx_id', entry.activityId)
               .eq('org_id', orgId)
               .single();
 
