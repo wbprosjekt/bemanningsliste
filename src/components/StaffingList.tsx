@@ -27,6 +27,7 @@ import {
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
 import ProjectSearchDialog from './ProjectSearchDialog';
 import ColorPickerDialog from './ColorPickerDialog';
+import { startOfISOWeek, addWeeks, addDays, isValid as isValidDate, format as formatDate } from 'date-fns';
 
 interface StaffingEntry {
   id: string;
@@ -92,12 +93,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
   const toDateKey = (d: Date): string => {
     try {
-      if (!(d instanceof Date) || isNaN(d.getTime())) return '';
-      const y = d.getFullYear();
-      if (y < 1970 || y > 3000) return ''; // Reasonable year range
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
+      if (!isValidDate(d)) return '';
+      return formatDate(d, 'yyyy-MM-dd');
     } catch (error) {
       console.error('Error formatting date:', error, d);
       return '';
@@ -111,64 +108,37 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     
     for (let i = 0; i < weeksToShow; i++) {
       try {
-        // Calculate first Monday of ISO year using Jan 4th rule (simplified)
-        const jan1 = new Date(currentYear, 0, 1);
-        if (isNaN(jan1.getTime())) {
-          console.error(`Invalid year: ${currentYear}`);
-          break;
-        }
-        
-        // Find first Thursday (ISO week 1 contains Jan 4th)
+        // ISO Week 1 Monday via date-fns
         const jan4 = new Date(currentYear, 0, 4);
-        const dayOfWeek = jan4.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Days to get to Monday
-        
-        const firstMonday = new Date(jan4);
-        firstMonday.setDate(jan4.getDate() + mondayOffset);
-        
-        if (isNaN(firstMonday.getTime())) {
-          console.error(`Invalid first Monday calculation for year ${currentYear}`);
+        const week1Monday = startOfISOWeek(jan4);
+        if (!isValidDate(week1Monday)) {
+          console.error(`Invalid week1Monday for year ${currentYear}`);
           break;
         }
-        
-        // Calculate target week's Monday
-        const targetMonday = new Date(firstMonday);
-        targetMonday.setDate(firstMonday.getDate() + (currentWeek - 1) * 7);
-        
-        if (isNaN(targetMonday.getTime())) {
-          console.error(`Invalid target Monday for week ${currentWeek}, year ${currentYear}`);
+
+        const targetMonday = addWeeks(week1Monday, currentWeek - 1);
+        if (!isValidDate(targetMonday)) {
+          console.error(`Invalid targetMonday for week ${currentWeek}, year ${currentYear}`);
           break;
         }
-        
-        // Generate 7 days of the week
+
+        // Generate 7 days
         const dates: Date[] = [];
         for (let j = 0; j < 7; j++) {
-          const date = new Date(targetMonday);
-          date.setDate(targetMonday.getDate() + j);
-          
-          if (isNaN(date.getTime())) {
-            console.error(`Invalid date generated for day ${j} of week ${currentWeek}`);
-            continue;
-          }
-          
-          dates.push(date);
+          const date = addDays(targetMonday, j);
+          if (isValidDate(date)) dates.push(date);
         }
-        
+
         if (dates.length === 7) {
-          weeks.push({
-            week: currentWeek,
-            year: currentYear,
-            dates
-          });
+          weeks.push({ week: currentWeek, year: currentYear, dates });
         }
-        
-        // Move to next week with year boundary handling
+
+        // Next week with 53-week check
         currentWeek++;
-        if (currentWeek > 53) { // Max possible weeks in a year
+        if (currentWeek > 53) {
           currentYear++;
           currentWeek = 1;
         } else if (currentWeek > 52) {
-          // Check if this year actually has week 53
           const dec31 = new Date(currentYear, 11, 31);
           const lastWeek = getWeekNumber(dec31);
           if (currentWeek > lastWeek) {
@@ -228,6 +198,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     setLoading(true);
     try {
       const dateStrings = allDates.map(toDateKey).filter(Boolean);
+      if (dateStrings.length === 0) {
+        console.warn('No valid dates generated for staffing query');
+        setStaffingData([]);
+        return;
+      }
       
       // Get all employees first 
       const { data: allEmployees, error: employeeError } = await supabase
@@ -442,6 +417,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const loadCalendarDays = async () => {
     try {
       const dateStrings = allDates.map(toDateKey).filter(Boolean);
+      if (dateStrings.length === 0) {
+        console.warn('No valid dates generated for calendar query');
+        setCalendarDays({});
+        return;
+      }
       const { data, error } = await supabase
         .from('kalender_dag')
         .select('dato, is_weekend, is_holiday')
