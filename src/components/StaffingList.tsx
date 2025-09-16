@@ -22,7 +22,7 @@ import {
   Users,
   Download
 } from 'lucide-react';
-import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue } from '@/lib/displayNames';
+import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
 import ProjectSearchDialog from './ProjectSearchDialog';
 
 interface StaffingEntry {
@@ -53,12 +53,19 @@ interface StaffingEntry {
   status: 'missing' | 'draft' | 'ready' | 'approved' | 'sent';
 }
 
-interface StaffingListProps {
+interface WeekData {
   week: number;
   year: number;
+  dates: Date[];
 }
 
-const StaffingList = ({ week, year }: StaffingListProps) => {
+interface StaffingListProps {
+  startWeek: number;
+  startYear: number;
+  weeksToShow?: number;
+}
+
+const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -73,23 +80,49 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showProjectSearch, setShowProjectSearch] = useState<{date: string, personId: string} | null>(null);
   
-  // Get week dates
-  const getWeekDates = () => {
-    const startDate = new Date(year, 0, 1 + (week - 1) * 7);
-    const firstMonday = new Date(startDate);
-    const dayOffset = startDate.getDay() - 1;
-    firstMonday.setDate(startDate.getDate() - dayOffset);
+  // Get multiple weeks of data
+  const getMultipleWeeksData = (): WeekData[] => {
+    const weeks: WeekData[] = [];
+    let currentWeek = startWeek;
+    let currentYear = startYear;
     
-    const dates = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(firstMonday);
-      date.setDate(firstMonday.getDate() + i);
-      dates.push(date);
+    for (let i = 0; i < weeksToShow; i++) {
+      // Calculate week dates
+      const startDate = new Date(currentYear, 0, 1 + (currentWeek - 1) * 7);
+      const firstMonday = new Date(startDate);
+      const dayOffset = startDate.getDay() - 1;
+      firstMonday.setDate(startDate.getDate() - dayOffset);
+      
+      const dates = [];
+      for (let j = 0; j < 7; j++) {
+        const date = new Date(firstMonday);
+        date.setDate(firstMonday.getDate() + j);
+        dates.push(date);
+      }
+      
+      weeks.push({
+        week: currentWeek,
+        year: currentYear,
+        dates
+      });
+      
+      // Move to next week
+      currentWeek++;
+      if (currentWeek > 52) {
+        // Check if year actually has 53 weeks
+        const lastWeekOfYear = getWeekNumber(new Date(currentYear, 11, 31));
+        if (currentWeek > lastWeekOfYear) {
+          currentYear++;
+          currentWeek = 1;
+        }
+      }
     }
-    return dates;
+    
+    return weeks;
   };
 
-  const weekDates = getWeekDates();
+  const multiWeekData = getMultipleWeeksData();
+  const allDates = multiWeekData.flatMap(w => w.dates);
 
   useEffect(() => {
     if (user) {
@@ -105,7 +138,7 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
       loadEmployees();
       loadProjectColors();
     }
-  }, [profile, week, year]);
+  }, [profile, startWeek, startYear, weeksToShow]);
 
   const loadUserProfile = async () => {
     if (!user) return;
@@ -129,7 +162,7 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
 
     setLoading(true);
     try {
-      const dateStrings = weekDates.map(d => d.toISOString().split('T')[0]);
+      const dateStrings = allDates.map(d => d.toISOString().split('T')[0]);
       
       // Get all employees first 
       const { data: allEmployees, error: employeeError } = await supabase
@@ -180,7 +213,7 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
       const transformedData: StaffingEntry[] = [];
       
       allEmployees?.forEach(employee => {
-        weekDates.forEach(date => {
+        allDates.forEach(date => {
           const dateStr = date.toISOString().split('T')[0];
           
           // Find existing vakt for this employee/date
@@ -530,7 +563,7 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
         <div>
           <h1 className="text-3xl font-bold">Bemanningsliste</h1>
           <p className="text-muted-foreground">
-            {profile?.org?.name} - Uke {week}, {year}
+            {profile?.org?.name} - Uker {startWeek}-{multiWeekData[multiWeekData.length - 1].week}, {startYear}
           </p>
         </div>
         
@@ -548,119 +581,132 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
         </div>
       </div>
 
-      {/* Excel-like table */}
-      <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-slate-100">
-                <th className="border border-gray-300 p-2 text-left font-bold w-40 bg-slate-200">
-                  UKE {week}
-                </th>
-                {weekDates.map(date => (
-                  <th key={date.toISOString()} className="border border-gray-300 p-2 text-center min-w-[140px] font-bold">
-                    <div className="space-y-1">
-                      <div className="text-xs uppercase font-semibold">
-                        {date.toLocaleDateString('no-NO', { weekday: 'long' })}
-                      </div>
-                      <div className="text-sm">
-                        {date.toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                      </div>
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {employees.map(employee => {
-                const employeeEntries = staffingData.filter(e => e.person.id === employee.id);
-                
-                return (
-                  <tr key={employee.id} className="hover:bg-gray-50">
-                    <td className="border border-gray-300 p-3 font-medium bg-slate-50 sticky left-0">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={employeeEntries.every(e => selectedEntries.has(e.id))}
-                          onCheckedChange={(checked) => {
-                            const newSelection = new Set(selectedEntries);
-                            employeeEntries.forEach(e => {
-                              if (checked) {
-                                newSelection.add(e.id);
-                              } else {
-                                newSelection.delete(e.id);
-                              }
-                            });
-                            setSelectedEntries(newSelection);
-                          }}
-                        />
-                        <span>{getPersonDisplayName(employee.fornavn, employee.etternavn)}</span>
-                      </div>
-                    </td>
-                    {weekDates.map(date => {
-                      const dateStr = date.toISOString().split('T')[0];
-                      const entry = employeeEntries.find(e => e.date === dateStr);
-                      
-                      return (
-                        <td 
-                          key={dateStr} 
-                          className="border border-gray-300 p-1 h-16 min-w-[140px] relative group"
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            const draggedEntryId = e.dataTransfer.getData('text/plain');
-                            if (draggedEntryId && draggedEntryId !== entry?.id) {
-                              copyEntryToDate(draggedEntryId, dateStr);
-                            }
-                          }}
-                        >
-                          {entry?.project ? (
-                            <div
-                              className="w-full h-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative"
-                              style={{ 
-                                backgroundColor: getProjectColor(entry.project.tripletex_project_id),
-                                color: getContrastColor(getProjectColor(entry.project.tripletex_project_id))
-                              }}
-                              draggable
-                              onDragStart={(e) => {
-                                e.dataTransfer.setData('text/plain', entry.id);
-                              }}
-                              onClick={() => {
-                                // TODO: Open project details/edit dialog
-                              }}
-                            >
-                              <div className="font-semibold truncate">
-                                {entry.project.project_name}
-                              </div>
-                              {entry.totalHours > 0 && (
-                                <div className="text-xs opacity-90">
-                                  {formatTimeValue(entry.totalHours)} t
-                                </div>
-                              )}
-                              {entry.activities.length > 0 && (
-                                <div className="text-xs opacity-75 truncate">
-                                  {entry.activities[0].activity_name}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <button
-                              className="w-full h-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors group-hover:bg-blue-50"
-                              onClick={() => setShowProjectSearch({ date: dateStr, personId: employee.id })}
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          )}
-                        </td>
-                      );
-                    })}
+      {/* Multi-week Excel-like table */}
+      <div className="space-y-8">
+        {multiWeekData.map(weekData => (
+          <div key={`${weekData.year}-${weekData.week}`} className="border rounded-lg overflow-hidden bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="border border-gray-300 p-2 text-left font-bold w-40 bg-slate-200">
+                      UKE {weekData.week}
+                    </th>
+                    {weekData.dates.map(date => (
+                      <th key={date.toISOString()} className="border border-gray-300 p-2 text-center min-w-[140px] font-bold">
+                        <div className="space-y-1">
+                          <div className="text-xs uppercase font-semibold">
+                            {date.toLocaleDateString('no-NO', { weekday: 'long' })}
+                          </div>
+                          <div className="text-sm">
+                            {date.toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          </div>
+                        </div>
+                      </th>
+                    ))}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {employees.map(employee => {
+                    const employeeEntries = staffingData.filter(e => 
+                      e.person.id === employee.id && 
+                      weekData.dates.some(d => d.toISOString().split('T')[0] === e.date)
+                    );
+                    
+                    return (
+                      <tr key={employee.id} className="hover:bg-gray-50">
+                        <td className="border border-gray-300 p-3 font-medium bg-slate-50 sticky left-0">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={employeeEntries.every(e => selectedEntries.has(e.id))}
+                              onCheckedChange={(checked) => {
+                                const newSelection = new Set(selectedEntries);
+                                employeeEntries.forEach(e => {
+                                  if (checked) {
+                                    newSelection.add(e.id);
+                                  } else {
+                                    newSelection.delete(e.id);
+                                  }
+                                });
+                                setSelectedEntries(newSelection);
+                              }}
+                            />
+                            <span>{getPersonDisplayName(employee.fornavn, employee.etternavn)}</span>
+                          </div>
+                        </td>
+                        {weekData.dates.map(date => {
+                          const dateStr = date.toISOString().split('T')[0];
+                          const entry = employeeEntries.find(e => e.date === dateStr);
+                          
+                          return (
+                            <td 
+                              key={dateStr} 
+                              className="border border-gray-300 p-1 h-16 min-w-[140px] relative group"
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                const draggedEntryId = e.dataTransfer.getData('text/plain');
+                                if (draggedEntryId && draggedEntryId !== entry?.id) {
+                                  copyEntryToDate(draggedEntryId, dateStr);
+                                }
+                              }}
+                            >
+                              {entry?.project ? (
+                                <div
+                                  className="w-full h-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative"
+                                  style={{ 
+                                    backgroundColor: getProjectColor(entry.project.tripletex_project_id),
+                                    color: getContrastColor(getProjectColor(entry.project.tripletex_project_id))
+                                  }}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData('text/plain', entry.id);
+                                  }}
+                                  onClick={() => {
+                                    // TODO: Open project details/edit dialog
+                                  }}
+                                >
+                                  <div className="font-semibold truncate">
+                                    {entry.project.project_name}
+                                  </div>
+                                  {entry.totalHours > 0 && (
+                                    <div className="text-xs opacity-90">
+                                      {formatTimeValue(entry.totalHours)} t
+                                    </div>
+                                  )}
+                                  {entry.activities.length > 0 && (
+                                    <div className="text-xs opacity-75 truncate">
+                                      {entry.activities[0].activity_name}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div 
+                                  className="w-full h-full border-2 border-dashed border-gray-200 rounded opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer hover:border-blue-300"
+                                  onClick={() => setShowProjectSearch({ date: dateStr, personId: employee.id })}
+                                >
+                                  <Plus className="h-4 w-4 text-gray-400" />
+                                </div>
+                              )}
+                              
+                              {/* Status indicator */}
+                              {entry && (
+                                <div className="absolute -top-1 -right-1">
+                                  {getStatusBadge(entry.status)}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
       </div>
-
       {/* Project Search Dialog */}
       <ProjectSearchDialog
         open={!!showProjectSearch}

@@ -12,13 +12,12 @@ const Bemanningsliste = () => {
   const currentYear = parseInt(year || new Date().getFullYear().toString());
   const currentWeek = parseInt(week || getWeekNumber(new Date()).toString());
 
-  const navigateWeek = (delta: number) => {
+  const navigateWeeks = (delta: number) => {
     let newYear = currentYear;
     let newWeek = currentWeek + delta;
 
     // Handle year transitions properly for ISO weeks
     if (newWeek > 52) {
-      // Check if year actually has 53 weeks
       const lastWeekOfYear = getWeekNumber(new Date(currentYear, 11, 31));
       if (newWeek > lastWeekOfYear) {
         newYear++;
@@ -34,25 +33,25 @@ const Bemanningsliste = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Week Navigation */}
+      {/* Multi-Week Navigation */}
       <div className="bg-card border-b p-4">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-4">
-          <Button variant="outline" onClick={() => navigateWeek(-1)}>
+          <Button variant="outline" onClick={() => navigateWeeks(-6)}>
             <ChevronLeft className="h-4 w-4" />
-            Forrige uke
+            Forrige 6 uker
           </Button>
           <div className="text-lg font-medium">
-            Uke {currentWeek}, {currentYear}
+            Fra uke {currentWeek}, {currentYear}
           </div>
-          <Button variant="outline" onClick={() => navigateWeek(1)}>
-            Neste uke
+          <Button variant="outline" onClick={() => navigateWeeks(6)}>
+            Neste 6 uker
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Staffing List */}
-      <StaffingList week={currentWeek} year={currentYear} />
+      {/* Multi-Week Staffing List */}
+      <StaffingList startWeek={currentWeek} startYear={currentYear} weeksToShow={6} />
     </div>
   );
 };
