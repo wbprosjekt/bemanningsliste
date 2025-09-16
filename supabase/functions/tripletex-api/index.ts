@@ -618,9 +618,9 @@ Deno.serve(async (req) => {
             const clientReference = `${orgId}-${entry.id}`;
             
             const timesheetData = {
-              employee: { id: employeeData.tripletex_employee_id },
-              project: { id: entry.projectId },
-              activity: { id: activityData.ttx_id },
+              employee: { id: parseInt(employeeData.tripletex_employee_id.toString()) },
+              project: { id: parseInt(entry.projectId.toString()) },
+              activity: { id: parseInt(activityData.ttx_id.toString()) },
               date: entry.date,
               hours: entry.hours,
               comment: entry.comment || '',
@@ -722,9 +722,9 @@ Deno.serve(async (req) => {
           
           const timesheetEntry = {
             date: entryDate,
-            employee: { id: employee_id },
-            project: { id: project_id },
-            activity: activity_id ? { id: activity_id } : undefined,
+            employee: { id: parseInt(employee_id.toString()) },
+            project: { id: parseInt(project_id.toString()) },
+            activity: activity_id ? { id: parseInt(activity_id.toString()) } : undefined,
             hours: parseFloat(hours.toString()),
             comment: description || '',
             // Tripletex uses different properties for overtime
