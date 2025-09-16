@@ -453,6 +453,92 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  const moveEntryToEmployeeAndDate = async (entryId: string, targetPersonId: string, targetDate: string, shouldCopy: boolean = false) => {
+    try {
+      const sourceEntry = staffingData.find(e => e.id === entryId);
+      if (!sourceEntry) return;
+
+      // Check if target already has a project for this date
+      const existingTargetEntry = staffingData.find(e => 
+        e.person.id === targetPersonId && 
+        e.date === targetDate && 
+        e.project
+      );
+
+      if (existingTargetEntry && !shouldCopy) {
+        toast({
+          title: "Ansatt har allerede prosjekt",
+          description: "Denne ansatte har allerede et prosjekt på denne datoen. Prosjektet vil bli kopiert i stedet.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Create new vakt for target person/date
+      const { data: newVakt, error: vaktError } = await supabase
+        .from('vakt')
+        .insert({
+          person_id: targetPersonId,
+          project_id: sourceEntry.project?.id || null,
+          dato: targetDate,
+          org_id: profile.org_id
+        })
+        .select()
+        .single();
+
+      if (vaktError) throw vaktError;
+
+      // Copy activities
+      for (const activity of sourceEntry.activities) {
+        await supabase
+          .from('vakt_timer')
+          .insert({
+            vakt_id: newVakt.id,
+            org_id: profile.org_id,
+            timer: activity.timer,
+            aktivitet_id: activities.find(a => a.navn === activity.activity_name)?.id,
+            lonnstype: activity.lonnstype,
+            notat: activity.notat,
+            status: 'utkast'
+          });
+      }
+
+      // If moving (not copying), remove the original entry
+      if (!shouldCopy && sourceEntry.id.indexOf('empty-') !== 0) {
+        // Delete original activities
+        if (sourceEntry.activities.length > 0) {
+          const activityIds = sourceEntry.activities.map(a => a.id);
+          await supabase
+            .from('vakt_timer')
+            .delete()
+            .in('id', activityIds);
+        }
+
+        // Delete original vakt
+        await supabase
+          .from('vakt')
+          .delete()
+          .eq('id', sourceEntry.id);
+      }
+
+      const targetEmployee = employees.find(e => e.id === targetPersonId);
+      const action = shouldCopy ? "kopiert til" : "flyttet til";
+      
+      toast({
+        title: `Prosjekt ${action}`,
+        description: `${sourceEntry.project?.project_name} ${action} ${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'ukjent ansatt'} på ${new Date(targetDate).toLocaleDateString('no-NO')}`
+      });
+
+      loadStaffingData();
+    } catch (error: any) {
+      toast({
+        title: "Operasjon feilet",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
   const assignProjectToPerson = async (projectId: string, personId: string, date: string) => {
     try {
       // Check if vakt already exists
@@ -574,6 +660,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-64"
           />
+          <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded">
+            💡 Tips: Dra prosjekter mellom ansatte. Hold Shift for å kopiere.
+          </div>
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
             Godkjenn ({selectedEntries.size})
@@ -642,18 +731,46 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             <td 
                               key={dateStr} 
                               className="border border-gray-300 p-1 h-16 min-w-[140px] relative group"
-                              onDragOver={(e) => e.preventDefault()}
+                              data-employee-id={employee.id}
+                              data-date={dateStr}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.classList.add('bg-blue-50', 'border-blue-300');
+                              }}
+                              onDragLeave={(e) => {
+                                e.currentTarget.classList.remove('bg-blue-50', 'border-blue-300');
+                              }}
                               onDrop={(e) => {
                                 e.preventDefault();
+                                e.currentTarget.classList.remove('bg-blue-50', 'border-blue-300');
+                                
                                 const draggedEntryId = e.dataTransfer.getData('text/plain');
-                                if (draggedEntryId && draggedEntryId !== entry?.id) {
-                                  copyEntryToDate(draggedEntryId, dateStr);
+                                const sourcePersonId = e.dataTransfer.getData('application/x-source-person-id');
+                                const sourceDate = e.dataTransfer.getData('application/x-source-date');
+                                
+                                if (draggedEntryId) {
+                                  const isShiftPressed = e.shiftKey;
+                                  const isSamePerson = sourcePersonId === employee.id;
+                                  const isSameDate = sourceDate === dateStr;
+                                  
+                                  if (isSamePerson && isSameDate) {
+                                    // Same cell - do nothing
+                                    return;
+                                  }
+                                  
+                                  if (isSamePerson) {
+                                    // Same person, different date - copy to new date
+                                    copyEntryToDate(draggedEntryId, dateStr);
+                                  } else {
+                                    // Different person - move or copy based on Shift key
+                                    moveEntryToEmployeeAndDate(draggedEntryId, employee.id, dateStr, isShiftPressed);
+                                  }
                                 }
                               }}
                             >
                               {entry?.project ? (
                                 <div
-                                  className="w-full h-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative"
+                                  className="w-full h-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow"
                                   style={{ 
                                     backgroundColor: getProjectColor(entry.project.tripletex_project_id),
                                     color: getContrastColor(getProjectColor(entry.project.tripletex_project_id))
@@ -661,10 +778,21 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   draggable
                                   onDragStart={(e) => {
                                     e.dataTransfer.setData('text/plain', entry.id);
+                                    e.dataTransfer.setData('application/x-source-person-id', employee.id);
+                                    e.dataTransfer.setData('application/x-source-date', dateStr);
+                                    e.dataTransfer.effectAllowed = 'copyMove';
+                                    
+                                    // Add visual feedback to the dragged element
+                                    e.currentTarget.style.opacity = '0.5';
+                                  }}
+                                  onDragEnd={(e) => {
+                                    // Reset visual feedback
+                                    e.currentTarget.style.opacity = '1';
                                   }}
                                   onClick={() => {
                                     // TODO: Open project details/edit dialog
                                   }}
+                                  title={`${entry.project.project_name}\n${formatTimeValue(entry.totalHours)} timer\nHold Shift og dra for å kopiere`}
                                 >
                                   <div className="font-semibold truncate">
                                     {entry.project.project_name}
