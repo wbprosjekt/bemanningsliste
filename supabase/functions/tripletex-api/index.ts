@@ -43,18 +43,15 @@ function safeBody(body: any) {
   return out;
 }
 
-// NEW: decode base64-JSON -> .token if applicable
-function maybeDecodeToken(raw: string): string {
-  if (!raw) return raw;
-  const s = raw.trim();
-  const looksB64 = /^[A-Za-z0-9+/=]+$/.test(s) && s.length % 4 === 0;
-  if (!looksB64) return s;
+// Extract token from base64-encoded JSON if needed
+function extractTokenFromBase64(base64Token: string): string {
+  if (!base64Token) return base64Token;
   try {
-    const txt = atob(s);
-    const obj = JSON.parse(txt);
-    return (obj && typeof obj.token === 'string' && obj.token) ? obj.token : s;
+    const decoded = atob(base64Token);
+    const parsed = JSON.parse(decoded);
+    return parsed.token || base64Token;
   } catch {
-    return s;
+    return base64Token;
   }
 }
 
@@ -133,44 +130,68 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
   const defaultDays = Number(Deno.env.get('SESSION_DEFAULT_DAYS') ?? '7');
   const expirationDate = new Date(Date.now() + defaultDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  // Decode tokens if they are base64-JSON
-  const consumerPlain = maybeDecodeToken(config.consumerToken);
-  const employeePlain = maybeDecodeToken(config.employeeToken);
+  // Use base64 tokens directly (don't decode)
+  const consumerToken = config.consumerToken;
+  const employeeToken = config.employeeToken;
 
-  // Build URL with query params (robust against body parsing issues)
+  // Build URL with query params as per requirement
   const sessionUrl = new URL(`${config.baseUrl}/token/session/:create`);
-  sessionUrl.searchParams.set('consumerToken', consumerPlain);
-  sessionUrl.searchParams.set('employeeToken', employeePlain);
+  sessionUrl.searchParams.set('consumerToken', consumerToken);
+  sessionUrl.searchParams.set('employeeToken', employeeToken);
   sessionUrl.searchParams.set('expirationDate', expirationDate);
 
   console.log('Creating new Tripletex session for org', orgId, 'expiring', expirationDate);
   console.log('Tripletex session request', {
-    url: sessionUrl.toString(),
-    method: 'PUT'
+    url: sessionUrl.toString().replace(consumerToken, '***masked***').replace(employeeToken, '***masked***'),
+    method: 'PUT',
+    queryParams: {
+      consumerToken: maskToken(consumerToken),
+      employeeToken: maskToken(employeeToken),
+      expirationDate
+    }
   });
 
   const resp = await fetch(sessionUrl.toString(), {
     method: 'PUT'
-    // no headers/body needed when using query params
+    // No body or headers needed - all in query params
   });
 
   const text = await resp.text();
   let data: any = {};
   try { data = JSON.parse(text); } catch {}
 
-  console.log('Tripletex session response', { status: resp.status, bodyLen: text.length });
+  console.log('Tripletex session response', { 
+    status: resp.status, 
+    success: resp.ok,
+    bodyLen: text.length 
+  });
+
   if (!resp.ok) {
-    console.error('Failed to create Tripletex session:', { status: resp.status, body: text.slice(0, 500) });
-    throw new Error(data?.message || text || `Failed to create Tripletex session (HTTP ${resp.status})`);
+    const errorMsg = data?.message || 'Unknown error';
+    console.error('Failed to create Tripletex session:', { 
+      status: resp.status, 
+      error: errorMsg,
+      validationMessages: data?.validationMessages || []
+    });
+    
+    // Handle specific error codes
+    if (resp.status === 401) {
+      throw new Error('Ugyldig API-nøkler. Sjekk consumer_token og employee_token.');
+    } else if (resp.status === 422) {
+      const validationErrors = data?.validationMessages?.map(v => v.message).join(', ') || 'Valideringsfeil';
+      throw new Error(`Valideringsfeil fra Tripletex: ${validationErrors}`);
+    } else {
+      throw new Error(errorMsg || `HTTP ${resp.status}: ${text.slice(0, 200)}`);
+    }
   }
 
-  // Try multiple shapes just in case
+  // Extract token from response
   const token = data?.value?.token ?? data?.token ?? data?.value?.[0]?.token;
   const exp = data?.value?.expirationDate ?? data?.expirationDate ?? expirationDate;
 
   if (!token) {
     console.error('Tripletex session response missing token:', data);
-    throw new Error('Tripletex session response missing token');
+    throw new Error('Tripletex returnerte ikke en session token');
   }
 
   // Persist session token into settings
@@ -326,17 +347,29 @@ Deno.serve(async (req) => {
 
       case 'test-session':
         try {
+          console.log(`Testing session creation for org ${orgId}`);
           const session = await getOrCreateSession(orgId);
-          result = { success: true, data: { token: session.token, expirationDate: session.expirationDate } };
+          console.log(`Session test successful: token length=${session.token.length}, expires=${session.expirationDate}`);
+          result = { 
+            success: true, 
+            data: { 
+              token: maskToken(session.token), 
+              expirationDate: session.expirationDate,
+              tokenLength: session.token.length
+            } 
+          };
         } catch (e: any) {
+          console.error('Session test failed:', e.message);
           result = { success: false, error: e.message || 'Failed to create session' };
         }
         break;
 
       case 'sync-employees':
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/employee?count=1000', 'GET', undefined, orgId);
+          const response = await callTripletexAPI('/employee?count=100', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
+            console.log(`Syncing ${response.data.values.length} employees for org ${orgId}`);
+            
             // Cache employees in database
             const employees = response.data.values.map((emp: any) => ({
               org_id: orgId,
@@ -344,11 +377,11 @@ Deno.serve(async (req) => {
               fornavn: emp.firstName || '',
               etternavn: emp.lastName || '',
               epost: emp.email,
-              aktiv: emp.isActive,
+              aktiv: emp.isActive !== false, // Default to true if undefined
               last_synced: new Date().toISOString()
             }));
 
-            // Upsert employees
+            // Upsert employees with proper conflict resolution
             const { error: upsertError } = await supabase
               .from('ttx_employee_cache')
               .upsert(employees, { 
@@ -358,9 +391,10 @@ Deno.serve(async (req) => {
 
             if (upsertError) {
               console.error('Error upserting employees:', upsertError);
-              return { success: false, error: upsertError.message };
+              return { success: false, error: `Database error: ${upsertError.message}` };
             }
 
+            console.log(`Successfully synced ${employees.length} employees`);
             return { success: true, data: { count: employees.length } };
           }
           return response;
@@ -369,8 +403,10 @@ Deno.serve(async (req) => {
 
       case 'sync-projects':
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/project?count=1000', 'GET', undefined, orgId);
+          const response = await callTripletexAPI('/project?count=100', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
+            console.log(`Syncing ${response.data.values.length} projects for org ${orgId}`);
+            
             // Cache projects in database
             const projects = response.data.values.map((proj: any) => ({
               org_id: orgId,
@@ -378,7 +414,7 @@ Deno.serve(async (req) => {
               project_number: proj.number,
               project_name: proj.displayName || proj.name,
               customer_name: proj.customer?.name,
-              is_active: proj.isActive,
+              is_active: proj.isActive !== false, // Default to true if undefined
               last_synced: new Date().toISOString()
             }));
 
@@ -391,9 +427,10 @@ Deno.serve(async (req) => {
 
             if (upsertError) {
               console.error('Error upserting projects:', upsertError);
-              return { success: false, error: upsertError.message };
+              return { success: false, error: `Database error: ${upsertError.message}` };
             }
 
+            console.log(`Successfully synced ${projects.length} projects`);
             return { success: true, data: { count: projects.length } };
           }
           return response;
