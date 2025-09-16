@@ -27,13 +27,13 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/min/uke/:year-:week" element={<MinUke />} />
-            <Route path="/uke/:year-:week" element={<Uke />} />
+            <Route path="/min/uke/:year/:week" element={<MinUke />} />
+            <Route path="/uke/:year/:week" element={<Uke />} />
             <Route path="/admin/integrasjoner/tripletex" element={<TripletexIntegration />} />
             <Route path="/admin/timer" element={<AdminTimer />} />
             <Route path="/admin/brukere" element={<AdminBrukere />} />
             <Route path="/admin/underleverandorer" element={<AdminUnderleverandorer />} />
-            <Route path="/admin/bemanningsliste/:year-:week" element={<Bemanningsliste />} />
+            <Route path="/admin/bemanningsliste/:year/:week" element={<Bemanningsliste />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

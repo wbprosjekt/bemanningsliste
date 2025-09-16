@@ -93,7 +93,7 @@ const MinUke = () => {
       newWeek = 52;
     }
 
-    navigate(`/min/uke/${newYear}-${newWeek.toString().padStart(2, '0')}`);
+    navigate(`/min/uke/${newYear}/${newWeek.toString().padStart(2, '0')}`);
   };
 
   const getWeekDays = () => {

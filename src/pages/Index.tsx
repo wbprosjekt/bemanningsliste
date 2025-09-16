@@ -33,7 +33,7 @@ const Index = () => {
   const currentWeek = getWeekNumber(new Date());
 
   const goToCurrentWeek = () => {
-    navigate(`/min/uke/${currentYear}-${currentWeek.toString().padStart(2, '0')}`);
+    navigate(`/min/uke/${currentYear}/${currentWeek.toString().padStart(2, '0')}`);
   };
 
   return (

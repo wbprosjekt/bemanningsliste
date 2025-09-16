@@ -29,7 +29,7 @@ const Bemanningsliste = () => {
       newWeek = 52;
     }
 
-    navigate(`/admin/bemanningsliste/${newYear}-${newWeek.toString().padStart(2, '0')}`);
+    navigate(`/admin/bemanningsliste/${newYear}/${newWeek.toString().padStart(2, '0')}`);
   };
 
   return (

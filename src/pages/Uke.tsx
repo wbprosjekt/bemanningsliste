@@ -194,7 +194,7 @@ const Uke = () => {
       newWeek = 52; // This might be 53 for some years
     }
 
-    navigate(`/uke/${newYear}-${newWeek.toString().padStart(2, '0')}`);
+    navigate(`/uke/${newYear}/${newWeek.toString().padStart(2, '0')}`);
   };
 
   const getProjectColor = (projectId?: number) => {
