@@ -21,7 +21,8 @@ import {
   Calendar,
   Users,
   Download,
-  Palette
+  Palette,
+  X
 } from 'lucide-react';
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
 import ProjectSearchDialog from './ProjectSearchDialog';
@@ -431,6 +432,42 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     });
   };
 
+  const deleteEntry = async (entryId: string) => {
+    try {
+      const entry = staffingData.find(e => e.id === entryId);
+      if (!entry) return;
+
+      // Delete all vakt_timer entries associated with this vakt
+      const { error: timerError } = await supabase
+        .from('vakt_timer')
+        .delete()
+        .eq('vakt_id', entryId);
+
+      if (timerError) throw timerError;
+
+      // Delete the vakt entry
+      const { error: vaktError } = await supabase
+        .from('vakt')
+        .delete()
+        .eq('id', entryId);
+
+      if (vaktError) throw vaktError;
+
+      toast({
+        title: "Timeføring slettet",
+        description: `Timeføring for ${entry.project?.project_name || 'prosjekt'} er slettet`
+      });
+
+      loadStaffingData();
+    } catch (error: any) {
+      toast({
+        title: "Sletting feilet",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
   const copyEntryToDate = async (entryId: string, targetDate: string) => {
     try {
       const sourceEntry = staffingData.find(e => e.id === entryId);
@@ -752,12 +789,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                         </td>
                         {weekData.dates.map(date => {
                           const dateStr = date.toISOString().split('T')[0];
-                          const entry = employeeEntries.find(e => e.date === dateStr);
+                          const dayEntries = employeeEntries.filter(e => e.date === dateStr && e.project);
                           
                           return (
                             <td 
                               key={dateStr} 
-                              className="border border-gray-300 p-1 h-16 min-w-[140px] relative group"
+                              className="border border-gray-300 p-1 min-h-[80px] min-w-[140px] relative group"
                               data-employee-id={employee.id}
                               data-date={dateStr}
                               onDragOver={(e) => {
@@ -795,65 +832,81 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 }
                               }}
                             >
-                              {entry?.project ? (
-                                <div
-                                  className="w-full h-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group"
-                                  style={{ 
-                                    backgroundColor: getProjectColor(entry.project.tripletex_project_id),
-                                    color: getContrastColor(getProjectColor(entry.project.tripletex_project_id))
-                                  }}
-                                  draggable
-                                  onDragStart={(e) => {
-                                    e.dataTransfer.setData('text/plain', entry.id);
-                                    e.dataTransfer.setData('application/x-source-person-id', employee.id);
-                                    e.dataTransfer.setData('application/x-source-date', dateStr);
-                                    e.dataTransfer.effectAllowed = 'copyMove';
+                              <div className="flex flex-col gap-1">
+                                {dayEntries.map((entry) => (
+                                  <div
+                                    key={entry.id}
+                                    className="w-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group/project"
+                                    style={{ 
+                                      backgroundColor: getProjectColor(entry.project?.tripletex_project_id),
+                                      color: getContrastColor(getProjectColor(entry.project?.tripletex_project_id))
+                                    }}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('text/plain', entry.id);
+                                      e.dataTransfer.setData('application/x-source-person-id', employee.id);
+                                      e.dataTransfer.setData('application/x-source-date', dateStr);
+                                      e.dataTransfer.effectAllowed = 'copyMove';
+                                      
+                                      // Add visual feedback to the dragged element
+                                      e.currentTarget.style.opacity = '0.5';
+                                    }}
+                                    onDragEnd={(e) => {
+                                      // Reset visual feedback
+                                      e.currentTarget.style.opacity = '1';
+                                    }}
+                                    onClick={(e) => handleProjectColorClick(entry.project, e)}
+                                    title={`${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å endre farge\nHold Shift og dra for å kopiere`}
+                                  >
+                                    {/* Action icons overlay */}
+                                    <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover/project:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          deleteEntry(entry.id);
+                                        }}
+                                        className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md border border-white/20"
+                                        title="Slett prosjekt"
+                                      >
+                                        <X className="h-2 w-2" />
+                                      </button>
+                                      <button
+                                        onClick={(e) => handleProjectColorClick(entry.project, e)}
+                                        className="bg-white rounded-full p-1 shadow-md border"
+                                        title="Endre farge"
+                                      >
+                                        <Palette className="h-2 w-2 text-gray-600" />
+                                      </button>
+                                    </div>
+                                    <div className="font-semibold truncate">
+                                      {entry.project?.project_name}
+                                    </div>
+                                    {entry.totalHours > 0 && (
+                                      <div className="text-xs opacity-90">
+                                        {formatTimeValue(entry.totalHours)} t
+                                      </div>
+                                    )}
+                                    {entry.activities.length > 0 && (
+                                      <div className="text-xs opacity-75 truncate">
+                                        {entry.activities[0].activity_name}
+                                      </div>
+                                    )}
                                     
-                                    // Add visual feedback to the dragged element
-                                    e.currentTarget.style.opacity = '0.5';
-                                  }}
-                                  onDragEnd={(e) => {
-                                    // Reset visual feedback
-                                    e.currentTarget.style.opacity = '1';
-                                  }}
-                                  onClick={(e) => handleProjectColorClick(entry.project, e)}
-                                  title={`${entry.project.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å endre farge\nHold Shift og dra for å kopiere`}
-                                >
-                                  {/* Color picker icon overlay */}
-                                  <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="bg-white rounded-full p-1 shadow-md border">
-                                      <Palette className="h-3 w-3 text-gray-600" />
+                                    {/* Status indicator */}
+                                    <div className="absolute -top-1 -left-1">
+                                      {getStatusBadge(entry.status)}
                                     </div>
                                   </div>
-                                  <div className="font-semibold truncate">
-                                    {entry.project.project_name}
-                                  </div>
-                                  {entry.totalHours > 0 && (
-                                    <div className="text-xs opacity-90">
-                                      {formatTimeValue(entry.totalHours)} t
-                                    </div>
-                                  )}
-                                  {entry.activities.length > 0 && (
-                                    <div className="text-xs opacity-75 truncate">
-                                      {entry.activities[0].activity_name}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
+                                ))}
+                                
+                                {/* Add project button */}
                                 <div 
-                                  className="w-full h-full border-2 border-dashed border-gray-200 rounded opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer hover:border-blue-300"
+                                  className="w-full h-8 border-2 border-dashed border-gray-200 rounded opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer hover:border-blue-300"
                                   onClick={() => setShowProjectSearch({ date: dateStr, personId: employee.id })}
                                 >
                                   <Plus className="h-4 w-4 text-gray-400" />
                                 </div>
-                              )}
-                              
-                              {/* Status indicator */}
-                              {entry && (
-                                <div className="absolute -top-1 -right-1">
-                                  {getStatusBadge(entry.status)}
-                                </div>
-                              )}
+                              </div>
                             </td>
                           );
                         })}
