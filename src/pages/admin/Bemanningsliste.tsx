@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -9,8 +9,21 @@ const Bemanningsliste = () => {
   const { year, week } = useParams<{ year: string; week: string }>();
   const navigate = useNavigate();
   
-  const currentYear = parseInt(year || new Date().getFullYear().toString());
-  const currentWeek = parseInt(week || getWeekNumber(new Date()).toString());
+  const now = new Date();
+  const defaultYear = now.getFullYear();
+  const defaultWeek = getWeekNumber(now);
+  const parsedYear = parseInt(year ?? '');
+  const parsedWeek = parseInt(week ?? '');
+  const currentYear = Number.isNaN(parsedYear) ? defaultYear : parsedYear;
+  const currentWeek = Number.isNaN(parsedWeek) ? defaultWeek : Math.max(1, Math.min(53, parsedWeek));
+
+  // Redirect away from invalid URL params like NaN/NaN
+  useEffect(() => {
+    const invalid = Number.isNaN(parsedYear) || Number.isNaN(parsedWeek);
+    if (invalid) {
+      navigate(`/admin/bemanningsliste/${currentYear}/${String(currentWeek).padStart(2,'0')}`, { replace: true });
+    }
+  }, [parsedYear, parsedWeek, navigate, currentYear, currentWeek]);
 
   const navigateWeeks = (delta: number) => {
     let newYear = currentYear;

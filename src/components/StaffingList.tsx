@@ -805,7 +805,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             className="w-64"
           />
           <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded">
-            💡 Tips: Dra prosjekter mellom ansatte. Hold Shift for å kopiere. Klikk på prosjekt for å endre farge.
+            💡 Tips: Dra prosjekter mellom ansatte. Hold Shift (eller Option på Mac) for å kopiere. Klikk på prosjekt for å endre farge.
           </div>
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
@@ -886,7 +886,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 e.preventDefault();
                                 // Indicate copy vs move while dragging
                                 try {
-                                  e.dataTransfer.dropEffect = e.shiftKey ? 'copy' : 'move';
+                                  const copyMod = e.shiftKey || e.altKey || e.metaKey || e.ctrlKey;
+                                  e.dataTransfer.dropEffect = copyMod ? 'copy' : 'move';
                                 } catch {}
                                 e.currentTarget.classList.add('bg-blue-50', 'border-blue-300');
                               }}
