@@ -680,15 +680,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const getStatusBadge = (status: StaffingEntry['status']) => {
     switch (status) {
       case 'approved':
-        return <Badge className="bg-green-500">✓ Godkjent</Badge>;
+        return <Badge className="bg-green-500 text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">✓</Badge>;
       case 'sent':
-        return <Badge className="bg-blue-500">→ Sendt</Badge>;
+        return <Badge className="bg-blue-500 text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">→</Badge>;
       case 'ready':
-        return <Badge className="bg-orange-500">! Klar</Badge>;
+        return <Badge className="bg-orange-500 text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">!</Badge>;
       case 'draft':
-        return <Badge variant="outline">✎ Utkast</Badge>;
+        return <Badge variant="outline" className="text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">✎</Badge>;
       default:
-        return <Badge variant="secondary">⚠ Mangler</Badge>;
+        return <Badge variant="secondary" className="text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">⚠</Badge>;
     }
   };
 
