@@ -91,57 +91,94 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const [calendarDays, setCalendarDays] = useState<Record<string, { isWeekend: boolean; isHoliday: boolean }>>({});
 
   const toDateKey = (d: Date): string => {
-    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    try {
+      if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+      const y = d.getFullYear();
+      if (y < 1970 || y > 3000) return ''; // Reasonable year range
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    } catch (error) {
+      console.error('Error formatting date:', error, d);
+      return '';
+    }
   };
-  // Get multiple weeks of data
+  // Get multiple weeks of data with robust date handling
   const getMultipleWeeksData = (): WeekData[] => {
     const weeks: WeekData[] = [];
-    let currentWeek = startWeek;
-    let currentYear = startYear;
+    let currentWeek = Math.max(1, Math.min(53, startWeek)); // Clamp week to valid range
+    let currentYear = Math.max(1970, Math.min(3000, startYear)); // Clamp year to reasonable range
     
     for (let i = 0; i < weeksToShow; i++) {
-      // Determine ISO Week 1 Monday (UTC-safe, Jan 4th rule)
-      const jan4 = new Date(Date.UTC(currentYear, 0, 4));
-      const jan4Day = (jan4.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
-      const week1MondayUTC = new Date(jan4);
-      week1MondayUTC.setUTCDate(jan4.getUTCDate() - jan4Day);
-
-      // Calculate the Monday of the target week (convert back to local midnight)
-      const targetMondayUTC = new Date(week1MondayUTC);
-      targetMondayUTC.setUTCDate(week1MondayUTC.getUTCDate() + (currentWeek - 1) * 7);
-      const targetMonday = new Date(
-        targetMondayUTC.getUTCFullYear(),
-        targetMondayUTC.getUTCMonth(),
-        targetMondayUTC.getUTCDate()
-      );
-      
-      // Generate the 7 days of the week
-      const dates = [];
-      for (let j = 0; j < 7; j++) {
-        const date = new Date(targetMonday);
-        date.setDate(targetMonday.getDate() + j);
-        dates.push(date);
-      }
-      
-      weeks.push({
-        week: currentWeek,
-        year: currentYear,
-        dates
-      });
-      
-      // Move to next week
-      currentWeek++;
-      if (currentWeek > 52) {
-        // Check if year actually has 53 weeks
-        const lastWeekOfYear = getWeekNumber(new Date(currentYear, 11, 31));
-        if (currentWeek > lastWeekOfYear) {
+      try {
+        // Calculate first Monday of ISO year using Jan 4th rule (simplified)
+        const jan1 = new Date(currentYear, 0, 1);
+        if (isNaN(jan1.getTime())) {
+          console.error(`Invalid year: ${currentYear}`);
+          break;
+        }
+        
+        // Find first Thursday (ISO week 1 contains Jan 4th)
+        const jan4 = new Date(currentYear, 0, 4);
+        const dayOfWeek = jan4.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Days to get to Monday
+        
+        const firstMonday = new Date(jan4);
+        firstMonday.setDate(jan4.getDate() + mondayOffset);
+        
+        if (isNaN(firstMonday.getTime())) {
+          console.error(`Invalid first Monday calculation for year ${currentYear}`);
+          break;
+        }
+        
+        // Calculate target week's Monday
+        const targetMonday = new Date(firstMonday);
+        targetMonday.setDate(firstMonday.getDate() + (currentWeek - 1) * 7);
+        
+        if (isNaN(targetMonday.getTime())) {
+          console.error(`Invalid target Monday for week ${currentWeek}, year ${currentYear}`);
+          break;
+        }
+        
+        // Generate 7 days of the week
+        const dates: Date[] = [];
+        for (let j = 0; j < 7; j++) {
+          const date = new Date(targetMonday);
+          date.setDate(targetMonday.getDate() + j);
+          
+          if (isNaN(date.getTime())) {
+            console.error(`Invalid date generated for day ${j} of week ${currentWeek}`);
+            continue;
+          }
+          
+          dates.push(date);
+        }
+        
+        if (dates.length === 7) {
+          weeks.push({
+            week: currentWeek,
+            year: currentYear,
+            dates
+          });
+        }
+        
+        // Move to next week with year boundary handling
+        currentWeek++;
+        if (currentWeek > 53) { // Max possible weeks in a year
           currentYear++;
           currentWeek = 1;
+        } else if (currentWeek > 52) {
+          // Check if this year actually has week 53
+          const dec31 = new Date(currentYear, 11, 31);
+          const lastWeek = getWeekNumber(dec31);
+          if (currentWeek > lastWeek) {
+            currentYear++;
+            currentWeek = 1;
+          }
         }
+      } catch (error) {
+        console.error(`Error generating week data for week ${currentWeek}, year ${currentYear}:`, error);
+        break;
       }
     }
     
