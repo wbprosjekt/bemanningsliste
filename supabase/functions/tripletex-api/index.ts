@@ -473,17 +473,6 @@ Deno.serve(async (req) => {
         });
         break;
 
-            if (upsertError) {
-              console.error('Error upserting employees:', upsertError);
-              return { success: false, error: `Database error: ${upsertError.message}` };
-            }
-
-            console.log(`Successfully synced ${employees.length} employees`);
-            return { success: true, data: { count: employees.length } };
-          }
-          return response;
-        });
-        break;
 
       case 'sync-projects':
         result = await exponentialBackoff(async () => {
