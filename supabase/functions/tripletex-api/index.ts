@@ -516,6 +516,7 @@ Deno.serve(async (req) => {
               .eq('org_id', orgId)
               .single();
 
+            // Query activity data from cache
             const { data: activityData } = await supabase
               .from('ttx_activity_cache')
               .select('ttx_id')
