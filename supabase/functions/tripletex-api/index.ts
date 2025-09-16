@@ -617,28 +617,30 @@ Deno.serve(async (req) => {
 
             const clientReference = `${orgId}-${entry.id}`;
             
-            const timesheetData = {
+            const hoursItem = {
+              date: entry.date,
               employee: { id: parseInt(employeeData.tripletex_employee_id.toString()) },
               project: { id: parseInt(entry.projectId.toString()) },
               activity: { id: parseInt(activityData.ttx_id.toString()) },
-              date: entry.date,
-              hours: entry.hours,
-              comment: entry.comment || '',
-              clientReference: clientReference
+              count: parseFloat(entry.hours.toString()),
+              description: entry.comment || '',
+              clientReference
             };
+
+            const hoursPayload = { hours: [hoursItem] };
 
             if (dryRun) {
               exportResults.push({ 
                 id: entry.id, 
                 success: true, 
                 dryRun: true,
-                payload: timesheetData
+                payload: hoursPayload
               });
               continue;
             }
 
             const exportResult = await exponentialBackoff(async () => {
-              return await callTripletexAPI('/timesheet/hours', 'POST', timesheetData, orgId);
+              return await callTripletexAPI('/timesheet/hours', 'POST', hoursPayload, orgId);
             });
 
             if (exportResult.success) {
