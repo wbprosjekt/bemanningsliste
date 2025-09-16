@@ -529,14 +529,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         e.project
       );
 
-      if (existingTargetEntry && !shouldCopy) {
-        toast({
-          title: "Ansatt har allerede prosjekt",
-          description: "Denne ansatte har allerede et prosjekt på denne datoen. Prosjektet vil bli kopiert i stedet.",
-          variant: "destructive"
-        });
-        return;
-      }
+      // Allow multiple projects per day - no restriction needed
+      // if (existingTargetEntry && !shouldCopy) {
+      //   toast({
+      //     title: "Ansatt har allerede prosjekt", 
+      //     description: "Denne ansatte har allerede et prosjekt på denne datoen. Prosjektet vil bli kopiert i stedet.",
+      //     variant: "destructive"
+      //   });
+      //   return;
+      // }
 
       // Create new vakt for target person/date
       const { data: newVakt, error: vaktError } = await supabase
@@ -816,15 +817,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   const isShiftPressed = e.shiftKey;
                                   const isSamePerson = sourcePersonId === employee.id;
                                   const isSameDate = sourceDate === dateStr;
-                                  
-                                  console.log('Drop event:', { 
-                                    isShiftPressed, 
-                                    isSamePerson, 
-                                    isSameDate, 
-                                    sourcePersonId, 
-                                    targetPersonId: employee.id,
-                                    action: isShiftPressed ? 'COPY' : 'MOVE' 
-                                  });
                                   
                                   if (isSamePerson && isSameDate) {
                                     // Same cell - do nothing
