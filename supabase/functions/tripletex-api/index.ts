@@ -394,6 +394,90 @@ Deno.serve(async (req) => {
               return { success: false, error: `Database error: ${upsertError.message}` };
             }
 
+            // Create person records for each employee
+            const persons = employees.map((emp: any) => ({
+              org_id: orgId,
+              fornavn: emp.fornavn,
+              etternavn: emp.etternavn,
+              epost: emp.epost,
+              tripletex_employee_id: emp.tripletex_employee_id,
+              aktiv: emp.aktiv,
+              person_type: 'ansatt'
+            }));
+
+            const { error: personError } = await supabase
+              .from('person')
+              .upsert(persons, {
+                onConflict: 'org_id,tripletex_employee_id',
+                ignoreDuplicates: false
+              });
+
+            if (personError) {
+              console.error('Error upserting persons:', personError);
+              return { success: false, error: `Person creation error: ${personError.message}` };
+            }
+
+            // Auto-create profiles for employees with valid email addresses
+            let profilesCreated = 0;
+            const validEmployees = employees.filter(emp => 
+              emp.epost && 
+              emp.epost.includes('@') && 
+              emp.aktiv
+            );
+
+            for (const emp of validEmployees) {
+              try {
+                // Check if profile already exists for this email
+                const { data: existingProfiles } = await supabase
+                  .from('profiles')
+                  .select('id')
+                  .eq('org_id', orgId)
+                  .eq('display_name', `${emp.fornavn} ${emp.etternavn}`)
+                  .single();
+
+                if (!existingProfiles) {
+                  // Create a placeholder profile that will be claimed when user signs up
+                  const profileId = crypto.randomUUID();
+                  
+                  const { error: profileError } = await supabase
+                    .from('profiles')
+                    .insert({
+                      id: profileId,
+                      user_id: profileId, // Temporary - will be updated when user actually signs up
+                      org_id: orgId,
+                      display_name: `${emp.fornavn} ${emp.etternavn}`,
+                      role: 'user'
+                    });
+
+                  if (!profileError) {
+                    profilesCreated++;
+                    console.log(`Created profile for ${emp.fornavn} ${emp.etternavn}`);
+                  }
+                }
+              } catch (profileErr) {
+                console.error(`Failed to create profile for ${emp.fornavn} ${emp.etternavn}:`, profileErr);
+              }
+            }
+
+            console.log(`Successfully synced ${employees.length} employees and created ${profilesCreated} profiles`);
+            return { 
+              success: true, 
+              data: { 
+                employees: employees.length,
+                profilesCreated: profilesCreated,
+                validEmails: validEmployees.length
+              } 
+            };
+          }
+          return response;
+        });
+        break;
+
+            if (upsertError) {
+              console.error('Error upserting employees:', upsertError);
+              return { success: false, error: `Database error: ${upsertError.message}` };
+            }
+
             console.log(`Successfully synced ${employees.length} employees`);
             return { success: true, data: { count: employees.length } };
           }

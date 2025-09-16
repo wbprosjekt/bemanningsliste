@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { getPersonDisplayName } from '@/lib/displayNames';
 import OnboardingDialog from '@/components/OnboardingDialog';
+import UserInviteSystem from '@/components/UserInviteSystem';
 
 interface UserProfile {
   id: string;
@@ -393,6 +394,12 @@ const AdminBrukere = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Tripletex User Sync */}
+        <UserInviteSystem 
+          orgId={profile.org_id} 
+          onUsersUpdated={loadUsers}
+        />
 
         {/* Users Table */}
         <Card>

@@ -13,6 +13,7 @@ import AdminTimer from "./pages/admin/Timer";
 import AdminBrukere from "./pages/admin/Brukere";
 import AdminUnderleverandorer from "./pages/admin/Underleverandorer";
 import Bemanningsliste from "./pages/admin/Bemanningsliste";
+import UserInviteSystem from "./components/UserInviteSystem";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

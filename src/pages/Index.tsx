@@ -93,7 +93,7 @@ const Index = () => {
                 Admin-verktøy
               </p>
               <p className="text-sm">
-                Se alle brukere i systemet og administrer tilganger.
+                Administrer brukere og synkroniser ansatte fra Tripletex.
               </p>
             </CardContent>
           </Card>
