@@ -760,6 +760,48 @@ Deno.serve(async (req) => {
             }
           }
           
+          // Check project participation
+          const participantCheck = await callTripletexAPI(`/project/participant?project.id=${project_id}&employee.id=${employee_id}&count=1`, 'GET', undefined, orgId);
+          if (!participantCheck.success) {
+            // Try fallback endpoint
+            const fallbackParticipantCheck = await callTripletexAPI(`/participant?project.id=${project_id}&employee.id=${employee_id}&count=1`, 'GET', undefined, orgId);
+            console.log('Preflight participant ->', fallbackParticipantCheck.success ? `200|${fallbackParticipantCheck.data?.count || 0}` : '404|0');
+            
+            if (!fallbackParticipantCheck.success || (fallbackParticipantCheck.data?.count || 0) === 0) {
+              return {
+                success: false,
+                error: "employee_not_participant",
+                projectId: project_id,
+                employeeId: employee_id
+              };
+            }
+          } else {
+            console.log('Preflight participant ->', `200|${participantCheck.data?.count || 0}`);
+            if ((participantCheck.data?.count || 0) === 0) {
+              return {
+                success: false,
+                error: "employee_not_participant", 
+                projectId: project_id,
+                employeeId: employee_id
+              };
+            }
+          }
+          
+          // Check project activity (if activity provided)
+          if (activity_id) {
+            const projectActivityCheck = await callTripletexAPI(`/project/activity?project.id=${project_id}&activity.id=${activity_id}&count=1`, 'GET', undefined, orgId);
+            console.log('Preflight projectActivity ->', projectActivityCheck.success ? `200|${projectActivityCheck.data?.count || 0}` : '404|0');
+            
+            if (!projectActivityCheck.success || (projectActivityCheck.data?.count || 0) === 0) {
+              return {
+                success: false,
+                error: "activity_not_on_project",
+                projectId: project_id,
+                activityId: activity_id
+              };
+            }
+          }
+          
           console.log('All preflight checks passed - proceeding with timesheet submission');
 
           // Format date for Tripletex API (YYYY-MM-DD)
