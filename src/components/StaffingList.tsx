@@ -100,6 +100,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       return '';
     }
   };
+  
+  // Helper to safely access week/year with fallbacks
+  const coerceWeekRef = (item?: { week?: number; year?: number } | null): { week: number; year: number } => {
+    if (item?.week && item?.year) {
+      return { week: item.week, year: item.year };
+    }
+    // Fallback to current date's week/year
+    const now = new Date();
+    return {
+      week: getWeekNumber(now),
+      year: now.getFullYear()
+    };
+  };
+
   // Get multiple weeks of data with robust date handling
   const getMultipleWeeksData = (): WeekData[] => {
     const weeks: WeekData[] = [];
@@ -157,6 +171,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
   const multiWeekData = getMultipleWeeksData();
   const allDates = multiWeekData.flatMap(w => w.dates).filter(d => d instanceof Date && !isNaN(d.getTime()));
+
+  // Safe access to last week data with fallback
+  const lastWeekData = multiWeekData.length > 0 ? multiWeekData[multiWeekData.length - 1] : null;
+  const safeLastWeek = coerceWeekRef(lastWeekData);
 
   useEffect(() => {
     if (user) {
@@ -772,7 +790,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         <div>
           <h1 className="text-3xl font-bold">Bemanningsliste</h1>
           <p className="text-muted-foreground">
-            {profile?.org?.name} - Uker {startWeek}-{multiWeekData[multiWeekData.length - 1].week}, {startYear}
+            {profile?.org?.name} - Uker {startWeek}-{safeLastWeek.week}, {startYear}
           </p>
         </div>
         
@@ -795,17 +813,19 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       {/* Multi-week Excel-like table */}
       <div className="space-y-8">
-        {multiWeekData.map(weekData => (
-          <div key={`${weekData.year}-${weekData.week}`} className="border rounded-lg overflow-hidden bg-white shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="border border-gray-300 p-2 text-left font-bold w-40 bg-slate-200">
-                      UKE {weekData.week}
-                    </th>
-                     {weekData.dates.map((date, idx) => (
-                       <th key={toDateKey(date) || `${weekData.year}-${weekData.week}-${idx}`} className="border border-gray-300 p-2 text-center min-w-[140px] font-bold">
+        {multiWeekData.length > 0 ? multiWeekData.map(weekData => {
+          const safeWeek = coerceWeekRef(weekData);
+          return (
+            <div key={`${safeWeek.year}-${safeWeek.week}`} className="border rounded-lg overflow-hidden bg-white shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100">
+                      <th className="border border-gray-300 p-2 text-left font-bold w-40 bg-slate-200">
+                        UKE {safeWeek.week}
+                      </th>
+                      {weekData.dates?.map((date, idx) => (
+                        <th key={toDateKey(date) || `${safeWeek.year}-${safeWeek.week}-${idx}`} className="border border-gray-300 p-2 text-center min-w-[140px] font-bold">
                          <div className="space-y-1">
                            <div className="text-xs uppercase font-semibold">
                              {isNaN(date.getTime()) ? '' : date.toLocaleDateString('no-NO', { weekday: 'long' })}
@@ -819,43 +839,43 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   </tr>
                 </thead>
                 <tbody>
-                  {employees.map(employee => {
-                    const employeeEntries = staffingData.filter(e => 
-                      e.person.id === employee.id && 
-                      weekData.dates.some(d => toDateKey(d) === e.date)
-                    );
-                    
-                    return (
-                      <tr key={employee.id} className="hover:bg-gray-50">
-                        <td className="border border-gray-300 p-3 font-medium bg-slate-50 sticky left-0">
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              checked={employeeEntries.every(e => selectedEntries.has(e.id))}
-                              onCheckedChange={(checked) => {
-                                const newSelection = new Set(selectedEntries);
-                                employeeEntries.forEach(e => {
-                                  if (checked) {
-                                    newSelection.add(e.id);
-                                  } else {
-                                    newSelection.delete(e.id);
-                                  }
-                                });
-                                setSelectedEntries(newSelection);
-                              }}
-                            />
-                            <span>{getPersonDisplayName(employee.fornavn, employee.etternavn)}</span>
-                          </div>
-                        </td>
-                        {weekData.dates.map((date, idx) => {
-                          const dateStr = toDateKey(date);
-                          const dayEntries = employeeEntries.filter(e => e.date === dateStr && e.project);
-                          const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday = 0, Saturday = 6
-                          const isHoliday = calendarDays[dateStr]?.isHoliday || false;
-                          const isFreeDay = isWeekend || isHoliday;
-                          
-                          return (
-                            <td 
-                              key={dateStr || `${employee.id}-${weekData.week}-${idx}`} 
+                    {employees.map(employee => {
+                      const employeeEntries = staffingData.filter(e => 
+                        e.person.id === employee.id && 
+                        weekData.dates?.some(d => toDateKey(d) === e.date)
+                      );
+                      
+                      return (
+                        <tr key={employee.id} className="hover:bg-gray-50">
+                          <td className="border border-gray-300 p-3 font-medium bg-slate-50 sticky left-0">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={employeeEntries.every(e => selectedEntries.has(e.id))}
+                                onCheckedChange={(checked) => {
+                                  const newSelection = new Set(selectedEntries);
+                                  employeeEntries.forEach(e => {
+                                    if (checked) {
+                                      newSelection.add(e.id);
+                                    } else {
+                                      newSelection.delete(e.id);
+                                    }
+                                  });
+                                  setSelectedEntries(newSelection);
+                                }}
+                              />
+                              <span>{getPersonDisplayName(employee.fornavn, employee.etternavn)}</span>
+                            </div>
+                          </td>
+                          {weekData.dates?.map((date, idx) => {
+                            const dateStr = toDateKey(date);
+                            const dayEntries = employeeEntries.filter(e => e.date === dateStr && e.project);
+                            const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday = 0, Saturday = 6
+                            const isHoliday = calendarDays[dateStr]?.isHoliday || false;
+                            const isFreeDay = isWeekend || isHoliday;
+                            
+                            return (
+                              <td 
+                                key={dateStr || `${employee.id}-${safeWeek.week}-${idx}`}
                               className="border border-gray-300 p-1 min-h-[80px] min-w-[140px] relative group"
                               data-employee-id={employee.id}
                               data-date={dateStr}
@@ -986,7 +1006,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
               </table>
             </div>
           </div>
-        ))}
+        );
+        }) : (
+          <div className="text-center py-8">
+            <div className="text-muted-foreground">
+              <p>Ingen bemanningsdata tilgjengelig for valgte periode.</p>
+              <p className="text-sm mt-2">Kontroller at uke og år er gyldige, eller prøv en annen periode.</p>
+            </div>
+          </div>
+        )}
       </div>
       {/* Color Picker Dialog */}
       {showColorPicker && (
