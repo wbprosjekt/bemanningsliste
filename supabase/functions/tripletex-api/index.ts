@@ -729,7 +729,6 @@ Deno.serve(async (req) => {
             ...(activity_id ? { activity: { id: parseInt(activity_id.toString()) } } : {}),
             count: parseFloat(hours.toString()),
             description: description || '',
-            hourType: { id: is_overtime ? 2 : 1 },
             clientReference,
           };
 

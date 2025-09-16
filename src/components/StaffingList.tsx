@@ -27,6 +27,7 @@ import {
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
 import ProjectSearchDialog from './ProjectSearchDialog';
 import ColorPickerDialog from './ColorPickerDialog';
+import TimeEntry from './TimeEntry';
 import { startOfISOWeek, addWeeks, addDays, isValid as isValidDate, format as formatDate } from 'date-fns';
 
 interface StaffingEntry {
@@ -1084,12 +1085,21 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                       // Add visual feedback to the dragged element
                                       e.currentTarget.style.opacity = '0.5';
                                     }}
-                                    onDragEnd={(e) => {
-                                      // Reset visual feedback
-                                      e.currentTarget.style.opacity = '1';
-                                    }}
-                                    onClick={(e) => handleProjectColorClick(entry.project, e)}
-                                    title={`${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å endre farge\nHold Shift og dra for å kopiere`}
+                                     onDragEnd={(e) => {
+                                       // Reset visual feedback
+                                       e.currentTarget.style.opacity = '1';
+                                     }}
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       const firstActivity = entry.activities[0];
+                                       if (firstActivity) {
+                                         setEditDialog({ 
+                                           vaktId: entry.id, 
+                                           existingEntry: firstActivity 
+                                         });
+                                       }
+                                     }}
+                                     title={`${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nHold Shift og dra for å kopiere`}
                                   >
                                     {/* Action icons overlay */}
                                     <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover/project:opacity-100 transition-opacity">
@@ -1201,6 +1211,26 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         orgId={profile?.org_id || ''}
         onProjectAssigned={loadStaffingData}
       />
+
+      {/* Time Entry Edit Dialog */}
+      {editDialog && (
+        <Dialog open={!!editDialog} onOpenChange={() => setEditDialog(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Rediger timeføring</DialogTitle>
+            </DialogHeader>
+            <TimeEntry
+              vaktId={editDialog.vaktId}
+              orgId={profile?.org_id || ''}
+              onSave={() => {
+                loadStaffingData();
+                setEditDialog(null);
+              }}
+              existingEntry={editDialog.existingEntry}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
