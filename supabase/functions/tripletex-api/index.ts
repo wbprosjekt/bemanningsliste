@@ -708,6 +708,86 @@ Deno.serve(async (req) => {
         };
         break;
 
+      case 'get_project_details':
+        const projectId = payload?.project_id;
+        
+        if (!projectId) {
+          return new Response(JSON.stringify({ error: 'Missing project_id' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        result = await exponentialBackoff(async () => {
+          // Get project details
+          const projectResponse = await callTripletexAPI(`/project/${projectId}`, 'GET', undefined, orgId);
+          
+          if (!projectResponse.success) {
+            return { success: false, error: 'Failed to fetch project details from Tripletex' };
+          }
+
+          const project = projectResponse.data?.value;
+          if (!project) {
+            return { success: false, error: 'Project not found' };
+          }
+
+          // Get customer details if available
+          let customerDetails = null;
+          if (project.customer?.id) {
+            const customerResponse = await callTripletexAPI(`/customer/${project.customer.id}`, 'GET', undefined, orgId);
+            if (customerResponse.success) {
+              customerDetails = customerResponse.data?.value;
+            }
+          }
+
+          // Get project manager details if available
+          let projectManagerDetails = null;
+          if (project.projectManager?.id) {
+            const managerResponse = await callTripletexAPI(`/employee/${project.projectManager.id}`, 'GET', undefined, orgId);
+            if (managerResponse.success) {
+              projectManagerDetails = managerResponse.data?.value;
+            }
+          }
+
+          // Get department details if available
+          let departmentDetails = null;
+          if (project.department?.id) {
+            const deptResponse = await callTripletexAPI(`/department/${project.department.id}`, 'GET', undefined, orgId);
+            if (deptResponse.success) {
+              departmentDetails = deptResponse.data?.value;
+            }
+          }
+
+          // Format response
+          const projectDetails = {
+            id: project.id,
+            name: project.name,
+            number: project.number,
+            description: project.description,
+            startDate: project.startDate,
+            endDate: project.endDate,
+            customer: {
+              name: customerDetails?.name || project.customer?.name || 'Ukjent kunde',
+              email: customerDetails?.email,
+              phoneNumber: customerDetails?.phoneNumber
+            },
+            projectManager: projectManagerDetails ? {
+              firstName: projectManagerDetails.firstName,
+              lastName: projectManagerDetails.lastName,
+              email: projectManagerDetails.email,
+              phoneNumber: projectManagerDetails.phoneNumber
+            } : null,
+            department: departmentDetails ? {
+              name: departmentDetails.name
+            } : null,
+            isClosed: project.isClosed || false,
+            displayName: project.displayName || `${project.number} - ${project.name}`
+          };
+
+          return { success: true, data: projectDetails };
+        });
+        break;
+
       default:
         return new Response(JSON.stringify({ error: 'Unknown action' }), {
           status: 400,

@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, getPersonDisplayName } from '@/lib/displayNames';
 import TimeEntry from './TimeEntry';
 import ProjectRequestDialog from './ProjectRequestDialog';
+import ProjectDetailDialog from './ProjectDetailDialog';
 
 interface DayCardProps {
   date: Date;
@@ -57,6 +58,11 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   const [projectColors, setProjectColors] = useState<ProjectColor[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVakt, setSelectedVakt] = useState<string | null>(null);
+  const [selectedProject, setSelectedProject] = useState<{
+    project_name: string;
+    project_number: number;
+    tripletex_project_id: number;
+  } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -308,14 +314,25 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                     {vakt.person && getPersonDisplayName(vakt.person.fornavn, vakt.person.etternavn)}
                   </span>
                   {vakt.ttx_project_cache ? (
-                    <div 
-                      className="px-2 py-1 rounded text-white text-xs font-medium"
+                    <Button
+                      variant="ghost"
+                      className="w-full h-auto p-3 justify-start text-left"
                       style={{ backgroundColor: getProjectColor(vakt.ttx_project_cache.tripletex_project_id) }}
+                      onClick={() => setSelectedProject(vakt.ttx_project_cache)}
                     >
-                      {vakt.ttx_project_cache.project_number} - {vakt.ttx_project_cache.project_name}
-                    </div>
+                      <div className="text-white w-full">
+                        <div className="font-bold text-lg">
+                          {vakt.ttx_project_cache.project_number}
+                        </div>
+                        <div className="text-sm opacity-90 truncate">
+                          {vakt.ttx_project_cache.project_name}
+                        </div>
+                      </div>
+                    </Button>
                   ) : (
-                    <span className="text-muted-foreground">Ikke tilordnet</span>
+                    <div className="text-muted-foreground p-3 text-center border border-dashed rounded">
+                      Ikke tilordnet
+                    </div>
                   )}
                 </div>
                 {vakt.vakt_timer.map((timer) => (
@@ -385,6 +402,16 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
           <Copy className="h-3 w-3 mr-1" />
           Kopier forrige dag
         </Button>
+
+        {/* Project Detail Dialog */}
+        {selectedProject && (
+          <ProjectDetailDialog
+            open={!!selectedProject}
+            onClose={() => setSelectedProject(null)}
+            project={selectedProject}
+            orgId={orgId}
+          />
+        )}
       </CardContent>
     </Card>
   );

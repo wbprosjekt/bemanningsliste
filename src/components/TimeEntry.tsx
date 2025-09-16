@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Clock, MessageSquare, Paperclip, Plus, Minus } from 'lucide-react';
+import { Clock, MessageSquare, Paperclip, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, parseTimeValue, validateTimeStep } from '@/lib/displayNames';
@@ -25,7 +25,8 @@ interface Activity {
 }
 
 const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }: TimeEntryProps) => {
-  const [timer, setTimer] = useState(existingEntry?.timer || defaultTimer);
+  const [hours, setHours] = useState(Math.floor(existingEntry?.timer || defaultTimer));
+  const [minutes, setMinutes] = useState(Math.round(((existingEntry?.timer || defaultTimer) % 1) * 60));
   const [aktivitetId, setAktivitetId] = useState(existingEntry?.aktivitet_id || '');
   const [notat, setNotat] = useState(existingEntry?.notat || '');
   const [status, setStatus] = useState(existingEntry?.status || 'utkast');
@@ -33,6 +34,9 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+
+  // Calculate total timer value from hours and minutes
+  const timer = hours + (minutes / 60);
 
   useEffect(() => {
     loadActivities();
@@ -54,16 +58,24 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
     }
   };
 
-  const adjustTime = (delta: number) => {
-    const newTime = Math.max(0, timer + delta);
-    if (validateTimeStep(newTime)) {
-      setTimer(newTime);
-    }
+  const adjustHours = (delta: number) => {
+    const newHours = Math.max(0, Math.min(8, hours + delta));
+    setHours(newHours);
+  };
+
+  const adjustMinutes = (delta: number) => {
+    const newMinutes = Math.max(0, Math.min(45, minutes + delta));
+    // Ensure minutes are in 15-minute intervals
+    const roundedMinutes = Math.round(newMinutes / 15) * 15;
+    setMinutes(roundedMinutes);
   };
 
   const handleTimeInputChange = (value: string) => {
     const parsed = parseTimeValue(value);
-    setTimer(parsed);
+    const newHours = Math.floor(parsed);
+    const newMinutes = Math.round((parsed % 1) * 60);
+    setHours(Math.max(0, Math.min(8, newHours)));
+    setMinutes(Math.max(0, Math.min(45, Math.round(newMinutes / 15) * 15)));
   };
 
   const handleSave = async () => {
@@ -151,32 +163,63 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="timer">Timer</Label>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => adjustTime(-0.25)}
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-            <Input
-              id="timer"
-              type="text"
-              value={formatTimeValue(timer)}
-              onChange={(e) => handleTimeInputChange(e.target.value)}
-              className="text-center"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => adjustTime(0.25)}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
+        <div className="space-y-3">
+          <Label>Timer</Label>
+          <div className="flex items-center justify-center gap-6 p-4 border rounded-lg bg-muted/20">
+            {/* Hours Section */}
+            <div className="flex flex-col items-center space-y-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => adjustHours(1)}
+                disabled={hours >= 8}
+              >
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+              <div className="text-3xl font-bold w-16 text-center">
+                {hours.toString().padStart(2, '0')}
+                <div className="text-xs text-muted-foreground font-normal mt-1">T</div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => adjustHours(-1)}
+                disabled={hours <= 0}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Minutes Section */}
+            <div className="flex flex-col items-center space-y-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => adjustMinutes(15)}
+                disabled={minutes >= 45}
+              >
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+              <div className="text-3xl font-bold w-16 text-center">
+                {minutes.toString().padStart(2, '0')}
+                <div className="text-xs text-muted-foreground font-normal mt-1">M</div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => adjustMinutes(-15)}
+                disabled={minutes <= 0}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="text-center text-sm text-muted-foreground">
+            Total: {formatTimeValue(timer)} timer
           </div>
         </div>
 
