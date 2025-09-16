@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { ChevronLeft, ChevronRight, Calendar, Eye } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Eye, Users } from 'lucide-react';
 import { getDateFromWeek, getWeekNumber, getPersonDisplayName } from '@/lib/displayNames';
 import DayCard from '@/components/DayCard';
 
@@ -170,6 +170,18 @@ const MinUke = () => {
             >
               <Eye className="h-4 w-4 mr-1" />
               {showFullWeek ? 'Kompakt visning' : 'Vis hele uka'}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                const currentYear = new Date().getFullYear();
+                const currentWeek = getWeekNumber(new Date());
+                navigate(`/admin/bemanningsliste/${currentYear}/${currentWeek.toString().padStart(2, '0')}`);
+              }}
+            >
+              <Users className="h-4 w-4 mr-1" />
+              Planlegg prosjekter
             </Button>
             <Badge variant="outline">
               <Calendar className="h-3 w-3 mr-1" />

@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, getPersonDisplayName } from '@/lib/displayNames';
 import TimeEntry from './TimeEntry';
+import ProjectRequestDialog from './ProjectRequestDialog';
 
 interface DayCardProps {
   date: Date;
@@ -308,6 +309,20 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                 </Dialog>
               </div>
             ))}
+          </div>
+        )}
+
+        {vakter.length === 0 && (
+          <div className="space-y-2">
+            <div className="text-sm text-muted-foreground text-center py-4">
+              Ingen arbeidsoppdrag planlagt
+            </div>
+            <ProjectRequestDialog
+              date={date}
+              orgId={orgId}
+              personId={personId || ''}
+              onRequestSent={loadDayData}
+            />
           </div>
         )}
 

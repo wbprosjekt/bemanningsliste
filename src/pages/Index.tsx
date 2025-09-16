@@ -66,6 +66,24 @@ const Index = () => {
             </CardContent>
           </Card>
 
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => {
+            const currentYear = new Date().getFullYear();
+            const currentWeek = getWeekNumber(new Date());
+            navigate(`/admin/bemanningsliste/${currentYear}/${currentWeek.toString().padStart(2, '0')}`);
+          }}>
+            <CardHeader>
+              <CardTitle>📋 Bemanningsliste</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Admin-verktøy
+              </p>
+              <p className="text-sm">
+                Planlegg prosjekter for alle ansatte i Excel-lignende visning.
+              </p>
+            </CardContent>
+          </Card>
+
           <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => navigate('/admin/brukere')}>
             <CardHeader>
               <CardTitle>👥 Brukerhåndtering</CardTitle>
