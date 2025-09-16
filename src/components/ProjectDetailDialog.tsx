@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Building, User, Phone, Mail, FileText, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ProjectDetailDialogProps {
   open: boolean;
@@ -56,30 +57,30 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
   const loadProjectDetails = async () => {
     setLoading(true);
     try {
-      // Call Tripletex API through our edge function
-      const response = await fetch('/functions/v1/tripletex-api', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Call Tripletex API through our edge function using Supabase client
+      const { data, error } = await supabase.functions.invoke('tripletex-api', {
+        body: {
           action: 'get_project_details',
           project_id: project.tripletex_project_id,
-          org_id: orgId
-        })
+          orgId: orgId
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to load project details');
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw new Error(error.message || 'Failed to load project details');
       }
 
-      const data = await response.json();
-      setProjectDetails(data);
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to load project details');
+      }
+
+      setProjectDetails(data.data);
     } catch (error) {
       console.error('Error loading project details:', error);
       toast({
-        title: "Kunne ikke laste prosjektdetaljer",
-        description: "Det oppstod en feil ved lasting av prosjektinformasjon fra Tripletex.",
+        title: "Kunne ikke laste prosjektdetaljer", 
+        description: error instanceof Error ? error.message : "Det oppstod en feil ved lasting av prosjektinformasjon fra Tripletex.",
         variant: "destructive"
       });
     } finally {
