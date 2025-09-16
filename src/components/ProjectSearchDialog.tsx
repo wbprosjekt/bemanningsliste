@@ -23,12 +23,14 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [person, setPerson] = useState<any>(null);
+  const [projectColors, setProjectColors] = useState<{ [key: number]: string }>({});
   const { toast } = useToast();
 
   useEffect(() => {
     if (open) {
       loadProjects();
       loadPerson();
+      loadProjectColors();
       setSearchTerm('');
     }
   }, [open, orgId]);
@@ -86,6 +88,26 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
     }
   };
 
+  const loadProjectColors = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('project_color')
+        .select('tripletex_project_id, hex')
+        .eq('org_id', orgId);
+
+      if (error) throw error;
+      
+      const colorsMap = data?.reduce((acc, item) => {
+        acc[item.tripletex_project_id] = item.hex;
+        return acc;
+      }, {} as { [key: number]: string }) || {};
+      
+      setProjectColors(colorsMap);
+    } catch (error) {
+      console.error('Error loading project colors:', error);
+    }
+  };
+
   const assignProject = async (project: any) => {
     try {
       // Get the project UUID from tripletex_project_id
@@ -131,7 +153,7 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
   };
 
   const getProjectColor = (tripletexProjectId: number) => {
-    return generateProjectColor(tripletexProjectId);
+    return projectColors[tripletexProjectId] || generateProjectColor(tripletexProjectId);
   };
 
   if (!open) return null;
