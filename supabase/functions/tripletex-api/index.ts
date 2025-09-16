@@ -719,6 +719,46 @@ Deno.serve(async (req) => {
         }
 
         result = await exponentialBackoff(async () => {
+          // Preflight checks - validate all IDs exist in Tripletex before sending hours
+          console.log('Running preflight checks for employee, project, and activity IDs');
+          
+          // Check employee exists
+          const employeeCheck = await callTripletexAPI(`/employee/${employee_id}`, 'GET', undefined, orgId);
+          if (!employeeCheck.success) {
+            return {
+              success: false,
+              error: "Tripletex-ID finnes ikke",
+              missing: "employee",
+              id: employee_id
+            };
+          }
+          
+          // Check project exists
+          const projectCheck = await callTripletexAPI(`/project/${project_id}`, 'GET', undefined, orgId);
+          if (!projectCheck.success) {
+            return {
+              success: false,
+              error: "Tripletex-ID finnes ikke", 
+              missing: "project",
+              id: project_id
+            };
+          }
+          
+          // Check activity exists (if provided)
+          if (activity_id) {
+            const activityCheck = await callTripletexAPI(`/activity/${activity_id}`, 'GET', undefined, orgId);
+            if (!activityCheck.success) {
+              return {
+                success: false,
+                error: "Tripletex-ID finnes ikke",
+                missing: "activity", 
+                id: activity_id
+              };
+            }
+          }
+          
+          console.log('All preflight checks passed - proceeding with timesheet submission');
+
           // Format date for Tripletex API (YYYY-MM-DD)
           const entryDate = new Date(date).toISOString().split('T')[0];
 
