@@ -37,6 +37,7 @@ interface StaffingEntry {
     fornavn: string;
     etternavn: string;
     forventet_dagstimer: number;
+    tripletex_employee_id?: number;
   };
   project: {
     id: string; // This is the UUID from ttx_project_cache.id
@@ -58,6 +59,8 @@ interface StaffingEntry {
     tripletex_synced_at?: string;
     tripletex_entry_id?: number;
     sync_error?: string;
+    aktivitet_id?: string; // UUID reference in our DB
+    ttx_activity_id?: number; // Tripletex activity id
   }>;
   totalHours: number;
   status: 'missing' | 'draft' | 'ready' | 'approved' | 'sent';
@@ -97,6 +100,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   } | null>(null);
   const [calendarDays, setCalendarDays] = useState<Record<string, { isWeekend: boolean; isHoliday: boolean }>>({});
   const [sendingToTripletex, setSendingToTripletex] = useState<Set<string>>(new Set());
+  const [editDialog, setEditDialog] = useState<{ vaktId: string; existingEntry?: any } | null>(null);
 
   const toDateKey = (d: Date): string => {
     try {
@@ -253,7 +257,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             id,
             fornavn,
             etternavn,
-            forventet_dagstimer
+            forventet_dagstimer,
+            tripletex_employee_id
           ),
           ttx_project_cache:project_id (
             id,
@@ -273,8 +278,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             tripletex_synced_at,
             tripletex_entry_id,
             sync_error,
+            aktivitet_id,
             ttx_activity_cache:aktivitet_id (
-              navn
+              navn,
+              ttx_id
             )
           )
         `)
@@ -319,7 +326,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   id: employee.id,
                   fornavn: employee.fornavn,
                   etternavn: employee.etternavn,
-                  forventet_dagstimer: employee.forventet_dagstimer || 8
+                  forventet_dagstimer: employee.forventet_dagstimer || 8,
+                  tripletex_employee_id: employee.tripletex_employee_id
                 },
                 project: existingVakt.ttx_project_cache ? {
                   id: existingVakt.ttx_project_cache.id,
@@ -334,7 +342,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   status: timer.status,
                   activity_name: timer.ttx_activity_cache?.navn || 'Ingen aktivitet',
                   lonnstype: timer.lonnstype,
-                  notat: timer.notat
+                  notat: timer.notat,
+                  is_overtime: timer.is_overtime,
+                  approved_at: timer.approved_at,
+                  approved_by: timer.approved_by,
+                  tripletex_synced_at: timer.tripletex_synced_at,
+                  tripletex_entry_id: timer.tripletex_entry_id,
+                  sync_error: timer.sync_error,
+                  aktivitet_id: timer.aktivitet_id,
+                  ttx_activity_id: timer.ttx_activity_cache?.ttx_id || undefined
                 })),
                 totalHours,
                 status
@@ -750,6 +766,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       return;
     }
 
+    if (!entry.person.tripletex_employee_id) {
+      toast({
+        title: "Mangler Tripletex-ansatt",
+        description: "Den ansatte er ikke koblet til Tripletex. Kjør ansattsynk først.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setSendingToTripletex(prev => new Set(prev).add(entry.id));
 
     try {
@@ -758,12 +783,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           body: {
             action: 'send_timesheet_entry',
             vakt_timer_id: activity.id,
-            employee_id: entry.person.id,
+            employee_id: entry.person.tripletex_employee_id,
             project_id: entry.project.tripletex_project_id,
-            activity_id: null, // Will need to map this properly
+            activity_id: activity.ttx_activity_id || null,
             hours: activity.timer,
             date: entry.date,
-            is_overtime: activity.is_overtime || false,
+            is_overtime: !!activity.is_overtime,
             description: activity.notat || '',
             orgId: profile.org_id
           }
