@@ -222,25 +222,25 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-background border z-50">
-              <SelectItem value="utkast">Utkast</SelectItem>
-              <SelectItem value="sendt">Sendt</SelectItem>
-              <SelectItem value="godkjent" disabled={status !== 'godkjent'}>
-                Godkjent
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
         <div className="flex gap-2">
-          <Button onClick={handleSave} disabled={loading}>
-            {loading ? 'Lagrer...' : 'Lagre'}
+          <Button 
+            onClick={() => {
+              setStatus('utkast');
+              handleSave();
+            }} 
+            disabled={loading}
+            variant="outline"
+          >
+            {loading && status === 'utkast' ? 'Lagrer...' : 'Lagre utkast'}
+          </Button>
+          <Button 
+            onClick={() => {
+              setStatus('sendt');
+              handleSave();
+            }} 
+            disabled={loading}
+          >
+            {loading && status === 'sendt' ? 'Sender...' : 'Send til godkjenning'}
           </Button>
           {existingEntry && (
             <div className="flex gap-1">

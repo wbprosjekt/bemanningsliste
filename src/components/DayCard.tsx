@@ -32,6 +32,8 @@ interface VaktWithTimer {
   };
   ttx_project_cache: {
     project_name: string;
+    project_number: number;
+    tripletex_project_id: number;
   } | null;
   vakt_timer: Array<{
     id: string;
@@ -45,14 +47,21 @@ interface VaktWithTimer {
   }>;
 }
 
+interface ProjectColor {
+  tripletex_project_id: number;
+  hex: string;
+}
+
 const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: DayCardProps) => {
   const [vakter, setVakter] = useState<VaktWithTimer[]>([]);
+  const [projectColors, setProjectColors] = useState<ProjectColor[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVakt, setSelectedVakt] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     loadDayData();
+    loadProjectColors();
   }, [date, orgId, personId]);
 
   const loadDayData = async () => {
@@ -68,7 +77,9 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
             forventet_dagstimer
           ),
           ttx_project_cache:project_id (
-            project_name
+            project_name,
+            project_number,
+            tripletex_project_id
           ),
           vakt_timer (
             id,
@@ -102,6 +113,33 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadProjectColors = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('project_color')
+        .select('tripletex_project_id, hex')
+        .eq('org_id', orgId);
+
+      if (error) throw error;
+      setProjectColors(data || []);
+    } catch (error) {
+      console.error('Error loading project colors:', error);
+    }
+  };
+
+  const getProjectColor = (tripletexProjectId?: number) => {
+    if (!tripletexProjectId) return '#6b7280'; // default gray
+    const colorConfig = projectColors.find(c => c.tripletex_project_id === tripletexProjectId);
+    if (colorConfig) return colorConfig.hex;
+    
+    // Generate a consistent color based on project ID if no color is configured
+    const colors = [
+      '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+      '#06b6d4', '#84cc16', '#f97316', '#ec4899', '#6366f1'
+    ];
+    return colors[tripletexProjectId % colors.length];
   };
 
   const copyFromPreviousDay = async () => {
@@ -178,20 +216,20 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     }, 0);
   };
 
-          const getExpectedHours = () => {
-            if (vakter.length === 0) return forventetTimer;
-            
-            // Check against kalender_dag table for holidays
-            const dateStr = date.toISOString().split('T')[0];
-            const calendarDay = calendarDays?.find(d => d.dato === dateStr);
-            
-            if (calendarDay?.is_holiday || calendarDay?.is_weekend) {
-              // TODO: Get from admin settings - default_expected_hours_on_holidays
-              return 0;
-            }
-            
-            return vakter[0]?.person?.forventet_dagstimer || forventetTimer;
-          };
+  const getExpectedHours = () => {
+    if (vakter.length === 0) return forventetTimer;
+    
+    // Check against kalender_dag table for holidays
+    const dateStr = date.toISOString().split('T')[0];
+    const calendarDay = calendarDays?.find(d => d.dato === dateStr);
+    
+    if (calendarDay?.is_holiday || calendarDay?.is_weekend) {
+      // TODO: Get from admin settings - default_expected_hours_on_holidays
+      return 0;
+    }
+    
+    return vakter[0]?.person?.forventet_dagstimer || forventetTimer;
+  };
 
   const getStatusChip = () => {
     const totalHours = getTotalHours();
@@ -265,8 +303,20 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
             <h4 className="text-sm font-medium">Dagens oppdrag:</h4>
             {vakter.map((vakt) => (
               <div key={vakt.id} className="space-y-1">
-                <div className="text-xs text-muted-foreground">
-                  {vakt.person && getPersonDisplayName(vakt.person.fornavn, vakt.person.etternavn)} - {vakt.ttx_project_cache?.project_name || 'Ikke tilordnet'}
+                <div className="text-xs flex items-center gap-2">
+                  <span className="text-muted-foreground">
+                    {vakt.person && getPersonDisplayName(vakt.person.fornavn, vakt.person.etternavn)}
+                  </span>
+                  {vakt.ttx_project_cache ? (
+                    <div 
+                      className="px-2 py-1 rounded text-white text-xs font-medium"
+                      style={{ backgroundColor: getProjectColor(vakt.ttx_project_cache.tripletex_project_id) }}
+                    >
+                      {vakt.ttx_project_cache.project_number} - {vakt.ttx_project_cache.project_name}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">Ikke tilordnet</span>
+                  )}
                 </div>
                 {vakt.vakt_timer.map((timer) => (
                   <div key={timer.id} className="flex items-center justify-between text-xs bg-muted/50 p-2 rounded">
