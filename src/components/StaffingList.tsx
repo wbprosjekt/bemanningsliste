@@ -817,6 +817,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   const isSamePerson = sourcePersonId === employee.id;
                                   const isSameDate = sourceDate === dateStr;
                                   
+                                  console.log('Drop event:', { 
+                                    isShiftPressed, 
+                                    isSamePerson, 
+                                    isSameDate, 
+                                    sourcePersonId, 
+                                    targetPersonId: employee.id,
+                                    action: isShiftPressed ? 'COPY' : 'MOVE' 
+                                  });
+                                  
                                   if (isSamePerson && isSameDate) {
                                     // Same cell - do nothing
                                     return;
