@@ -818,7 +818,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                         {weekData.dates.map(date => {
                           const dateStr = date.toISOString().split('T')[0];
                           const dayEntries = employeeEntries.filter(e => e.date === dateStr && e.project);
-                          const isFreeDay = !!(calendarDays[dateStr]?.isWeekend || calendarDays[dateStr]?.isHoliday);
+                          const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday = 0, Saturday = 6
+                          const isHoliday = calendarDays[dateStr]?.isHoliday || false;
+                          const isFreeDay = isWeekend || isHoliday;
                           
                           return (
                             <td 
