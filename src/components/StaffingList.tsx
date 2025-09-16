@@ -20,10 +20,12 @@ import {
   ChevronRight,
   Calendar,
   Users,
-  Download
+  Download,
+  Palette
 } from 'lucide-react';
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
 import ProjectSearchDialog from './ProjectSearchDialog';
+import ColorPickerDialog from './ColorPickerDialog';
 
 interface StaffingEntry {
   id: string;
@@ -79,6 +81,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showProjectSearch, setShowProjectSearch] = useState<{date: string, personId: string} | null>(null);
+  const [showColorPicker, setShowColorPicker] = useState<{
+    projectName: string;
+    projectNumber: number;
+    tripletexProjectId: number;
+    currentColor: string;
+  } | null>(null);
   
   // Get multiple weeks of data
   const getMultipleWeeksData = (): WeekData[] => {
@@ -391,10 +399,19 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       if (error) throw error;
       
       setProjectColors(prev => ({ ...prev, [tripletexProjectId]: color }));
+      
+      // Count how many instances were updated
+      const affectedEntries = staffingData.filter(entry => 
+        entry.project?.tripletex_project_id === tripletexProjectId
+      );
+      
       toast({
-        title: "Farge oppdatert",
-        description: "Prosjektfargen er oppdatert"
+        title: "Prosjektfarge oppdatert",
+        description: `Fargen er endret på ${affectedEntries.length} forekomster av prosjektet`
       });
+
+      // Reload data to reflect color changes
+      loadStaffingData();
     } catch (error) {
       toast({
         title: "Feil ved oppdatering",
@@ -402,6 +419,16 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         variant: "destructive"
       });
     }
+  };
+
+  const handleProjectColorClick = (project: any, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent drag from starting
+    setShowColorPicker({
+      projectName: project.project_name,
+      projectNumber: project.project_number,
+      tripletexProjectId: project.tripletex_project_id,
+      currentColor: getProjectColor(project.tripletex_project_id)
+    });
   };
 
   const copyEntryToDate = async (entryId: string, targetDate: string) => {
@@ -661,7 +688,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             className="w-64"
           />
           <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded">
-            💡 Tips: Dra prosjekter mellom ansatte. Hold Shift for å kopiere.
+            💡 Tips: Dra prosjekter mellom ansatte. Hold Shift for å kopiere. Klikk på prosjekt for å endre farge.
           </div>
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
@@ -770,7 +797,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             >
                               {entry?.project ? (
                                 <div
-                                  className="w-full h-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow"
+                                  className="w-full h-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group"
                                   style={{ 
                                     backgroundColor: getProjectColor(entry.project.tripletex_project_id),
                                     color: getContrastColor(getProjectColor(entry.project.tripletex_project_id))
@@ -789,11 +816,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                     // Reset visual feedback
                                     e.currentTarget.style.opacity = '1';
                                   }}
-                                  onClick={() => {
-                                    // TODO: Open project details/edit dialog
-                                  }}
-                                  title={`${entry.project.project_name}\n${formatTimeValue(entry.totalHours)} timer\nHold Shift og dra for å kopiere`}
+                                  onClick={(e) => handleProjectColorClick(entry.project, e)}
+                                  title={`${entry.project.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å endre farge\nHold Shift og dra for å kopiere`}
                                 >
+                                  {/* Color picker icon overlay */}
+                                  <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="bg-white rounded-full p-1 shadow-md border">
+                                      <Palette className="h-3 w-3 text-gray-600" />
+                                    </div>
+                                  </div>
                                   <div className="font-semibold truncate">
                                     {entry.project.project_name}
                                   </div>
@@ -835,6 +866,18 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           </div>
         ))}
       </div>
+      {/* Color Picker Dialog */}
+      {showColorPicker && (
+        <ColorPickerDialog
+          open={!!showColorPicker}
+          onClose={() => setShowColorPicker(null)}
+          projectName={showColorPicker.projectName}
+          projectNumber={showColorPicker.projectNumber}
+          currentColor={showColorPicker.currentColor}
+          onColorChange={(color) => setProjectColor(showColorPicker.tripletexProjectId, color)}
+        />
+      )}
+
       {/* Project Search Dialog */}
       <ProjectSearchDialog
         open={!!showProjectSearch}
