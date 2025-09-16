@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Copy, Plus, MessageSquare, Paperclip } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -364,6 +364,9 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                       <DialogTitle>
                         Timeføring - {vakt.ttx_project_cache?.project_name || 'Prosjekt'}
                       </DialogTitle>
+                      <DialogDescription>
+                        Legg til eller rediger timer for denne arbeidsoppgaven.
+                      </DialogDescription>
                     </DialogHeader>
                     <TimeEntry
                       vaktId={vakt.id}

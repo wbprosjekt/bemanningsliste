@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -1218,6 +1218,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Rediger timeføring</DialogTitle>
+              <DialogDescription>
+                Rediger timer, aktivitet og andre detaljer for denne arbeidsoppgaven.
+              </DialogDescription>
             </DialogHeader>
             <TimeEntry
               vaktId={editDialog.vaktId}
