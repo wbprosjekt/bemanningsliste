@@ -767,21 +767,25 @@ Deno.serve(async (req) => {
 
           // Build payload according to Tripletex /timesheet/hours spec
           const clientReference = `${orgId}-${vakt_timer_id}`;
-          const hoursItem: any = {
-            date: entryDate,
+          
+          // Ensure hours is a proper number with decimal point
+          const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
+          
+          const payload = {
             employee: { id: parseInt(employee_id.toString()) },
             project: { id: parseInt(project_id.toString()) },
             ...(activity_id ? { activity: { id: parseInt(activity_id.toString()) } } : {}),
-            count: parseFloat(hours.toString()),
-            description: description || '',
-            clientReference,
+            date: entryDate,
+            hours: hoursNumber,
+            comment: description || '',
+            clientReference
           };
 
-          const hoursPayload = { hours: [hoursItem] };
+          console.log('Payload keys:', Object.keys(payload));
+          console.log('typeof hours:', typeof payload.hours, 'value:', payload.hours);
+          console.log('Sending timesheet to Tripletex:', { ...payload, employee: '***', project: '***' });
 
-          console.log('Sending timesheet hours to Tripletex:', { ...hoursItem, employee: '***', project: '***' });
-
-          const response = await callTripletexAPI('/timesheet/hours', 'POST', hoursPayload, orgId);
+          const response = await callTripletexAPI('/timesheet/hours', 'POST', payload, orgId);
 
           // Extract created id (API returns value array)
           const value = (response as any).data?.value;
