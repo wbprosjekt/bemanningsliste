@@ -96,15 +96,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     let currentYear = startYear;
     
     for (let i = 0; i < weeksToShow; i++) {
-      // Get the first day of the ISO week (Monday)
-      const firstDayOfYear = new Date(currentYear, 0, 1);
-      const firstThursday = new Date(currentYear, 0, 1 + (11 - firstDayOfYear.getDay()) % 7);
-      const firstMonday = new Date(firstThursday);
-      firstMonday.setDate(firstThursday.getDate() - 3);
+      // Determine ISO Week 1 Monday using Jan 4th rule
+      const jan4 = new Date(currentYear, 0, 4);
+      const jan4Day = (jan4.getDay() + 6) % 7; // 0=Mon..6=Sun
+      const week1Monday = new Date(jan4);
+      week1Monday.setDate(jan4.getDate() - jan4Day);
       
       // Calculate the Monday of the target week
-      const targetMonday = new Date(firstMonday);
-      targetMonday.setDate(firstMonday.getDate() + (currentWeek - 1) * 7);
+      const targetMonday = new Date(week1Monday);
+      targetMonday.setDate(week1Monday.getDate() + (currentWeek - 1) * 7);
       
       // Generate the 7 days of the week
       const dates = [];
