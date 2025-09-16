@@ -1090,15 +1090,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                        e.currentTarget.style.opacity = '1';
                                      }}
                                      onClick={(e) => {
-                                       e.stopPropagation();
-                                       const firstActivity = entry.activities[0];
-                                       if (firstActivity) {
-                                         setEditDialog({ 
-                                           vaktId: entry.id, 
-                                           existingEntry: firstActivity 
-                                         });
-                                       }
-                                     }}
+                                        e.stopPropagation();
+                                        const firstActivity = entry.activities[0];
+                                        // Allow editing even if no activities exist yet - administrators can fill in time entries
+                                        setEditDialog({ 
+                                          vaktId: entry.id, 
+                                          existingEntry: firstActivity || null 
+                                        });
+                                      }}
                                      title={`${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nHold Shift og dra for å kopiere`}
                                   >
                                     {/* Action icons overlay */}
