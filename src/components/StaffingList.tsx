@@ -23,6 +23,7 @@ import {
   Download
 } from 'lucide-react';
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue } from '@/lib/displayNames';
+import ProjectSearchDialog from './ProjectSearchDialog';
 
 interface StaffingEntry {
   id: string;
@@ -130,11 +131,23 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
     try {
       const dateStrings = weekDates.map(d => d.toISOString().split('T')[0]);
       
+      // Get all employees first 
+      const { data: allEmployees, error: employeeError } = await supabase
+        .from('person')
+        .select('*')
+        .eq('org_id', profile.org_id)
+        .eq('aktiv', true)
+        .order('fornavn');
+
+      if (employeeError) throw employeeError;
+
+      // Get existing vakt data
       const { data: vaktData, error } = await supabase
         .from('vakt')
         .select(`
           id,
           dato,
+          person_id,
           person:person_id (
             id,
             fornavn,
@@ -163,45 +176,77 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
 
       if (error) throw error;
 
-      // Transform data into Excel-like structure
+      // Create entries for ALL employees for ALL days (Excel-style)
       const transformedData: StaffingEntry[] = [];
       
-      vaktData?.forEach(vakt => {
-        const totalHours = vakt.vakt_timer.reduce((sum: number, timer: any) => sum + timer.timer, 0);
-        
-        // Determine status
-        let status: StaffingEntry['status'] = 'missing';
-        if (vakt.vakt_timer.length > 0) {
-          const allApproved = vakt.vakt_timer.every((t: any) => t.status === 'godkjent');
-          const allSent = vakt.vakt_timer.every((t: any) => t.status === 'sendt');
+      allEmployees?.forEach(employee => {
+        weekDates.forEach(date => {
+          const dateStr = date.toISOString().split('T')[0];
           
-          if (allSent) status = 'sent';
-          else if (allApproved) status = 'approved';
-          else if (vakt.vakt_timer.some((t: any) => t.status === 'klar')) status = 'ready';
-          else status = 'draft';
-        }
+          // Find existing vakt for this employee/date
+          const existingVakt = vaktData?.find(v => 
+            v.person_id === employee.id && v.dato === dateStr
+          );
 
-        transformedData.push({
-          id: vakt.id,
-          date: vakt.dato,
-          person: vakt.person,
-          project: vakt.ttx_project_cache ? {
-            id: vakt.ttx_project_cache.id,
-            tripletex_project_id: vakt.ttx_project_cache.tripletex_project_id,
-            project_name: vakt.ttx_project_cache.project_name,
-            project_number: vakt.ttx_project_cache.project_number,
-            color: projectColors[vakt.ttx_project_cache.tripletex_project_id]
-          } : null,
-          activities: vakt.vakt_timer.map((timer: any) => ({
-            id: timer.id,
-            timer: timer.timer,
-            status: timer.status,
-            activity_name: timer.ttx_activity_cache?.navn || 'Ingen aktivitet',
-            lonnstype: timer.lonnstype,
-            notat: timer.notat
-          })),
-          totalHours,
-          status
+          if (existingVakt) {
+            // Use existing data
+            const totalHours = existingVakt.vakt_timer.reduce((sum: number, timer: any) => sum + timer.timer, 0);
+            
+            let status: StaffingEntry['status'] = 'missing';
+            if (existingVakt.vakt_timer.length > 0) {
+              const allApproved = existingVakt.vakt_timer.every((t: any) => t.status === 'godkjent');
+              const allSent = existingVakt.vakt_timer.every((t: any) => t.status === 'sendt');
+              
+              if (allSent) status = 'sent';
+              else if (allApproved) status = 'approved';
+              else if (existingVakt.vakt_timer.some((t: any) => t.status === 'klar')) status = 'ready';
+              else status = 'draft';
+            }
+
+            transformedData.push({
+              id: existingVakt.id,
+              date: dateStr,
+              person: {
+                id: employee.id,
+                fornavn: employee.fornavn,
+                etternavn: employee.etternavn,
+                forventet_dagstimer: employee.forventet_dagstimer || 8
+              },
+              project: existingVakt.ttx_project_cache ? {
+                id: existingVakt.ttx_project_cache.id,
+                tripletex_project_id: existingVakt.ttx_project_cache.tripletex_project_id,
+                project_name: existingVakt.ttx_project_cache.project_name,
+                project_number: existingVakt.ttx_project_cache.project_number,
+                color: projectColors[existingVakt.ttx_project_cache.tripletex_project_id]
+              } : null,
+              activities: existingVakt.vakt_timer.map((timer: any) => ({
+                id: timer.id,
+                timer: timer.timer,
+                status: timer.status,
+                activity_name: timer.ttx_activity_cache?.navn || 'Ingen aktivitet',
+                lonnstype: timer.lonnstype,
+                notat: timer.notat
+              })),
+              totalHours,
+              status
+            });
+          } else {
+            // Create empty entry for employee/date combination
+            transformedData.push({
+              id: `empty-${employee.id}-${dateStr}`,
+              date: dateStr,
+              person: {
+                id: employee.id,
+                fornavn: employee.fornavn,
+                etternavn: employee.etternavn,
+                forventet_dagstimer: employee.forventet_dagstimer || 8
+              },
+              project: null,
+              activities: [],
+              totalHours: 0,
+              status: 'missing'
+            });
+          }
         });
       });
 
@@ -504,49 +549,36 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
       </div>
 
       {/* Excel-like table */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="p-3 text-left w-12">
-                    <Checkbox
-                      checked={selectedEntries.size === staffingData.length}
-                      onCheckedChange={() => {
-                        if (selectedEntries.size === staffingData.length) {
-                          setSelectedEntries(new Set());
-                        } else {
-                          setSelectedEntries(new Set(staffingData.map(e => e.id)));
-                        }
-                      }}
-                    />
-                  </th>
-                  <th className="p-3 text-left min-w-[200px]">Ansatt</th>
-                  {weekDates.map(date => (
-                    <th key={date.toISOString()} className="p-3 text-center min-w-[180px]">
-                      <div className="space-y-1">
-                        <div className="font-medium">
-                          {date.toLocaleDateString('no-NO', { weekday: 'short' })}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {date.getDate()}.{date.getMonth() + 1}
-                        </div>
+      <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="border border-gray-300 p-2 text-left font-bold w-40 bg-slate-200">
+                  UKE {week}
+                </th>
+                {weekDates.map(date => (
+                  <th key={date.toISOString()} className="border border-gray-300 p-2 text-center min-w-[140px] font-bold">
+                    <div className="space-y-1">
+                      <div className="text-xs uppercase font-semibold">
+                        {date.toLocaleDateString('no-NO', { weekday: 'long' })}
                       </div>
-                    </th>
-                  ))}
-                  <th className="p-3 text-center">Total</th>
-                  <th className="p-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEmployees.map(employee => {
-                  const employeeEntries = staffingData.filter(e => e.person.id === employee.id);
-                  const totalWeekHours = employeeEntries.reduce((sum, e) => sum + e.totalHours, 0);
-                  
-                  return (
-                    <tr key={employee.id} className="border-b hover:bg-muted/30">
-                      <td className="p-3">
+                      <div className="text-sm">
+                        {date.toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </div>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {employees.map(employee => {
+                const employeeEntries = staffingData.filter(e => e.person.id === employee.id);
+                
+                return (
+                  <tr key={employee.id} className="hover:bg-gray-50">
+                    <td className="border border-gray-300 p-3 font-medium bg-slate-50 sticky left-0">
+                      <div className="flex items-center gap-2">
                         <Checkbox
                           checked={employeeEntries.every(e => selectedEntries.has(e.id))}
                           onCheckedChange={(checked) => {
@@ -561,135 +593,83 @@ const StaffingList = ({ week, year }: StaffingListProps) => {
                             setSelectedEntries(newSelection);
                           }}
                         />
-                      </td>
-                      <td className="p-3 font-medium">
-                        {getPersonDisplayName(employee.fornavn, employee.etternavn)}
-                      </td>
-                      {weekDates.map(date => {
-                        const dateStr = date.toISOString().split('T')[0];
-                        const entry = employeeEntries.find(e => e.date === dateStr);
-                        
-                        return (
-                          <td key={dateStr} className="p-2">
-                            {entry ? (
-                              <div className="space-y-1">
-                                {entry.project && (
-                                  <div
-                                    className="text-xs px-2 py-1 rounded text-white font-medium cursor-move"
-                                    style={{ backgroundColor: getProjectColor(entry.project.tripletex_project_id) }}
-                                    draggable
-                                    onDragStart={(e) => {
-                                      e.dataTransfer.setData('text/plain', entry.id);
-                                    }}
-                                  >
-                                    {entry.project.project_name}
-                                  </div>
-                                )}
-                                <div className="text-sm font-medium">
+                        <span>{getPersonDisplayName(employee.fornavn, employee.etternavn)}</span>
+                      </div>
+                    </td>
+                    {weekDates.map(date => {
+                      const dateStr = date.toISOString().split('T')[0];
+                      const entry = employeeEntries.find(e => e.date === dateStr);
+                      
+                      return (
+                        <td 
+                          key={dateStr} 
+                          className="border border-gray-300 p-1 h-16 min-w-[140px] relative group"
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const draggedEntryId = e.dataTransfer.getData('text/plain');
+                            if (draggedEntryId && draggedEntryId !== entry?.id) {
+                              copyEntryToDate(draggedEntryId, dateStr);
+                            }
+                          }}
+                        >
+                          {entry?.project ? (
+                            <div
+                              className="w-full h-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative"
+                              style={{ 
+                                backgroundColor: getProjectColor(entry.project.tripletex_project_id),
+                                color: getContrastColor(getProjectColor(entry.project.tripletex_project_id))
+                              }}
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData('text/plain', entry.id);
+                              }}
+                              onClick={() => {
+                                // TODO: Open project details/edit dialog
+                              }}
+                            >
+                              <div className="font-semibold truncate">
+                                {entry.project.project_name}
+                              </div>
+                              {entry.totalHours > 0 && (
+                                <div className="text-xs opacity-90">
                                   {formatTimeValue(entry.totalHours)} t
                                 </div>
-                                {entry.activities.map(activity => (
-                                  <div key={activity.id} className="text-xs text-muted-foreground">
-                                    {activity.activity_name} ({formatTimeValue(activity.timer)}t)
-                                  </div>
-                                ))}
-                                {getStatusBadge(entry.status)}
-                              </div>
-                            ) : (
-                              <div 
-                                className="space-y-1 min-h-[60px] border-2 border-dashed border-muted-foreground/20 rounded p-2 flex items-center justify-center"
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  const entryId = e.dataTransfer.getData('text/plain');
-                                  copyEntryToDate(entryId, dateStr);
-                                }}
-                              >
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full h-8 text-xs"
-                                  onClick={() => setShowProjectSearch({ date: dateStr, personId: employee.id })}
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="p-3 text-center font-bold">
-                        {formatTimeValue(totalWeekHours)} t
-                      </td>
-                      <td className="p-3 text-center">
-                        {employeeEntries.length > 0 ? (
-                          employeeEntries.every(e => e.status === 'approved') ? (
-                            <Badge className="bg-green-500">✓ OK</Badge>
-                          ) : employeeEntries.some(e => e.status === 'missing') ? (
-                            <Badge variant="secondary">⚠ Mangler</Badge>
+                              )}
+                              {entry.activities.length > 0 && (
+                                <div className="text-xs opacity-75 truncate">
+                                  {entry.activities[0].activity_name}
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            <Badge variant="outline">✎ Pågår</Badge>
-                          )
-                        ) : (
-                          <Badge variant="secondary">⚠ Mangler</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                            <button
+                              className="w-full h-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors group-hover:bg-blue-50"
+                              onClick={() => setShowProjectSearch({ date: dateStr, personId: employee.id })}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* Project Search Dialog */}
-      {showProjectSearch && (
-        <Dialog open={!!showProjectSearch} onOpenChange={() => setShowProjectSearch(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Velg prosjekt</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <Input
-                placeholder="Søk prosjekter..."
-                className="w-full"
-              />
-              <div className="max-h-64 overflow-y-auto space-y-2">
-                {projects.map(project => (
-                  <div
-                    key={project.id}
-                    className="flex items-center justify-between p-3 border rounded cursor-pointer hover:bg-muted/50"
-                    onClick={() => assignProjectToPerson(
-                      project.id, // Use the UUID, not tripletex_project_id
-                      showProjectSearch.personId, 
-                      showProjectSearch.date
-                    )}
-                  >
-                    <div>
-                      <div className="font-medium">{project.project_name}</div>
-                      <div className="text-sm text-muted-foreground">#{project.project_number}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-4 h-4 rounded"
-                        style={{ backgroundColor: getProjectColor(project.tripletex_project_id) }}
-                      />
-                      <input
-                        type="color"
-                        value={getProjectColor(project.tripletex_project_id)}
-                        onChange={(e) => setProjectColor(project.tripletex_project_id, e.target.value)}
-                        className="w-6 h-6 rounded border-none cursor-pointer"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      <ProjectSearchDialog
+        open={!!showProjectSearch}
+        onClose={() => setShowProjectSearch(null)}
+        date={showProjectSearch?.date || ''}
+        personId={showProjectSearch?.personId || ''}
+        orgId={profile?.org_id || ''}
+        onProjectAssigned={loadStaffingData}
+      />
     </div>
   );
 };
