@@ -785,7 +785,9 @@ Deno.serve(async (req) => {
           console.log('typeof hours:', typeof payload.hours, 'value:', payload.hours);
           console.log('Sending timesheet to Tripletex:', { ...payload, employee: '***', project: '***' });
 
-          const response = await callTripletexAPI('/timesheet/hours', 'POST', payload, orgId);
+          // Wrap payload in hours array as expected by Tripletex API
+          const hoursPayload = { hours: [payload] };
+          const response = await callTripletexAPI('/timesheet/hours', 'POST', hoursPayload, orgId);
 
           // Extract created id (API returns value array)
           const value = (response as any).data?.value;
