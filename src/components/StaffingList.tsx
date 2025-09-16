@@ -114,11 +114,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     };
   };
 
+  // Coerce incoming props to safe week/year
+  const { week: safeStartWeek, year: safeStartYear } = coerceWeekRef({ week: startWeek as any, year: startYear as any });
+
   // Get multiple weeks of data with robust date handling
   const getMultipleWeeksData = (): WeekData[] => {
     const weeks: WeekData[] = [];
-    let currentWeek = Math.max(1, Math.min(53, startWeek)); // Clamp week to valid range
-    let currentYear = Math.max(1970, Math.min(3000, startYear)); // Clamp year to reasonable range
+    let currentWeek = Math.max(1, Math.min(53, safeStartWeek)); // Clamp week to valid range
+    let currentYear = Math.max(1970, Math.min(3000, safeStartYear)); // Clamp year to reasonable range
     
     for (let i = 0; i < weeksToShow; i++) {
       try {
@@ -790,7 +793,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         <div>
           <h1 className="text-3xl font-bold">Bemanningsliste</h1>
           <p className="text-muted-foreground">
-            {profile?.org?.name} - Uker {startWeek}-{safeLastWeek.week}, {startYear}
+            {profile?.org?.name} - Uker {safeStartWeek}-{safeLastWeek.week}, {safeStartYear}
           </p>
         </div>
         
