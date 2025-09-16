@@ -89,6 +89,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     currentColor: string;
   } | null>(null);
   const [calendarDays, setCalendarDays] = useState<Record<string, { isWeekend: boolean; isHoliday: boolean }>>({});
+
+  const toDateKey = (d: Date): string => {
+    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
   // Get multiple weeks of data
   const getMultipleWeeksData = (): WeekData[] => {
     const weeks: WeekData[] = [];
@@ -96,15 +104,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     let currentYear = startYear;
     
     for (let i = 0; i < weeksToShow; i++) {
-      // Determine ISO Week 1 Monday using Jan 4th rule
-      const jan4 = new Date(currentYear, 0, 4);
-      const jan4Day = (jan4.getDay() + 6) % 7; // 0=Mon..6=Sun
-      const week1Monday = new Date(jan4);
-      week1Monday.setDate(jan4.getDate() - jan4Day);
-      
-      // Calculate the Monday of the target week
-      const targetMonday = new Date(week1Monday);
-      targetMonday.setDate(week1Monday.getDate() + (currentWeek - 1) * 7);
+      // Determine ISO Week 1 Monday (UTC-safe, Jan 4th rule)
+      const jan4 = new Date(Date.UTC(currentYear, 0, 4));
+      const jan4Day = (jan4.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
+      const week1MondayUTC = new Date(jan4);
+      week1MondayUTC.setUTCDate(jan4.getUTCDate() - jan4Day);
+
+      // Calculate the Monday of the target week (convert back to local midnight)
+      const targetMondayUTC = new Date(week1MondayUTC);
+      targetMondayUTC.setUTCDate(week1MondayUTC.getUTCDate() + (currentWeek - 1) * 7);
+      const targetMonday = new Date(
+        targetMondayUTC.getUTCFullYear(),
+        targetMondayUTC.getUTCMonth(),
+        targetMondayUTC.getUTCDate()
+      );
       
       // Generate the 7 days of the week
       const dates = [];
@@ -136,7 +149,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   };
 
   const multiWeekData = getMultipleWeeksData();
-  const allDates = multiWeekData.flatMap(w => w.dates);
+  const allDates = multiWeekData.flatMap(w => w.dates).filter(d => d instanceof Date && !isNaN(d.getTime()));
 
   useEffect(() => {
     if (user) {
@@ -177,7 +190,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
     setLoading(true);
     try {
-      const dateStrings = allDates.map(d => d.toISOString().split('T')[0]);
+      const dateStrings = allDates.map(toDateKey).filter(Boolean);
       
       // Get all employees first 
       const { data: allEmployees, error: employeeError } = await supabase
@@ -229,7 +242,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       
       allEmployees?.forEach(employee => {
         allDates.forEach(date => {
-          const dateStr = date.toISOString().split('T')[0];
+          const dateStr = toDateKey(date);
+          if (!dateStr) return;
           
           // Find all vakter for this employee/date
           const matchingVakts = (vaktData || []).filter(v => 
@@ -390,7 +404,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
   const loadCalendarDays = async () => {
     try {
-      const dateStrings = allDates.map(d => d.toISOString().split('T')[0]);
+      const dateStrings = allDates.map(toDateKey).filter(Boolean);
       const { data, error } = await supabase
         .from('kalender_dag')
         .select('dato, is_weekend, is_holiday')
@@ -773,25 +787,25 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                     <th className="border border-gray-300 p-2 text-left font-bold w-40 bg-slate-200">
                       UKE {weekData.week}
                     </th>
-                    {weekData.dates.map(date => (
-                      <th key={date.toISOString()} className="border border-gray-300 p-2 text-center min-w-[140px] font-bold">
-                        <div className="space-y-1">
-                          <div className="text-xs uppercase font-semibold">
-                            {date.toLocaleDateString('no-NO', { weekday: 'long' })}
-                          </div>
-                          <div className="text-sm">
-                            {date.toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                          </div>
-                        </div>
-                      </th>
-                    ))}
+                     {weekData.dates.map((date, idx) => (
+                       <th key={toDateKey(date) || `${weekData.year}-${weekData.week}-${idx}`} className="border border-gray-300 p-2 text-center min-w-[140px] font-bold">
+                         <div className="space-y-1">
+                           <div className="text-xs uppercase font-semibold">
+                             {isNaN(date.getTime()) ? '' : date.toLocaleDateString('no-NO', { weekday: 'long' })}
+                           </div>
+                           <div className="text-sm">
+                             {isNaN(date.getTime()) ? '' : date.toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                           </div>
+                         </div>
+                       </th>
+                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {employees.map(employee => {
                     const employeeEntries = staffingData.filter(e => 
                       e.person.id === employee.id && 
-                      weekData.dates.some(d => d.toISOString().split('T')[0] === e.date)
+                      weekData.dates.some(d => toDateKey(d) === e.date)
                     );
                     
                     return (
@@ -815,8 +829,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             <span>{getPersonDisplayName(employee.fornavn, employee.etternavn)}</span>
                           </div>
                         </td>
-                        {weekData.dates.map(date => {
-                          const dateStr = date.toISOString().split('T')[0];
+                        {weekData.dates.map((date, idx) => {
+                          const dateStr = toDateKey(date);
                           const dayEntries = employeeEntries.filter(e => e.date === dateStr && e.project);
                           const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday = 0, Saturday = 6
                           const isHoliday = calendarDays[dateStr]?.isHoliday || false;
@@ -824,7 +838,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                           
                           return (
                             <td 
-                              key={dateStr} 
+                              key={dateStr || `${employee.id}-${weekData.week}-${idx}`} 
                               className="border border-gray-300 p-1 min-h-[80px] min-w-[140px] relative group"
                               data-employee-id={employee.id}
                               data-date={dateStr}
