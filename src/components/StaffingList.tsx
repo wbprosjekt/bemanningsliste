@@ -830,6 +830,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                               data-date={dateStr}
                               onDragOver={(e) => {
                                 e.preventDefault();
+                                // Indicate copy vs move while dragging
+                                try {
+                                  e.dataTransfer.dropEffect = e.shiftKey ? 'copy' : 'move';
+                                } catch {}
                                 e.currentTarget.classList.add('bg-blue-50', 'border-blue-300');
                               }}
                               onDragLeave={(e) => {
@@ -844,7 +848,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 const sourceDate = e.dataTransfer.getData('application/x-source-date');
                                 
                                 if (draggedEntryId) {
-                                  const isShiftPressed = e.shiftKey;
+                                  const intendsCopy = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.dataTransfer.dropEffect === 'copy';
                                   const isSamePerson = sourcePersonId === employee.id;
                                   const isSameDate = sourceDate === dateStr;
                                   
@@ -857,8 +861,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                     // Same person, different date - copy to new date
                                     copyEntryToDate(draggedEntryId, dateStr);
                                   } else {
-                                    // Different person - move or copy based on Shift key
-                                    moveEntryToEmployeeAndDate(draggedEntryId, employee.id, dateStr, isShiftPressed);
+                                    // Different person - move or copy
+                                    moveEntryToEmployeeAndDate(draggedEntryId, employee.id, dateStr, intendsCopy);
                                   }
                                 }
                               }}
