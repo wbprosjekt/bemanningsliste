@@ -94,32 +94,9 @@ const TripletexIntegration = () => {
       // Load existing tokens if they exist
       if (data?.settings) {
         const settings = data.settings as any;
-        
-        // Decode base64 tokens for display
-        let consumerToken = '';
-        let employeeToken = '';
-        
-        try {
-          if (settings.consumer_token) {
-            consumerToken = atob(settings.consumer_token);
-          }
-        } catch (e) {
-          // If decoding fails, use as-is (might already be decoded)
-          consumerToken = settings.consumer_token || '';
-        }
-        
-        try {
-          if (settings.employee_token) {
-            employeeToken = atob(settings.employee_token);
-          }
-        } catch (e) {
-          // If decoding fails, use as-is (might already be decoded)
-          employeeToken = settings.employee_token || '';
-        }
-        
         setTokenForm({
-          consumerToken,
-          employeeToken,
+          consumerToken: settings.consumer_token || '',
+          employeeToken: settings.employee_token || '',
           apiBaseUrl: settings.api_base_url || 'https://api-test.tripletex.tech/v2'
         });
       }
