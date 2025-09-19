@@ -39,7 +39,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   const [overtime100Minutes, setOvertime100Minutes] = useState(0);
   const [overtime50Hours, setOvertime50Hours] = useState(0);
   const [overtime50Minutes, setOvertime50Minutes] = useState(0);
-  const [showOvertime, setShowOvertime] = useState(true); // Show by default - FORCE REBUILD
+  const [showOvertime, setShowOvertime] = useState(true); // Show by default - FORCE REBUILD COMPLETE
 
   // Calculate total timer value from hours and minutes
   const timer = hours + (minutes / 60);
@@ -73,6 +73,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           const totalOvertime = overtimeEntries.reduce((sum, entry) => sum + entry.timer, 0);
           setOvertime100Hours(Math.floor(totalOvertime));
           setOvertime100Minutes(Math.round((totalOvertime % 1) * 60));
+        }
         
         setShowOvertime(true);
       }
