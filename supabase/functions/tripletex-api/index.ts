@@ -715,38 +715,6 @@ Deno.serve(async (req) => {
 
       case 'send_timesheet_entry':
         const { vakt_timer_id, employee_id, project_id, activity_id, hours, date, is_overtime, description } = payload;
-
-        // --- PATCH: map employee_id (intern UUID eller ttx-id) til Tripletex ansatt-id ---
-        let ttxEmployeeId: number | null = null;
-
-        if (/^\d+$/.test(String(employee_id))) {
-          // Ser ut som Tripletex-ID
-          ttxEmployeeId = Number(employee_id);
-        } else {
-          // Intern person-id (UUID) -> slå opp mapping i 'person'
-          const { data: personMap, error: personErr } = await supabase
-          .from('person')
-          .select('tripletex_employee_id')
-          .eq('org_id', orgId)
-          .eq('id', employee_id)
-          .maybeSingle();
-
-      if (personErr) {
-        result = { success: false, error: `DB error resolving employee mapping: ${personErr.message}` };
-        break;
-      }
-      if (!personMap?.tripletex_employee_id) {
-        result = { success: false, error: 'employee_mapping_missing' };
-        break;
-      }
-      ttxEmployeeId = Number(personMap.tripletex_employee_id);
-    }
-
-if (!Number.isFinite(ttxEmployeeId)) {
-  result = { success: false, error: 'Invalid Tripletex employee id after mapping' };
-  break;
-}
-// --- /PATCH ---
         
         if (!vakt_timer_id || !employee_id || !project_id || !hours || !date) {
           result = { success: false, error: 'Missing required fields for timesheet entry' };
@@ -838,81 +806,67 @@ if (!Number.isFinite(ttxEmployeeId)) {
           }
           
           console.log('All preflight checks passed - proceeding with timesheet submission');
+// Riktig body for /timesheet/entry (IKKE hours-array, IKKE clientReference)
+const entryDate = new Date(date).toISOString().split('T')[0];
+const hoursNumber = parseFloat(String(hours).replace(',', '.'));
 
-          // Format date for Tripletex API (YYYY-MM-DD)
-          const entryDate = new Date(date).toISOString().split('T')[0];
+// Bygg korrekt payload til /timesheet/entry
+const entryPayload: any = {
+  date: entryDate,
+  employee: { id: ttxEmployeeId },               // ← fra mini-patch 1
+  project:  { id: Number(project_id) },
+  hours: hoursNumber,
+  comment: description || ''
+};
+if (activity_id) entryPayload.activity = { id: Number(activity_id) };
 
-          // Build payload according to Tripletex /timesheet/hours spec
-          const clientReference = `${orgId}-${vakt_timer_id}`;
-          
-          // Ensure hours is a proper number with decimal point
-          const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
-          
-          const payload = {
-            employee: { id: parseInt(employee_id.toString()) },
-            project: { id: parseInt(project_id.toString()) },
-            ...(activity_id ? { activity: { id: parseInt(activity_id.toString()) } } : {}),
-            date: entryDate,
-            hours: hoursNumber,
-            comment: description || '',
-            clientReference
-          };
+console.log('Sending /timesheet/entry payload:', { ...entryPayload, employee: '***', project: '***' });
 
-          console.log('Payload keys:', Object.keys(payload));
-          console.log('typeof hours:', typeof payload.hours, 'value:', payload.hours);
-          console.log('Sending timesheet to Tripletex:', { ...payload, employee: '***', project: '***' });
+// Kall /timesheet/entry med ÉN entry (ikke hours-array)
+const response = await callTripletexAPI('/timesheet/entry', 'POST', entryPayload, orgId);
 
-          // Wrap payload in hours array as expected by Tripletex API
-          const hoursPayload = { hours: [payload] };
-          const response = await callTripletexAPI('/timesheet/entry', 'POST', hoursPayload, orgId);
+// Les ut id fra value.id
+const createdId = response?.data?.value?.id;
 
-          // Extract created id (API returns value array)
-          const value = (response as any).data?.value;
-          const created = Array.isArray(value) ? value[0] : value;
-          const createdId = created?.id;
+if (response.success && createdId) {
+  // Oppdater lokalt
+  const { error: updateError } = await supabase
+    .from('vakt_timer')
+    .update({
+      tripletex_entry_id: createdId,
+      tripletex_synced_at: new Date().toISOString(),
+      sync_error: null,
+      status: 'sendt'
+    })
+    .eq('id', vakt_timer_id);
 
-          if (response.success && createdId) {
-            // Update local vakt_timer with Tripletex ID and sync timestamp
-            const { error: updateError } = await supabase
-              .from('vakt_timer')
-              .update({
-                tripletex_entry_id: createdId,
-                tripletex_synced_at: new Date().toISOString(),
-                sync_error: null,
-                status: 'sendt'
-              })
-              .eq('id', vakt_timer_id);
+  if (updateError) {
+    console.error('Failed to update vakt_timer after sync:', updateError);
+    return {
+      success: true, // Tripletex OK, men lokal oppdatering feilet
+      data: response.data,
+      warning: 'Timesheet created in Tripletex but local sync status not updated'
+    };
+  }
 
-            if (updateError) {
-              console.error('Failed to update vakt_timer after sync:', updateError);
-              return {
-                success: true, // Tripletex succeeded, but local update failed
-                data: response.data,
-                warning: 'Timesheet created in Tripletex but local sync status not updated'
-              };
-            }
+  return {
+    success: true,
+    data: { tripletex_id: createdId, message: 'Timesheet entry created successfully' }
+  };
+}
 
-            return {
-              success: true,
-              data: {
-                tripletex_id: createdId,
-                message: 'Timesheet hours created successfully'
-              }
-            };
-          }
+// Feilhåndtering — lagre sync_error for visning i UI
+if (vakt_timer_id) {
+  await supabase
+    .from('vakt_timer')
+    .update({
+      sync_error: response.error || 'Unknown error',
+      tripletex_synced_at: null
+    })
+    .eq('id', vakt_timer_id);
+}
 
-          // Handle sync error
-          if (vakt_timer_id) {
-            await supabase
-              .from('vakt_timer')
-              .update({
-                sync_error: response.error || 'Unknown error',
-                tripletex_synced_at: null
-              })
-              .eq('id', vakt_timer_id);
-          }
-
-          return response;
+return response;
         });
         break;
 
