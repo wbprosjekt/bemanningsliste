@@ -813,19 +813,22 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       if (vaktError) throw vaktError;
 
-      // Copy activities
-      for (const activity of sourceEntry.activities) {
-        await supabase
-          .from('vakt_timer')
-          .insert({
-            vakt_id: newVakt.id,
-            org_id: profile.org_id,
-            timer: activity.timer,
-            aktivitet_id: activities.find(a => a.navn === activity.activity_name)?.id,
-            lonnstype: activity.lonnstype,
-            notat: activity.notat,
-            status: 'utkast'
-          });
+      // Only copy activities if this is a copy operation (not a move)
+      // When moving, we want an empty project assignment without time entries
+      if (shouldCopy) {
+        for (const activity of sourceEntry.activities) {
+          await supabase
+            .from('vakt_timer')
+            .insert({
+              vakt_id: newVakt.id,
+              org_id: profile.org_id,
+              timer: activity.timer,
+              aktivitet_id: activities.find(a => a.navn === activity.activity_name)?.id,
+              lonnstype: activity.lonnstype,
+              notat: activity.notat,
+              status: 'utkast'
+            });
+        }
       }
 
       // If moving (not copying), remove the original entry
@@ -847,10 +850,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       }
 
       const action = shouldCopy ? "kopiert til" : "flyttet til";
+      const timerNote = shouldCopy ? " (inkluderer timer)" : " (tom prosjekttilordning)";
       
       toast({
         title: `Prosjekt ${action}`,
-        description: `${sourceEntry.project?.project_name} ${action} ${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'ukjent ansatt'} på ${new Date(targetDate).toLocaleDateString('no-NO')}`
+        description: `${sourceEntry.project?.project_name} ${action} ${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'ukjent ansatt'} på ${new Date(targetDate).toLocaleDateString('no-NO')}${timerNote}`
       });
 
       revalidateInBackground();
@@ -1134,7 +1138,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             className="w-64"
           />
           <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded">
-            💡 Tips: Dra prosjekter mellom ansatte. Hold Shift (eller Option på Mac) for å kopiere. Klikk på prosjekt for å endre farge.
+            💡 Tips: Dra prosjekter mellom ansatte (tom tilordning). Hold Shift (eller Option på Mac) for å kopiere med timer. Klikk på prosjekt for å endre farge.
           </div>
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
@@ -1294,7 +1298,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                           existingEntry: firstActivity || null 
                                         });
                                       }}
-                                     title={`#${entry.project?.tripletex_project_id} - ${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nHold Shift og dra for å kopiere`}
+                                     title={`#${entry.project?.tripletex_project_id} - ${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nDra for å flytte prosjekt (tom tilordning)\nHold Shift og dra for å kopiere (inkluderer timer)`}
                                   >
                                     {/* Action icons overlay */}
                                     <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover/project:opacity-100 transition-opacity">
