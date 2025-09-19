@@ -602,71 +602,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
-  const copyEntryToDate = async (entryId: string, targetDate: string) => {
-    try {
-      const sourceEntry = staffingData.find(e => e.id === entryId);
-      if (!sourceEntry) return;
-
-      // Check if same person already has this project on target date
-      const existingEntry = staffingData.find(e => 
-        e.person.id === sourceEntry.person.id && 
-        e.date === targetDate && 
-        e.project?.id === sourceEntry.project?.id
-      );
-
-      if (existingEntry) {
-        toast({
-          title: "Prosjekt finnes allerede",
-          description: `${getPersonDisplayName(sourceEntry.person.fornavn, sourceEntry.person.etternavn)} har allerede ${sourceEntry.project?.project_name} på ${new Date(targetDate).toLocaleDateString('no-NO')}`,
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Create new vakt for target date
-      const { data: newVakt, error: vaktError } = await supabase
-        .from('vakt')
-        .insert({
-          person_id: sourceEntry.person.id,
-          project_id: sourceEntry.project?.id || null,
-          dato: targetDate,
-          org_id: profile.org_id
-        })
-        .select()
-        .single();
-
-      if (vaktError) throw vaktError;
-
-      // Copy activities
-      for (const activity of sourceEntry.activities) {
-        await supabase
-          .from('vakt_timer')
-          .insert({
-            vakt_id: newVakt.id,
-            org_id: profile.org_id,
-            timer: activity.timer,
-            aktivitet_id: activities.find(a => a.navn === activity.activity_name)?.id,
-            lonnstype: activity.lonnstype,
-            notat: activity.notat,
-            status: 'utkast'
-          });
-      }
-
-      toast({
-        title: "Kopiert til ny dag",
-        description: `Timeføring kopiert til ${new Date(targetDate).toLocaleDateString('no-NO')}`
-      });
-
-      revalidateInBackground();
-    } catch (error: any) {
-      toast({
-        title: "Kopiering feilet",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  };
-
   const moveEntryToEmployeeAndDate = async (entryId: string, targetPersonId: string, targetDate: string, shouldCopy: boolean = false) => {
     if (isProcessingUpdate) return;
     
@@ -1253,13 +1188,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   // Prevent multiple simultaneous operations
                                   if (isProcessingUpdate) return;
                                   
-                                  if (isSamePerson) {
-                                    // Same person, different date - copy to new date
-                                    copyEntryToDate(draggedEntryId, dateStr);
-                                  } else {
-                                    // Different person - move or copy
-                                    moveEntryToEmployeeAndDate(draggedEntryId, employee.id, dateStr, intendsCopy);
-                                  }
+                                  // Move or copy based on modifier key
+                                  moveEntryToEmployeeAndDate(draggedEntryId, employee.id, dateStr, intendsCopy);
                                 }
                               }}
                             >
