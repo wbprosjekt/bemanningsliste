@@ -35,14 +35,18 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // Separate overtime time entry
-  const [overtimeHours, setOvertimeHours] = useState(0);
-  const [overtimeMinutes, setOvertimeMinutes] = useState(0);
-  const [showOvertime, setShowOvertime] = useState(true); // Show by default
+  // Separate overtime time entries for 100% and 50%
+  const [overtime100Hours, setOvertime100Hours] = useState(0);
+  const [overtime100Minutes, setOvertime100Minutes] = useState(0);
+  const [overtime50Hours, setOvertime50Hours] = useState(0);
+  const [overtime50Minutes, setOvertime50Minutes] = useState(0);
+  const [showOvertime, setShowOvertime] = useState(false); // Collapsed by default
 
   // Calculate total timer value from hours and minutes
   const timer = hours + (minutes / 60);
-  const overtimeTimer = overtimeHours + (overtimeMinutes / 60);
+  const overtime100Timer = overtime100Hours + (overtime100Minutes / 60);
+  const overtime50Timer = overtime50Hours + (overtime50Minutes / 60);
+  const totalOvertimeTimer = overtime100Timer + overtime50Timer;
 
   useEffect(() => {
     loadActivities();
@@ -56,17 +60,27 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
         .from('vakt_timer')
         .select('timer, lonnstype')
         .eq('vakt_id', vaktId)
-        .eq('lonnstype', 'overtid');
+        .in('lonnstype', ['overtid_100', 'overtid_50']);
 
       if (error) throw error;
       
       if (data && data.length > 0) {
-        const totalOvertime = data.reduce((sum, entry) => sum + entry.timer, 0);
-        const overtimeHours = Math.floor(totalOvertime);
-        const overtimeMinutes = Math.round((totalOvertime % 1) * 60);
+        // Separate 100% and 50% overtime
+        const overtime100 = data.filter(entry => entry.lonnstype === 'overtid_100');
+        const overtime50 = data.filter(entry => entry.lonnstype === 'overtid_50');
         
-        setOvertimeHours(overtimeHours);
-        setOvertimeMinutes(overtimeMinutes);
+        if (overtime100.length > 0) {
+          const total100 = overtime100.reduce((sum, entry) => sum + entry.timer, 0);
+          setOvertime100Hours(Math.floor(total100));
+          setOvertime100Minutes(Math.round((total100 % 1) * 60));
+        }
+        
+        if (overtime50.length > 0) {
+          const total50 = overtime50.reduce((sum, entry) => sum + entry.timer, 0);
+          setOvertime50Hours(Math.floor(total50));
+          setOvertime50Minutes(Math.round((total50 % 1) * 60));
+        }
+        
         setShowOvertime(true);
       }
     } catch (error) {
@@ -102,16 +116,26 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
     setMinutes(roundedMinutes);
   };
 
-  const adjustOvertimeHours = (delta: number) => {
-    const newHours = Math.max(0, Math.min(12, overtimeHours + delta));
-    setOvertimeHours(newHours);
+  const adjustOvertime100Hours = (delta: number) => {
+    const newHours = Math.max(0, Math.min(12, overtime100Hours + delta));
+    setOvertime100Hours(newHours);
   };
 
-  const adjustOvertimeMinutes = (delta: number) => {
-    const newMinutes = Math.max(0, Math.min(45, overtimeMinutes + delta));
-    // Ensure minutes are in 15-minute intervals
+  const adjustOvertime100Minutes = (delta: number) => {
+    const newMinutes = Math.max(0, Math.min(45, overtime100Minutes + delta));
     const roundedMinutes = Math.round(newMinutes / 15) * 15;
-    setOvertimeMinutes(roundedMinutes);
+    setOvertime100Minutes(roundedMinutes);
+  };
+
+  const adjustOvertime50Hours = (delta: number) => {
+    const newHours = Math.max(0, Math.min(12, overtime50Hours + delta));
+    setOvertime50Hours(newHours);
+  };
+
+  const adjustOvertime50Minutes = (delta: number) => {
+    const newMinutes = Math.max(0, Math.min(45, overtime50Minutes + delta));
+    const roundedMinutes = Math.round(newMinutes / 15) * 15;
+    setOvertime50Minutes(roundedMinutes);
   };
 
   const handleTimeInputChange = (value: string) => {
@@ -141,7 +165,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
       return;
     }
 
-    if (overtimeTimer > 0 && !validateTimeStep(overtimeTimer)) {
+    if (totalOvertimeTimer > 0 && (!validateTimeStep(overtime100Timer) || !validateTimeStep(overtime50Timer))) {
       toast({
         title: "Ugyldig overtidstidsverdi",
         description: "Overtidstimer må være i 0,25-steg (f.eks. 1,25, 2,50, 3,75, 4,00).",
@@ -178,44 +202,56 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
 
       if (result.error) throw result.error;
 
-      // Handle overtime entries
-      if (overtimeTimer > 0) {
-        // First, delete existing overtime entries
-        await supabase
-          .from('vakt_timer')
-          .delete()
-          .eq('vakt_id', vaktId)
-          .eq('lonnstype', 'overtid');
+      // Handle overtime entries - delete existing first
+      await supabase
+        .from('vakt_timer')
+        .delete()
+        .eq('vakt_id', vaktId)
+        .in('lonnstype', ['overtid_100', 'overtid_50']);
 
-        // Then insert new overtime entry
-        const overtimeData = {
+      // Insert 100% overtime if exists
+      if (overtime100Timer > 0) {
+        const overtime100Data = {
           vakt_id: vaktId,
           org_id: orgId,
-          timer: overtimeTimer,
+          timer: overtime100Timer,
           aktivitet_id: aktivitetId,
           notat: notat || null,
           status,
-          lonnstype: 'overtid',
+          lonnstype: 'overtid_100',
           is_overtime: true
         };
 
-        const overtimeResult = await supabase
+        const overtime100Result = await supabase
           .from('vakt_timer')
-          .insert(overtimeData);
+          .insert(overtime100Data);
 
-        if (overtimeResult.error) throw overtimeResult.error;
-      } else {
-        // If no overtime, delete any existing overtime entries
-        await supabase
+        if (overtime100Result.error) throw overtime100Result.error;
+      }
+
+      // Insert 50% overtime if exists
+      if (overtime50Timer > 0) {
+        const overtime50Data = {
+          vakt_id: vaktId,
+          org_id: orgId,
+          timer: overtime50Timer,
+          aktivitet_id: aktivitetId,
+          notat: notat || null,
+          status,
+          lonnstype: 'overtid_50',
+          is_overtime: true
+        };
+
+        const overtime50Result = await supabase
           .from('vakt_timer')
-          .delete()
-          .eq('vakt_id', vaktId)
-          .eq('lonnstype', 'overtid');
+          .insert(overtime50Data);
+
+        if (overtime50Result.error) throw overtime50Result.error;
       }
 
       toast({
         title: "Lagret",
-        description: `Timeføring lagret${overtimeTimer > 0 ? ` med ${formatTimeValue(overtimeTimer)} overtid` : ''}.`
+        description: `Timeføring lagret${totalOvertimeTimer > 0 ? ` med ${formatTimeValue(totalOvertimeTimer)} overtid` : ''}.`
       });
 
       onSave?.();
@@ -310,9 +346,9 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           </div>
           <div className="text-center text-sm text-muted-foreground">
             Total: {formatTimeValue(timer)} timer
-            {overtimeTimer > 0 && (
+            {totalOvertimeTimer > 0 && (
               <span className="ml-2 text-yellow-600 font-bold">
-                + {formatTimeValue(overtimeTimer)} overtid ⚡
+                + {formatTimeValue(totalOvertimeTimer)} overtid ⚡
               </span>
             )}
           </div>
@@ -353,65 +389,129 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           </div>
           
           {showOvertime && (
-            <div className="flex items-center justify-center gap-6 p-4 border rounded-lg bg-yellow-50 border-yellow-200">
-              {/* Overtime Hours Section */}
-              <div className="flex flex-col items-center space-y-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => adjustOvertimeHours(1)}
-                  disabled={overtimeHours >= 12}
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </Button>
-                <div className="text-3xl font-bold w-16 text-center">
-                  {overtimeHours.toString().padStart(2, '0')}
-                  <div className="text-xs text-muted-foreground font-normal mt-1">T</div>
+            <div className="space-y-4 p-4 border rounded-lg bg-yellow-50 border-yellow-200">
+              {/* 100% Overtime */}
+              <div className="space-y-2">
+                <Label className="text-blue-600 font-medium">Overtidstillegg 100%</Label>
+                <div className="flex items-center justify-center gap-6">
+                  {/* 100% Hours */}
+                  <div className="flex flex-col items-center space-y-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => adjustOvertime100Hours(1)}
+                      disabled={overtime100Hours >= 12}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <div className="text-3xl font-bold w-16 text-center">
+                      {overtime100Hours.toString().padStart(2, '0')}
+                      <div className="text-xs text-muted-foreground font-normal mt-1">T</div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => adjustOvertime100Hours(-1)}
+                      disabled={overtime100Hours <= 0}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {/* 100% Minutes */}
+                  <div className="flex flex-col items-center space-y-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => adjustOvertime100Minutes(15)}
+                      disabled={overtime100Minutes >= 45}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <div className="text-3xl font-bold w-16 text-center">
+                      {overtime100Minutes.toString().padStart(2, '0')}
+                      <div className="text-xs text-muted-foreground font-normal mt-1">M</div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => adjustOvertime100Minutes(-15)}
+                      disabled={overtime100Minutes <= 0}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => adjustOvertimeHours(-1)}
-                  disabled={overtimeHours <= 0}
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
               </div>
 
-              {/* Overtime Minutes Section */}
-              <div className="flex flex-col items-center space-y-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => adjustOvertimeMinutes(15)}
-                  disabled={overtimeMinutes >= 45}
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </Button>
-                <div className="text-3xl font-bold w-16 text-center">
-                  {overtimeMinutes.toString().padStart(2, '0')}
-                  <div className="text-xs text-muted-foreground font-normal mt-1">M</div>
+              {/* 50% Overtime */}
+              <div className="space-y-2">
+                <Label className="text-blue-600 font-medium">Overtidstillegg 50%</Label>
+                <div className="flex items-center justify-center gap-6">
+                  {/* 50% Hours */}
+                  <div className="flex flex-col items-center space-y-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => adjustOvertime50Hours(1)}
+                      disabled={overtime50Hours >= 12}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <div className="text-3xl font-bold w-16 text-center">
+                      {overtime50Hours.toString().padStart(2, '0')}
+                      <div className="text-xs text-muted-foreground font-normal mt-1">T</div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => adjustOvertime50Hours(-1)}
+                      disabled={overtime50Hours <= 0}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {/* 50% Minutes */}
+                  <div className="flex flex-col items-center space-y-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => adjustOvertime50Minutes(15)}
+                      disabled={overtime50Minutes >= 45}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <div className="text-3xl font-bold w-16 text-center">
+                      {overtime50Minutes.toString().padStart(2, '0')}
+                      <div className="text-xs text-muted-foreground font-normal mt-1">M</div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => adjustOvertime50Minutes(-15)}
+                      disabled={overtime50Minutes <= 0}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => adjustOvertimeMinutes(-15)}
-                  disabled={overtimeMinutes <= 0}
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           )}
           
           {showOvertime && (
             <div className="text-center text-sm text-muted-foreground">
-              Overtid: {formatTimeValue(overtimeTimer)} timer
-              {overtimeTimer > 0 && <span className="ml-2 text-yellow-600 font-bold">⚡</span>}
+              Overtid: {formatTimeValue(totalOvertimeTimer)} timer
+              {totalOvertimeTimer > 0 && <span className="ml-2 text-yellow-600 font-bold">⚡</span>}
             </div>
           )}
         </div>
