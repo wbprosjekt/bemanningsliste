@@ -219,7 +219,10 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
     return { success: false, error: 'Tripletex tokens not configured for this organization' };
   }
   const url = `${config.baseUrl}${endpoint}`;
-  let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  let headers: Record<string, string> = { 
+  'Content-Type': 'application/json',
+  'Accept': 'application/json'
+};;
 
   // Use session token for all non-session endpoints
   if (!endpoint.startsWith('/token/session')) {
@@ -700,7 +703,7 @@ Deno.serve(async (req) => {
           });
         }
 
-        const verifyResult = await callTripletexAPI(`/timesheet/hours/${tripletexEntryId}`, 'GET', undefined, orgId);
+        const verifyResult = await callTripletexAPI(`/timesheet/entry/${tripletexEntryId}`, 'GET', undefined, orgId);
         result = { 
           success: true, 
           data: { 
@@ -829,7 +832,7 @@ Deno.serve(async (req) => {
 
           // Wrap payload in hours array as expected by Tripletex API
           const hoursPayload = { hours: [payload] };
-          const response = await callTripletexAPI('/timesheet/hours', 'POST', hoursPayload, orgId);
+          const response = await callTripletexAPI('/timesheet/entry', 'POST', hoursPayload, orgId);
 
           // Extract created id (API returns value array)
           const value = (response as any).data?.value;
