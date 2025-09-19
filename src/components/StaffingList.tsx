@@ -661,12 +661,65 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       const sourceEntry = staffingData.find(e => e.id === entryId);
       if (!sourceEntry) return;
 
+      const targetEmployee = employees.find(e => e.id === targetPersonId);
+
       if (shouldCopy) {
-        await copyEntryToDate(entryId, targetDate);
+        // Optimistically add copied entry to target
+        const copiedEntry: StaffingEntry = {
+          ...sourceEntry,
+          id: `temp-${Date.now()}`,
+          person: targetEmployee,
+          date: targetDate,
+          activities: sourceEntry.activities.map(a => ({ 
+            ...a, 
+            id: `temp-${Date.now()}-${Math.random()}` 
+          }))
+        };
+        
+        updateStaffingDataOptimistically(data => [...data, copiedEntry]);
+
+        // Create new vakt for target person/date
+        const { data: newVakt, error: vaktError } = await supabase
+          .from('vakt')
+          .insert({
+            person_id: targetPersonId,
+            project_id: sourceEntry.project?.id,
+            dato: targetDate,
+            org_id: profile.org_id
+          })
+          .select()
+          .single();
+
+        if (vaktError) throw vaktError;
+
+        // Copy activities to new vakt
+        if (sourceEntry.activities.length > 0) {
+          const activitiesToCopy = sourceEntry.activities.map(activity => ({
+            vakt_id: newVakt.id,
+            org_id: profile.org_id,
+            timer: activity.timer,
+            aktivitet_id: activity.aktivitet_id,
+            notat: activity.notat,
+            status: 'utkast',
+            lonnstype: activity.lonnstype || 'normal',
+            is_overtime: activity.is_overtime || false
+          }));
+
+          const { error: timerError } = await supabase
+            .from('vakt_timer')
+            .insert(activitiesToCopy);
+
+          if (timerError) throw timerError;
+        }
+
+        toast({
+          title: "Prosjekt kopiert",
+          description: `${sourceEntry.project?.project_name} kopiert til ${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'ukjent ansatt'} på ${new Date(targetDate).toLocaleDateString('no-NO')}`
+        });
+
+        revalidateInBackground();
         return;
       }
-
-      const targetEmployee = employees.find(e => e.id === targetPersonId);
 
       // Optimistically move the entry
       updateStaffingDataOptimistically(data => {
