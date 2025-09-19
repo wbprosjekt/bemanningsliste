@@ -660,25 +660,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
         if (vaktError) throw vaktError;
 
-        // Copy activities to new vakt
-        if (sourceEntry.activities.length > 0) {
-          const activitiesToCopy = sourceEntry.activities.map(activity => ({
-            vakt_id: newVakt.id,
-            org_id: profile.org_id,
-            timer: activity.timer,
-            aktivitet_id: activity.aktivitet_id,
-            notat: activity.notat,
-            status: 'utkast',
-            lonnstype: activity.lonnstype || 'normal',
-            is_overtime: activity.is_overtime || false
-          }));
-
-          const { error: timerError } = await supabase
-            .from('vakt_timer')
-            .insert(activitiesToCopy);
-
-          if (timerError) throw timerError;
-        }
+        // No timer copying - both move and copy create empty project assignments
 
         toast({
           title: "Prosjekt kopiert",
@@ -748,23 +730,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       if (vaktError) throw vaktError;
 
-      // Only copy activities if this is a copy operation (not a move)
-      // When moving, we want an empty project assignment without time entries
-      if (shouldCopy) {
-        for (const activity of sourceEntry.activities) {
-          await supabase
-            .from('vakt_timer')
-            .insert({
-              vakt_id: newVakt.id,
-              org_id: profile.org_id,
-              timer: activity.timer,
-              aktivitet_id: activities.find(a => a.navn === activity.activity_name)?.id,
-              lonnstype: activity.lonnstype,
-              notat: activity.notat,
-              status: 'utkast'
-            });
-        }
-      }
+      // No timer copying - both move and copy create empty project assignments
 
       // If moving (not copying), remove the original entry
       if (!shouldCopy && sourceEntry.id.indexOf('empty-') !== 0) {
@@ -785,11 +751,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       }
 
       const action = shouldCopy ? "kopiert til" : "flyttet til";
-      const timerNote = shouldCopy ? " (inkluderer timer)" : " (tom prosjekttilordning)";
       
       toast({
         title: `Prosjekt ${action}`,
-        description: `${sourceEntry.project?.project_name} ${action} ${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'ukjent ansatt'} på ${new Date(targetDate).toLocaleDateString('no-NO')}${timerNote}`
+        description: `${sourceEntry.project?.project_name} ${action} ${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'ukjent ansatt'} på ${new Date(targetDate).toLocaleDateString('no-NO')} (tom tilordning)`
       });
 
       revalidateInBackground();
@@ -1073,7 +1038,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             className="w-64"
           />
           <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded">
-            💡 Tips: Dra prosjekter mellom ansatte (tom tilordning). Hold Shift (eller Option på Mac) for å kopiere med timer. Klikk på prosjekt for å endre farge.
+            💡 Tips: Dra prosjekter mellom ansatte (tom tilordning). Hold Shift/Option for å kopiere (tom tilordning). Prosjekter sorteres etter nummer. Klikk på prosjekt for å endre farge.
           </div>
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
@@ -1197,7 +1162,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 <div className="absolute inset-0 bg-red-500/10 pointer-events-none rounded-sm" />
                               )}
                               <div className="flex flex-col gap-1">
-                                {dayEntries.map((entry) => (
+                                {dayEntries
+                                  .sort((a, b) => {
+                                    const aNum = a.project?.project_number || 999999;
+                                    const bNum = b.project?.project_number || 999999;
+                                    return aNum - bNum;
+                                  })
+                                  .map((entry) => (
                                   <div
                                     key={entry.id}
                                     className="w-full p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group/project"
@@ -1228,7 +1199,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                           existingEntry: firstActivity || null 
                                         });
                                       }}
-                                     title={`#${entry.project?.tripletex_project_id} - ${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nDra for å flytte prosjekt (tom tilordning)\nHold Shift og dra for å kopiere (inkluderer timer)`}
+                                     title={`#${entry.project?.tripletex_project_id} - ${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nDra for å flytte prosjekt (tom tilordning)\nHold Shift/Option og dra for å kopiere (tom tilordning)`}
                                   >
                                     {/* Action icons overlay */}
                                     <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover/project:opacity-100 transition-opacity">
