@@ -35,11 +35,14 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // Calculate if this is overtime based on lonnstype
-  const isOvertime = lonnstype === 'overtid';
+  // Separate overtime time entry
+  const [overtimeHours, setOvertimeHours] = useState(0);
+  const [overtimeMinutes, setOvertimeMinutes] = useState(0);
+  const [showOvertime, setShowOvertime] = useState(false);
 
   // Calculate total timer value from hours and minutes
   const timer = hours + (minutes / 60);
+  const overtimeTimer = overtimeHours + (overtimeMinutes / 60);
 
   useEffect(() => {
     loadActivities();
@@ -73,6 +76,18 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
     setMinutes(roundedMinutes);
   };
 
+  const adjustOvertimeHours = (delta: number) => {
+    const newHours = Math.max(0, Math.min(12, overtimeHours + delta));
+    setOvertimeHours(newHours);
+  };
+
+  const adjustOvertimeMinutes = (delta: number) => {
+    const newMinutes = Math.max(0, Math.min(45, overtimeMinutes + delta));
+    // Ensure minutes are in 15-minute intervals
+    const roundedMinutes = Math.round(newMinutes / 15) * 15;
+    setOvertimeMinutes(roundedMinutes);
+  };
+
   const handleTimeInputChange = (value: string) => {
     const parsed = parseTimeValue(value);
     const newHours = Math.floor(parsed);
@@ -100,36 +115,66 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
       return;
     }
 
+    if (overtimeTimer > 0 && !validateTimeStep(overtimeTimer)) {
+      toast({
+        title: "Ugyldig overtidstidsverdi",
+        description: "Overtidstimer må være i 0,25-steg (f.eks. 1,25, 2,50, 3,75, 4,00).",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = {
+      // Save normal time entry
+      const normalTimeData = {
         vakt_id: vaktId,
         org_id: orgId,
         timer,
         aktivitet_id: aktivitetId,
         notat: notat || null,
         status,
-        lonnstype,
-        is_overtime: isOvertime
+        lonnstype: 'normal',
+        is_overtime: false
       };
 
       let result;
-      if (existingEntry) {
+      if (existingEntry && existingEntry.lonnstype === 'normal') {
         result = await supabase
           .from('vakt_timer')
-          .update(data)
+          .update(normalTimeData)
           .eq('id', existingEntry.id);
       } else {
         result = await supabase
           .from('vakt_timer')
-          .insert(data);
+          .insert(normalTimeData);
       }
 
       if (result.error) throw result.error;
 
+      // Save overtime entry if overtime timer > 0
+      if (overtimeTimer > 0) {
+        const overtimeData = {
+          vakt_id: vaktId,
+          org_id: orgId,
+          timer: overtimeTimer,
+          aktivitet_id: aktivitetId,
+          notat: notat || null,
+          status,
+          lonnstype: 'overtid',
+          is_overtime: true
+        };
+
+        const overtimeResult = await supabase
+          .from('vakt_timer')
+          .insert(overtimeData);
+
+        if (overtimeResult.error) throw overtimeResult.error;
+      }
+
       toast({
         title: "Lagret",
-        description: "Timeføringen er lagret."
+        description: `Timeføring lagret${overtimeTimer > 0 ? ` med ${formatTimeValue(overtimeTimer)} overtid` : ''}.`
       });
 
       onSave?.();
@@ -224,7 +269,11 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           </div>
           <div className="text-center text-sm text-muted-foreground">
             Total: {formatTimeValue(timer)} timer
-            {isOvertime && <span className="ml-2 text-yellow-600">⚡ Overtid</span>}
+            {overtimeTimer > 0 && (
+              <span className="ml-2 text-yellow-600 font-bold">
+                + {formatTimeValue(overtimeTimer)} overtid ⚡
+              </span>
+            )}
           </div>
         </div>
 
@@ -244,22 +293,84 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="lonnstype">Lønnstype</Label>
-          <Select value={lonnstype} onValueChange={setLonnstype}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-background border z-50">
-              <SelectItem value="normal">Normal arbeidstid</SelectItem>
-              <SelectItem value="overtid">Overtid</SelectItem>
-              <SelectItem value="helg">Helgearbeid</SelectItem>
-              <SelectItem value="ferie">Ferie</SelectItem>
-            </SelectContent>
-          </Select>
-          {isOvertime && (
-            <div className="text-sm text-yellow-600 flex items-center gap-1">
-              ⚡ Overtid - vil bli registrert som overtidslønn
+        {/* Overtime Section */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Overtid
+            </Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowOvertime(!showOvertime)}
+              className="text-xs"
+            >
+              {showOvertime ? 'Skjul' : 'Vis'}
+            </Button>
+          </div>
+          
+          {showOvertime && (
+            <div className="flex items-center justify-center gap-6 p-4 border rounded-lg bg-yellow-50 border-yellow-200">
+              {/* Overtime Hours Section */}
+              <div className="flex flex-col items-center space-y-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => adjustOvertimeHours(1)}
+                  disabled={overtimeHours >= 12}
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <div className="text-3xl font-bold w-16 text-center">
+                  {overtimeHours.toString().padStart(2, '0')}
+                  <div className="text-xs text-muted-foreground font-normal mt-1">T</div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => adjustOvertimeHours(-1)}
+                  disabled={overtimeHours <= 0}
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Overtime Minutes Section */}
+              <div className="flex flex-col items-center space-y-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => adjustOvertimeMinutes(15)}
+                  disabled={overtimeMinutes >= 45}
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <div className="text-3xl font-bold w-16 text-center">
+                  {overtimeMinutes.toString().padStart(2, '0')}
+                  <div className="text-xs text-muted-foreground font-normal mt-1">M</div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => adjustOvertimeMinutes(-15)}
+                  disabled={overtimeMinutes <= 0}
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {showOvertime && (
+            <div className="text-center text-sm text-muted-foreground">
+              Overtid: {formatTimeValue(overtimeTimer)} timer
+              {overtimeTimer > 0 && <span className="ml-2 text-yellow-600 font-bold">⚡</span>}
             </div>
           )}
         </div>
