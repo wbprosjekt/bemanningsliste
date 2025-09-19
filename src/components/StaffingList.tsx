@@ -1139,15 +1139,17 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   </tr>
                 </thead>
                 <tbody>
-                    {employees.map(employee => {
-                      const employeeEntries = staffingData.filter(e => 
-                        e.person.id === employee.id && 
-                        weekData.dates?.some(d => toDateKey(d) === e.date)
-                      );
-                      
-                      return (
-                        <tr key={employee.id} className="hover:bg-gray-50">
-                          <td className="border border-gray-300 p-3 font-medium bg-slate-50 sticky left-0">
+                    {employees.map((employee, employeeIndex) => {
+                       const employeeEntries = staffingData.filter(e => 
+                         e.person.id === employee.id && 
+                         weekData.dates?.some(d => toDateKey(d) === e.date)
+                       );
+                       
+                       const isEvenRow = employeeIndex % 2 === 0;
+                       
+                       return (
+                         <tr key={employee.id} className={`hover:bg-gray-50 ${isEvenRow ? 'bg-white' : 'bg-gray-25'}`}>
+                          <td className={`border border-gray-300 p-3 font-medium sticky left-0 ${isEvenRow ? 'bg-slate-50' : 'bg-slate-75'}`}>
                             <div className="flex items-center gap-2">
                               <Checkbox
                                 checked={employeeEntries.every(e => selectedEntries.has(e.id))}
@@ -1174,9 +1176,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             const isFreeDay = isWeekend || isHoliday;
                             
                             return (
-                              <td 
-                                key={dateStr || `${employee.id}-${safeWeek.week}-${idx}`}
-                              className="border border-gray-300 p-1 min-h-[80px] min-w-[140px] relative group"
+                               <td 
+                                 key={dateStr || `${employee.id}-${safeWeek.week}-${idx}`}
+                               className={`border border-gray-300 p-1 min-h-[80px] min-w-[140px] relative group ${isEvenRow ? 'bg-white' : 'bg-gray-25'}`}
                               data-employee-id={employee.id}
                               data-date={dateStr}
                               onDragOver={(e) => {
