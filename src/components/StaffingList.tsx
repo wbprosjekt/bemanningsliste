@@ -102,6 +102,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const [calendarDays, setCalendarDays] = useState<Record<string, { isWeekend: boolean; isHoliday: boolean }>>({});
   const [sendingToTripletex, setSendingToTripletex] = useState<Set<string>>(new Set());
   const [editDialog, setEditDialog] = useState<{ vaktId: string; existingEntry?: any } | null>(null);
+  const [isProcessingUpdate, setIsProcessingUpdate] = useState(false);
 
   const toDateKey = (d: Date): string => {
     try {
@@ -225,10 +226,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
-  const loadStaffingData = async () => {
+  const loadStaffingData = async (silent: boolean = false) => {
     if (!profile?.org_id) return;
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const dateStrings = allDates.map(toDateKey).filter(Boolean);
       if (dateStrings.length === 0) {
@@ -380,14 +381,34 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       setStaffingData(transformedData);
     } catch (error) {
       console.error('Error loading staffing data:', error);
-      toast({
-        title: "Feil ved lasting",
-        description: "Kunne ikke laste bemanningsdata",
-        variant: "destructive"
-      });
+      if (!silent) {
+        toast({
+          title: "Feil ved lasting",
+          description: "Kunne ikke laste bemanningsdata",
+          variant: "destructive"
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+  };
+
+  // Optimistic update helpers
+  const updateStaffingDataOptimistically = (updateFn: (data: StaffingEntry[]) => StaffingEntry[]) => {
+    setStaffingData(prev => updateFn(prev));
+  };
+
+  const revalidateInBackground = () => {
+    setTimeout(() => loadStaffingData(true), 1000);
+  };
+
+  const rollbackUpdate = (previousData: StaffingEntry[], errorMessage: string) => {
+    setStaffingData(previousData);
+    toast({
+      title: "Operasjon feilet",
+      description: errorMessage,
+      variant: "destructive"
+    });
   };
 
   const loadProjects = async () => {
@@ -515,13 +536,16 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         entry.project?.tripletex_project_id === tripletexProjectId
       );
       
+      // Optimistically update project colors  
+      setProjectColors(prev => ({ ...prev, [tripletexProjectId]: color }));
+      
       toast({
         title: "Prosjektfarge oppdatert",
         description: `Fargen er endret på ${affectedEntries.length} forekomster av prosjektet`
       });
 
-      // Reload data to reflect color changes
-      loadStaffingData();
+      // Revalidate in background
+      revalidateInBackground();
     } catch (error) {
       toast({
         title: "Feil ved oppdatering",
@@ -542,9 +566,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   };
 
   const deleteEntry = async (entryId: string) => {
+    const previousData = [...staffingData];
+    
     try {
       const entry = staffingData.find(e => e.id === entryId);
       if (!entry) return;
+
+      // Optimistically remove the entry
+      updateStaffingDataOptimistically(data => data.filter(e => e.id !== entryId));
 
       // Delete all vakt_timer entries associated with this vakt
       const { error: timerError } = await supabase
@@ -567,13 +596,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         description: `Timeføring for ${entry.project?.project_name || 'prosjekt'} er slettet`
       });
 
-      loadStaffingData();
+      revalidateInBackground();
     } catch (error: any) {
-      toast({
-        title: "Sletting feilet",
-        description: error.message,
-        variant: "destructive"
-      });
+      rollbackUpdate(previousData, error.message);
     }
   };
 
@@ -616,7 +641,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         description: `Timeføring kopiert til ${new Date(targetDate).toLocaleDateString('no-NO')}`
       });
 
-      loadStaffingData();
+      revalidateInBackground();
     } catch (error: any) {
       toast({
         title: "Kopiering feilet",
@@ -627,9 +652,30 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   };
 
   const moveEntryToEmployeeAndDate = async (entryId: string, targetPersonId: string, targetDate: string, shouldCopy: boolean = false) => {
+    if (isProcessingUpdate) return;
+    
+    const previousData = [...staffingData];
+    setIsProcessingUpdate(true);
+    
     try {
       const sourceEntry = staffingData.find(e => e.id === entryId);
       if (!sourceEntry) return;
+
+      if (shouldCopy) {
+        await copyEntryToDate(entryId, targetDate);
+        return;
+      }
+
+      const targetEmployee = employees.find(e => e.id === targetPersonId);
+
+      // Optimistically move the entry
+      updateStaffingDataOptimistically(data => {
+        return data.map(entry => 
+          entry.id === entryId 
+            ? { ...entry, person: targetEmployee, date: targetDate }
+            : entry
+        );
+      });
 
       // Check if target already has a project for this date
       const existingTargetEntry = staffingData.find(e => 
@@ -695,7 +741,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           .eq('id', sourceEntry.id);
       }
 
-      const targetEmployee = employees.find(e => e.id === targetPersonId);
       const action = shouldCopy ? "kopiert til" : "flyttet til";
       
       toast({
@@ -703,20 +748,47 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         description: `${sourceEntry.project?.project_name} ${action} ${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'ukjent ansatt'} på ${new Date(targetDate).toLocaleDateString('no-NO')}`
       });
 
-      loadStaffingData();
+      revalidateInBackground();
     } catch (error: any) {
-      toast({
-        title: "Operasjon feilet",
-        description: error.message,
-        variant: "destructive"
-      });
+      rollbackUpdate(previousData, error.message);
+    } finally {
+      setIsProcessingUpdate(false);
     }
   };
 
   const assignProjectToPerson = async (projectId: string, personId: string, date: string) => {
+    const previousData = [...staffingData];
+    
     try {
+      const person = employees.find(e => e.id === personId);
+      const project = projects.find(p => p.id === projectId);
+      
+      // Optimistically add/update the entry
+      updateStaffingDataOptimistically(data => {
+        const existingEntry = data.find(e => e.person.id === personId && e.date === date);
+        
+        if (existingEntry) {
+          return data.map(entry =>
+            entry.id === existingEntry.id
+              ? { ...entry, project }
+              : entry
+          );
+        } else {
+          const newEntry: StaffingEntry = {
+            id: `temp-${Date.now()}`,
+            date,
+            person,
+            project,
+            activities: [],
+            totalHours: 0,
+            status: 'draft' as const
+          };
+          return [...data, newEntry];
+        }
+      });
+      
       // Check if vakt already exists
-      let vaktId = staffingData.find(e => e.person.id === personId && e.date === date)?.id;
+      let vaktId = previousData.find(e => e.person.id === personId && e.date === date)?.id;
       
       if (!vaktId) {
         // Create new vakt
@@ -746,14 +818,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         description: "Prosjekt er tilordnet ansatt"
       });
 
-      loadStaffingData();
+      revalidateInBackground();
       setShowProjectSearch(null);
     } catch (error: any) {
-      toast({
-        title: "Tilordning feilet",
-        description: error.message,
-        variant: "destructive"
-      });
+      rollbackUpdate(previousData, error.message);
     }
   };
 
@@ -809,7 +877,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         description: `${entry.activities.length} timer sendt for ${entry.project.project_name}`
       });
 
-      loadStaffingData(); // Refresh to show updated sync status
+      revalidateInBackground(); // Refresh to show updated sync status
     } catch (error: any) {
       console.error('Error sending to Tripletex:', error);
       toast({
@@ -855,7 +923,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       });
 
       setSelectedEntries(new Set());
-      loadStaffingData();
+      revalidateInBackground();
     } catch (error: any) {
       toast({
         title: "Tilbaketrekking feilet", 
@@ -885,7 +953,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       });
 
       setSelectedEntries(new Set());
-      loadStaffingData();
+      revalidateInBackground();
     } catch (error: any) {
       toast({
         title: "Godkjenning feilet",
@@ -1053,6 +1121,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                     return;
                                   }
                                   
+                                  // Prevent multiple simultaneous operations
+                                  if (isProcessingUpdate) return;
+                                  
                                   if (isSamePerson) {
                                     // Same person, different date - copy to new date
                                     copyEntryToDate(draggedEntryId, dateStr);
@@ -1214,7 +1285,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         date={showProjectSearch?.date || ''}
         personId={showProjectSearch?.personId || ''}
         orgId={profile?.org_id || ''}
-        onProjectAssigned={loadStaffingData}
+        onProjectAssigned={() => revalidateInBackground()}
       />
 
       {/* Time Entry Edit Dialog */}
@@ -1231,7 +1302,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
               vaktId={editDialog.vaktId}
               orgId={profile?.org_id || ''}
               onSave={() => {
-                loadStaffingData();
+                revalidateInBackground();
                 setEditDialog(null);
               }}
               existingEntry={editDialog.existingEntry}
