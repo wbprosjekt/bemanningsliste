@@ -1098,7 +1098,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                           existingEntry: firstActivity || null 
                                         });
                                       }}
-                                     title={`${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nHold Shift og dra for å kopiere`}
+                                     title={`#${entry.project?.tripletex_project_id} - ${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nHold Shift og dra for å kopiere`}
                                   >
                                     {/* Action icons overlay */}
                                     <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover/project:opacity-100 transition-opacity">
@@ -1131,28 +1131,46 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                          <Palette className="h-2 w-2 text-gray-600" />
                                        </button>
                                     </div>
-                                     <div className="font-semibold truncate">
-                                       {entry.project?.project_name}
-                                       {entry.activities.some(a => a.tripletex_synced_at) && (
-                                         <span className="ml-1 text-xs">✓</span>
-                                       )}
-                                       {entry.activities.some(a => a.sync_error) && (
-                                         <span className="ml-1 text-xs text-red-300" title={entry.activities.find(a => a.sync_error)?.sync_error}>⚠</span>
-                                       )}
-                                     </div>
-                                     {entry.totalHours > 0 && (
-                                       <div className="text-xs opacity-90">
-                                         {formatTimeValue(entry.totalHours)} t
-                                         {entry.activities.some(a => a.is_overtime) && (
-                                           <span className="ml-1 text-yellow-200" title="Inneholder overtid">⚡</span>
+                                     <div className="space-y-0.5">
+                                       {/* Project number prominent display */}
+                                       <div className="font-bold text-sm">
+                                         #{entry.project?.tripletex_project_id}
+                                         {entry.activities.some(a => a.tripletex_synced_at) && (
+                                           <span className="ml-1 text-xs">✓</span>
+                                         )}
+                                         {entry.activities.some(a => a.sync_error) && (
+                                           <span className="ml-1 text-xs text-red-300" title={entry.activities.find(a => a.sync_error)?.sync_error}>⚠</span>
                                          )}
                                        </div>
-                                     )}
-                                    {entry.activities.length > 0 && (
-                                      <div className="text-xs opacity-75 truncate">
-                                        {entry.activities[0].activity_name}
-                                      </div>
-                                    )}
+                                       
+                                       {/* Project name with smart truncation */}
+                                       <div className="text-xs font-medium leading-tight overflow-hidden" 
+                                            style={{ 
+                                              display: '-webkit-box',
+                                              WebkitLineClamp: 2,
+                                              WebkitBoxOrient: 'vertical',
+                                              maxHeight: '2rem'
+                                            }}>
+                                         {entry.project?.project_name}
+                                       </div>
+                                       
+                                       {/* Hours and activity in one line */}
+                                       <div className="flex items-center justify-between text-xs opacity-90">
+                                         {entry.totalHours > 0 && (
+                                           <span>
+                                             {formatTimeValue(entry.totalHours)} t
+                                             {entry.activities.some(a => a.is_overtime) && (
+                                               <span className="ml-1 text-yellow-200" title="Inneholder overtid">⚡</span>
+                                             )}
+                                           </span>
+                                         )}
+                                         {entry.activities.length > 0 && (
+                                           <span className="truncate max-w-16 opacity-75" title={entry.activities[0].activity_name}>
+                                             {entry.activities[0].activity_name}
+                                           </span>
+                                         )}
+                                       </div>
+                                     </div>
                                     
                                     {/* Status indicator */}
                                     <div className="absolute -top-1 -left-1">
