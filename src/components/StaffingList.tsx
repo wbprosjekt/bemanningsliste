@@ -22,7 +22,8 @@ import {
   Users,
   Download,
   Palette,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
 import ProjectSearchDialog from './ProjectSearchDialog';
@@ -925,6 +926,44 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  const recallFromTripletex = async (entry: StaffingEntry) => {
+    try {
+      for (const activity of entry.activities) {
+        if (activity.tripletex_entry_id) {
+          const { data, error } = await supabase.functions.invoke('tripletex-api', {
+            body: {
+              action: 'delete_timesheet_entry',
+              tripletex_entry_id: activity.tripletex_entry_id,
+              vakt_timer_id: activity.id,
+              orgId: profile.org_id
+            }
+          });
+
+          if (error) {
+            throw new Error(error.message || 'Failed to recall from Tripletex');
+          }
+
+          if (!data?.success) {
+            throw new Error(data?.error || 'Failed to recall from Tripletex');
+          }
+        }
+      }
+
+      toast({
+        title: "Timer kalt tilbake fra Tripletex",
+        description: `${entry.activities.length} timer er nå tilbake til utkast-status og kan redigeres`
+      });
+
+      revalidateInBackground();
+    } catch (error: any) {
+      toast({
+        title: "Tilbakekalling feilet",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
   const unapproveSelectedEntries = async () => {
     try {
       const entryIds = Array.from(selectedEntries);
@@ -1054,9 +1093,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-64"
           />
-          <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded">
-            💡 Tips: Dra prosjekter mellom ansatte. Prosjekter med timer kopieres (bevarer original), tomme prosjekter flyttes. Hold Shift/Option for å alltid kopiere. Prosjekter sorteres etter nummer. Klikk på prosjekt for å endre farge.
-          </div>
+       <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded">
+         💡 Tips: Dra prosjekter mellom ansatte. Prosjekter med timer kopieres (bevarer original), tomme prosjekter flyttes. Hold Shift/Option for å alltid kopiere. Prosjekter sorteres etter nummer. Klikk på prosjekt for å endre farge.
+       </div>
+       
+       <div className="text-xs text-muted-foreground px-3 py-2 bg-blue-50 rounded border border-blue-200">
+         📋 Status-ikoner: ✓ Godkjent (grønn) | → Send til Tripletex (blå) | 🔄 Kall tilbake fra Tripletex (oransje) | ! Klar for godkjenning (oransje) | ✎ Utkast (grå) | ⚠ Feil ved synkronisering (rød) | ⚡ Overtid (gul) | 🗑️ Sletting blokkert for godkjente/sendte prosjekter
+       </div>
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
             Godkjenn ({selectedEntries.size})
@@ -1220,8 +1263,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   >
                                     {/* Action icons overlay */}
                                     <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover/project:opacity-100 transition-opacity">
-                                      {/* Only show delete button if not sent to Tripletex */}
-                                      {!entry.activities.some(a => a.tripletex_synced_at) && (
+                                      {/* Only show delete button if not approved or sent to Tripletex */}
+                                      {!entry.activities.some(a => a.status === 'godkjent' || a.status === 'sendt' || a.tripletex_synced_at) && (
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
@@ -1245,6 +1288,19 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                           disabled={sendingToTripletex.has(entry.id)}
                                         >
                                           <Send className="h-2 w-2" />
+                                        </button>
+                                      )}
+                                      {/* Show recall button if sent to Tripletex */}
+                                      {entry.activities.some(a => a.tripletex_synced_at) && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            recallFromTripletex(entry);
+                                          }}
+                                          className="bg-orange-500 hover:bg-orange-600 text-white rounded-full p-1 shadow-md border border-white/20"
+                                          title="Kall tilbake fra Tripletex"
+                                        >
+                                          <RefreshCw className="h-2 w-2" />
                                         </button>
                                       )}
                                       <button
