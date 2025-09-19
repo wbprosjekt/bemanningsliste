@@ -1401,8 +1401,18 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       {/* Time Entry Edit Dialog */}
       <Dialog open={!!editDialog} onOpenChange={() => setEditDialog(null)}>
-        <DialogContent className="max-w-2xl h-[95vh] flex flex-col p-0">
-          <div className="flex-1 overflow-y-auto p-6">
+        <DialogContent 
+          className="max-w-2xl h-[95vh] flex flex-col p-0" 
+          style={{ 
+            maxHeight: '95vh !important', 
+            height: '95vh !important', 
+            display: 'flex !important', 
+            flexDirection: 'column !important', 
+            padding: '0 !important',
+            border: '2px solid red !important' // Debug border
+          }}
+        >
+          <div className="flex-1 overflow-y-auto p-6" style={{ flex: '1 !important', overflowY: 'auto !important', padding: '1.5rem !important' }}>
             <DialogHeader className="pb-4">
               <DialogTitle>Rediger timeføring</DialogTitle>
               <DialogDescription>
