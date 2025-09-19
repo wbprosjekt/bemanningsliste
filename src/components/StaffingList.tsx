@@ -1131,14 +1131,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                          <Palette className="h-2 w-2 text-gray-600" />
                                        </button>
                                     </div>
-                                     <div className="space-y-0.5">
-                                       {/* Project name with integrated number */}
-                                       <div className="text-xs font-semibold leading-tight overflow-hidden" 
+                                     <div className="space-y-1">
+                                       {/* Project name */}
+                                       <div className="text-sm font-semibold leading-tight overflow-hidden" 
                                             style={{ 
                                               display: '-webkit-box',
                                               WebkitLineClamp: 2,
                                               WebkitBoxOrient: 'vertical',
-                                              maxHeight: '2rem'
+                                              maxHeight: '2.5rem'
                                             }}>
                                          {entry.project?.project_name}
                                          {entry.activities.some(a => a.tripletex_synced_at) && (
@@ -1149,23 +1149,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                          )}
                                        </div>
                                        
-                                       {/* Hours, project number and activity in bottom row */}
-                                       <div className="flex items-center justify-between text-xs opacity-90">
-                                         {entry.totalHours > 0 && (
-                                           <span>
-                                             {formatTimeValue(entry.totalHours)} t
-                                             {entry.activities.some(a => a.is_overtime) && (
-                                               <span className="ml-1 text-yellow-200" title="Inneholder overtid">⚡</span>
-                                             )}
-                                           </span>
-                                         )}
-                                         <span className="text-xs opacity-75">
-                                           #{entry.project?.tripletex_project_id}
-                                         </span>
-                                       </div>
-                                       {entry.activities.length > 0 && (
-                                         <div className="text-xs opacity-75 truncate">
-                                           {entry.activities[0].activity_name}
+                                       {/* Hours only */}
+                                       {entry.totalHours > 0 && (
+                                         <div className="text-sm font-medium">
+                                           {formatTimeValue(entry.totalHours)} t
+                                           {entry.activities.some(a => a.is_overtime) && (
+                                             <span className="ml-1 text-yellow-200" title="Inneholder overtid">⚡</span>
+                                           )}
                                          </div>
                                        )}
                                      </div>
