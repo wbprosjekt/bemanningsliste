@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -1401,23 +1402,25 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       {/* Time Entry Edit Dialog */}
       {editDialog && (
         <Dialog open={!!editDialog} onOpenChange={() => setEditDialog(null)}>
-          <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto flex flex-col" style={{ maxHeight: '95vh', overflowY: 'auto' }}>
-            <DialogHeader>
-              <DialogTitle>Rediger timeføring</DialogTitle>
-              <DialogDescription>
-                Rediger timer, aktivitet og andre detaljer for denne arbeidsoppgaven.
-              </DialogDescription>
-            </DialogHeader>
-            <TimeEntry
-              vaktId={editDialog.vaktId}
-              orgId={profile?.org_id || ''}
-              onSave={() => {
-                revalidateInBackground();
-                setEditDialog(null);
-              }}
-              defaultTimer={8.0}
-              existingEntry={editDialog.existingEntry}
-            />
+          <DialogContent className="max-w-2xl max-h-[95vh]">
+            <ScrollArea className="h-[85vh]">
+              <DialogHeader>
+                <DialogTitle>Rediger timeføring</DialogTitle>
+                <DialogDescription>
+                  Rediger timer, aktivitet og andre detaljer for denne arbeidsoppgaven.
+                </DialogDescription>
+              </DialogHeader>
+              <TimeEntry
+                vaktId={editDialog.vaktId}
+                orgId={profile?.org_id || ''}
+                onSave={() => {
+                  revalidateInBackground();
+                  setEditDialog(null);
+                }}
+                defaultTimer={8.0}
+                existingEntry={editDialog.existingEntry}
+              />
+            </ScrollArea>
           </DialogContent>
         </Dialog>
       )}

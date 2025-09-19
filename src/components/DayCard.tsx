@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Copy, Plus, MessageSquare, Paperclip } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -380,22 +381,24 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                       {vakt.vakt_timer.length > 0 ? 'Rediger timer' : 'Legg til timer'}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto flex flex-col">
-                    <DialogHeader>
-                      <DialogTitle className="text-base sm:text-lg">
-                        Timeføring - {vakt.ttx_project_cache?.project_name || 'Prosjekt'}
-                      </DialogTitle>
-                      <DialogDescription className="text-sm">
-                        Legg til eller rediger timer for denne arbeidsoppgaven.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <TimeEntry
-                      vaktId={vakt.id}
-                      orgId={orgId}
-                      onSave={loadDayData}
-                      defaultTimer={vakt.person?.forventet_dagstimer || 8.0}
-                      existingEntry={vakt.vakt_timer[0]} // For simplicity, edit first entry
-                    />
+                  <DialogContent className="max-w-2xl max-h-[95vh]">
+                    <ScrollArea className="h-[85vh]">
+                      <DialogHeader>
+                        <DialogTitle className="text-base sm:text-lg">
+                          Timeføring - {vakt.ttx_project_cache?.project_name || 'Prosjekt'}
+                        </DialogTitle>
+                        <DialogDescription className="text-sm">
+                          Legg til eller rediger timer for denne arbeidsoppgaven.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <TimeEntry
+                        vaktId={vakt.id}
+                        orgId={orgId}
+                        onSave={loadDayData}
+                        defaultTimer={vakt.person?.forventet_dagstimer || 8.0}
+                        existingEntry={vakt.vakt_timer[0]} // For simplicity, edit first entry
+                      />
+                    </ScrollArea>
                   </DialogContent>
                 </Dialog>
               </div>
