@@ -722,7 +722,7 @@ Deno.serve(async (req) => {
         }
 
         result = await exponentialBackoff(async () => {
-          // Preflight checks - validate all IDs exist in Tripletex before sending hours
+          // Preflight checks - validate all IDs exist in Tripletex
           console.log('Preflight IDs', { employeeId: employee_id, projectId: project_id, activityId: activity_id });
           
           // Check employee exists
@@ -739,7 +739,7 @@ Deno.serve(async (req) => {
           
           // Check project exists
           const projectCheck = await callTripletexAPI(`/project/${project_id}`, 'GET', undefined, orgId);
-          console.log('Preflight project  ->', projectCheck.success ? 200 : 404);
+          console.log('Preflight project ->', projectCheck.success ? 200 : 404);
           if (!projectCheck.success) {
             return {
               success: false,
@@ -763,81 +763,97 @@ Deno.serve(async (req) => {
             }
           }
           
-          // Check project participation
+          // Ensure-links: Check and create participant relationship if needed
           const participantCheck = await callTripletexAPI(`/project/participant?project.id=${project_id}&employee.id=${employee_id}&count=1`, 'GET', undefined, orgId);
+          let participantExists = false;
+          
           if (!participantCheck.success) {
             // Try fallback endpoint
             const fallbackParticipantCheck = await callTripletexAPI(`/participant?project.id=${project_id}&employee.id=${employee_id}&count=1`, 'GET', undefined, orgId);
             console.log('Preflight participant ->', fallbackParticipantCheck.success ? `200|${fallbackParticipantCheck.data?.count || 0}` : '404|0');
-            
-            if (!fallbackParticipantCheck.success || (fallbackParticipantCheck.data?.count || 0) === 0) {
-              return {
-                success: false,
-                error: "employee_not_participant",
-                projectId: project_id,
-                employeeId: employee_id
-              };
-            }
+            participantExists = fallbackParticipantCheck.success && (fallbackParticipantCheck.data?.count || 0) > 0;
           } else {
             console.log('Preflight participant ->', `200|${participantCheck.data?.count || 0}`);
-            if ((participantCheck.data?.count || 0) === 0) {
+            participantExists = (participantCheck.data?.count || 0) > 0;
+          }
+          
+          if (!participantExists) {
+            // Create participant relationship
+            const createParticipantResult = await callTripletexAPI('/participant', 'POST', {
+              project: { id: parseInt(project_id.toString()) },
+              employee: { id: parseInt(employee_id.toString()) }
+            }, orgId);
+            
+            if (!createParticipantResult.success) {
+              console.error('Failed to create participant relationship:', createParticipantResult.error);
               return {
                 success: false,
-                error: "employee_not_participant", 
+                error: "Could not add employee to project",
                 projectId: project_id,
                 employeeId: employee_id
               };
             }
+            console.log('Created participant relationship for employee', employee_id, 'on project', project_id);
           }
           
-          // Check project activity (if activity provided)
+          // Ensure-links: Check and create project activity if needed
           if (activity_id) {
             const projectActivityCheck = await callTripletexAPI(`/project/activity?project.id=${project_id}&activity.id=${activity_id}&count=1`, 'GET', undefined, orgId);
             console.log('Preflight projectActivity ->', projectActivityCheck.success ? `200|${projectActivityCheck.data?.count || 0}` : '404|0');
             
-            if (!projectActivityCheck.success || (projectActivityCheck.data?.count || 0) === 0) {
-              return {
-                success: false,
-                error: "activity_not_on_project",
-                projectId: project_id,
-                activityId: activity_id
-              };
+            const activityOnProject = projectActivityCheck.success && (projectActivityCheck.data?.count || 0) > 0;
+            
+            if (!activityOnProject) {
+              // Add activity to project
+              const addActivityResult = await callTripletexAPI('/project/activity', 'POST', {
+                project: { id: parseInt(project_id.toString()) },
+                activity: { id: parseInt(activity_id.toString()) }
+              }, orgId);
+              
+              if (!addActivityResult.success) {
+                console.error('Failed to add activity to project:', addActivityResult.error);
+                return {
+                  success: false,
+                  error: "Could not add activity to project",
+                  projectId: project_id,
+                  activityId: activity_id
+                };
+              }
+              console.log('Added activity', activity_id, 'to project', project_id);
             }
           }
           
-          console.log('All preflight checks passed - proceeding with timesheet submission');
+          console.log('All preflight checks and ensure-links completed - proceeding with timesheet submission');
 
           // Format date for Tripletex API (YYYY-MM-DD)
           const entryDate = new Date(date).toISOString().split('T')[0];
 
-          // Build payload according to Tripletex /timesheet/hours spec
+          // Build payload for new /timesheet/entry API (single object, not array)
           const clientReference = `${orgId}-${vakt_timer_id}`;
           
           // Ensure hours is a proper number with decimal point
           const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
           
-          const payload = {
+          const entryPayload = {
+            date: entryDate,
             employee: { id: parseInt(employee_id.toString()) },
             project: { id: parseInt(project_id.toString()) },
             ...(activity_id ? { activity: { id: parseInt(activity_id.toString()) } } : {}),
-            date: entryDate,
             hours: hoursNumber,
             comment: description || '',
             clientReference
           };
 
-          console.log('Payload keys:', Object.keys(payload));
-          console.log('typeof hours:', typeof payload.hours, 'value:', payload.hours);
-          console.log('Sending timesheet to Tripletex:', { ...payload, employee: '***', project: '***' });
+          console.log('Payload keys:', Object.keys(entryPayload));
+          console.log('typeof hours:', typeof entryPayload.hours, 'value:', entryPayload.hours);
+          console.log('Sending timesheet entry to Tripletex:', { ...entryPayload, employee: '***', project: '***' });
 
-          // Wrap payload in hours array as expected by Tripletex API
-          const hoursPayload = { hours: [payload] };
-          const response = await callTripletexAPI('/timesheet/entry', 'POST', hoursPayload, orgId);
+          // Send single object to new /timesheet/entry endpoint
+          const response = await callTripletexAPI('/timesheet/entry', 'POST', entryPayload, orgId);
 
-          // Extract created id (API returns value array)
+          // Extract created id (API returns value or direct object)
           const value = (response as any).data?.value;
-          const created = Array.isArray(value) ? value[0] : value;
-          const createdId = created?.id;
+          const createdId = value?.id || response.data?.id;
 
           if (response.success && createdId) {
             // Update local vakt_timer with Tripletex ID and sync timestamp
@@ -864,23 +880,37 @@ Deno.serve(async (req) => {
               success: true,
               data: {
                 tripletex_id: createdId,
-                message: 'Timesheet hours created successfully'
+                message: 'Timesheet entry created successfully'
               }
             };
           }
 
-          // Handle sync error
+          // Handle sync error - save error message to sync_error field
+          let errorMessage = response.error || 'Unknown error';
+          let errorType = 'general_error';
+          
+          // Check for period locked error
+          if (response.error?.includes('locked') || response.error?.includes('låst') || 
+              response.error?.includes('period is closed') || response.error?.includes('Period is closed')) {
+            errorMessage = 'Periode er låst i Tripletex - kontakt lønn';
+            errorType = 'period_locked';
+          }
+
           if (vakt_timer_id) {
             await supabase
               .from('vakt_timer')
               .update({
-                sync_error: response.error || 'Unknown error',
+                sync_error: errorMessage,
                 tripletex_synced_at: null
               })
               .eq('id', vakt_timer_id);
           }
 
-          return response;
+          return {
+            success: false,
+            error: errorMessage,
+            errorType: errorType
+          };
         });
         break;
 
