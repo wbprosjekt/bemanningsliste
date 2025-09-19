@@ -1097,9 +1097,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
          💡 Tips: Dra prosjekter mellom ansatte. Prosjekter med timer kopieres (bevarer original), tomme prosjekter flyttes. Hold Shift/Option for å alltid kopiere. Prosjekter sorteres etter nummer. Klikk på prosjekt for å endre farge.
        </div>
        
-       <div className="text-xs text-muted-foreground px-3 py-2 bg-blue-50 rounded border border-blue-200">
-         📋 Status-ikoner: ✓ Godkjent (grønn) | → Send til Tripletex (blå) | 🔄 Kall tilbake fra Tripletex (oransje) | ! Klar for godkjenning (oransje) | ✎ Utkast (grå) | ⚠ Feil ved synkronisering (rød) | ⚡ Overtid (gul) | 🗑️ Sletting blokkert for godkjente/sendte prosjekter
-       </div>
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
             Godkjenn ({selectedEntries.size})
@@ -1107,6 +1104,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           <Button onClick={unapproveSelectedEntries} disabled={selectedEntries.size === 0} variant="outline">
             Trekk tilbake godkjenning ({selectedEntries.size})
           </Button>
+        </div>
+        
+        <div className="text-xs text-muted-foreground px-3 py-2 bg-blue-50 rounded border border-blue-200">
+          📋 Status-ikoner: ✓ Godkjent (grønn) | → Send til Tripletex (blå) | 🔄 Kall tilbake fra Tripletex (oransje) | ! Klar for godkjenning (oransje) | ✎ Utkast (grå) | ⚠ Feil ved synkronisering (rød) | ⚡ Overtid (gul) | 🗑️ Sletting blokkert for godkjente/sendte prosjekter
         </div>
       </div>
 

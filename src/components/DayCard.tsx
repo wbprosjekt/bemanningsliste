@@ -45,6 +45,7 @@ interface VaktWithTimer {
     } | null;
     notat: string | null;
     lonnstype: string;
+    is_overtime: boolean | null;
   }>;
 }
 
@@ -93,6 +94,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
             status,
             notat,
             lonnstype,
+            is_overtime,
             ttx_activity_cache:aktivitet_id (
               navn
             )
