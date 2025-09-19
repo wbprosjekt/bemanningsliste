@@ -151,63 +151,116 @@ const MinUke = () => {
   const weekDays = getWeekDays();
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background p-2 sm:p-4">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Min uke</h1>
-            <p className="text-muted-foreground mt-1">
-              {profile.org?.name} - Uke {currentWeek}, {currentYear}
+        <div className="space-y-3">
+          <div className="text-center sm:text-left">
+            <h1 className="text-2xl sm:text-3xl font-bold">Min uke</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+              {profile.org?.name}
+            </p>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Uke {currentWeek}, {currentYear}
               {person && ` - ${getPersonDisplayName(person.fornavn, person.etternavn)}`}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowFullWeek(!showFullWeek)}
-            >
-              <Eye className="h-4 w-4 mr-1" />
-              {showFullWeek ? 'Kompakt visning' : 'Vis hele uka'}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                const currentYear = new Date().getFullYear();
-                const currentWeek = getWeekNumber(new Date());
-                navigate(`/admin/bemanningsliste/${currentYear}/${currentWeek.toString().padStart(2, '0')}`);
-              }}
-            >
-              <Users className="h-4 w-4 mr-1" />
-              Planlegg prosjekter
-            </Button>
-            <Badge variant="outline">
-              <Calendar className="h-3 w-3 mr-1" />
-              {new Date().toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-            </Badge>
+          
+          {/* Mobile Action Buttons */}
+          <div className="flex flex-col sm:hidden space-y-2">
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="flex-1"
+                onClick={() => setShowFullWeek(!showFullWeek)}
+              >
+                <Eye className="h-4 w-4 mr-1" />
+                {showFullWeek ? 'Kompakt' : 'Hele uka'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="flex-1"
+                onClick={() => {
+                  const currentYear = new Date().getFullYear();
+                  const currentWeek = getWeekNumber(new Date());
+                  navigate(`/admin/bemanningsliste/${currentYear}/${currentWeek.toString().padStart(2, '0')}`);
+                }}
+              >
+                <Users className="h-4 w-4 mr-1" />
+                Planlegg
+              </Button>
+            </div>
+            <div className="flex justify-center">
+              <Badge variant="outline" className="text-xs">
+                <Calendar className="h-3 w-3 mr-1" />
+                {new Date().toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit' })}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Desktop Action Buttons */}
+          <div className="hidden sm:flex items-center justify-between">
+            <div></div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowFullWeek(!showFullWeek)}
+              >
+                <Eye className="h-4 w-4 mr-1" />
+                {showFullWeek ? 'Kompakt visning' : 'Vis hele uka'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  const currentYear = new Date().getFullYear();
+                  const currentWeek = getWeekNumber(new Date());
+                  navigate(`/admin/bemanningsliste/${currentYear}/${currentWeek.toString().padStart(2, '0')}`);
+                }}
+              >
+                <Users className="h-4 w-4 mr-1" />
+                Planlegg prosjekter
+              </Button>
+              <Badge variant="outline">
+                <Calendar className="h-3 w-3 mr-1" />
+                {new Date().toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </Badge>
+            </div>
           </div>
         </div>
 
         {/* Week Navigation */}
-        <div className="flex items-center justify-center gap-4">
-          <Button variant="outline" onClick={() => navigateWeek(-1)}>
-            <ChevronLeft className="h-4 w-4" />
-            Forrige uke
+        <div className="flex items-center justify-center gap-2 sm:gap-4">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => navigateWeek(-1)}
+            className="flex-shrink-0"
+          >
+            <ChevronLeft className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Forrige uke</span>
           </Button>
-          <div className="text-lg font-medium">
-            Uke {currentWeek}, {currentYear}
+          <div className="text-sm sm:text-lg font-medium text-center px-2">
+            <div className="sm:hidden">Uke {currentWeek}</div>
+            <div className="hidden sm:block">Uke {currentWeek}, {currentYear}</div>
           </div>
-          <Button variant="outline" onClick={() => navigateWeek(1)}>
-            Neste uke
-            <ChevronRight className="h-4 w-4" />
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => navigateWeek(1)}
+            className="flex-shrink-0"
+          >
+            <span className="hidden sm:inline">Neste uke</span>
+            <ChevronRight className="h-4 w-4 sm:ml-1" />
           </Button>
         </div>
 
         {/* Week View */}
         {showFullWeek ? (
-          <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2 sm:gap-4">
             {weekDays.map((date, index) => (
               <div key={index} className={isToday(date) ? 'ring-2 ring-primary rounded-lg' : ''}>
                 <DayCard
@@ -220,7 +273,7 @@ const MinUke = () => {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
             {weekDays
               .filter(date => {
                 // Show today and upcoming days, plus previous 2 days
@@ -243,22 +296,22 @@ const MinUke = () => {
 
         {/* Quick Actions */}
         <Card>
-          <CardHeader>
-            <CardTitle>Hurtighandlinger</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base sm:text-lg">Hurtighandlinger</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+              <Button variant="outline" size="sm" className="text-xs sm:text-sm">
                 📊 Ukeoversikt
               </Button>
-              <Button variant="outline" size="sm">
-                📋 Kopier hele uka
+              <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+                📋 Kopier uka
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="text-xs sm:text-sm">
                 📤 Send til godkjenning
               </Button>
-              <Button variant="outline" size="sm">
-                📄 Eksporter timesheet
+              <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+                📄 Eksporter
               </Button>
             </div>
           </CardContent>

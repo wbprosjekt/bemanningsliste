@@ -245,16 +245,16 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     // Don't show "Mangler timer" for holidays/weekends with 0 expected hours
     if (expectedHours === 0) {
       if (!hasEntries) {
-        return <Badge variant="outline">🌙 Helligdag/helg</Badge>;
+        return <Badge variant="outline" className="text-xs px-1.5 py-0.5">🌙 Hellig/helg</Badge>;
       }
     }
 
     if (!hasEntries && vakter.length > 0 && expectedHours > 0) {
-      return <Badge variant="secondary">🟡 Mangler timer</Badge>;
+      return <Badge variant="secondary" className="text-xs px-1.5 py-0.5">🟡 Mangler</Badge>;
     }
 
     if (totalHours < expectedHours) {
-      return <Badge variant="secondary">🟡 Mangler timer</Badge>;
+      return <Badge variant="secondary" className="text-xs px-1.5 py-0.5">🟡 Mangler</Badge>;
     }
 
     const allApproved = vakter.every(v => 
@@ -262,7 +262,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     );
     
     if (allApproved && hasEntries) {
-      return <Badge className="bg-green-500">🟢 Godkjent</Badge>;
+      return <Badge className="bg-green-500 text-xs px-1.5 py-0.5">🟢 OK</Badge>;
     }
 
     const allSent = vakter.every(v => 
@@ -270,10 +270,10 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     );
 
     if (allSent && hasEntries) {
-      return <Badge className="bg-blue-500">🔵 Sendt</Badge>;
+      return <Badge className="bg-blue-500 text-xs px-1.5 py-0.5">🔵 Sendt</Badge>;
     }
 
-    return <Badge variant="outline">📝 Utkast</Badge>;
+    return <Badge variant="outline" className="text-xs px-1.5 py-0.5">📝 Utkast</Badge>;
   };
 
   if (loading) {
@@ -287,84 +287,90 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="h-full">
+      <CardHeader className="pb-2 sm:pb-3">
         <CardTitle className="flex items-center justify-between text-sm">
-          <span>{date.toLocaleDateString('no-NO', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span>
+          <span className="text-xs sm:text-sm font-medium">
+            {date.toLocaleDateString('no-NO', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+          </span>
           {getStatusChip()}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex justify-between text-sm">
-          <span>Timer ført:</span>
-          <span className="font-medium">{formatTimeValue(getTotalHours())}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span>Forventet:</span>
-          <span>{formatTimeValue(getExpectedHours())}</span>
+      <CardContent className="space-y-2 sm:space-y-3 text-sm">
+        <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Timer ført:</span>
+            <span className="font-medium">{formatTimeValue(getTotalHours())}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Forventet:</span>
+            <span className="font-medium">{formatTimeValue(getExpectedHours())}</span>
+          </div>
         </div>
 
         {vakter.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium">Dagens oppdrag:</h4>
+            <h4 className="text-xs sm:text-sm font-medium">Dagens oppdrag:</h4>
             {vakter.map((vakt) => (
               <div key={vakt.id} className="space-y-1">
-                <div className="text-xs flex items-center gap-2">
-                  <span className="text-muted-foreground">
+                <div className="text-xs flex items-center gap-1 sm:gap-2">
+                  <span className="text-muted-foreground text-xs truncate">
                     {vakt.person && getPersonDisplayName(vakt.person.fornavn, vakt.person.etternavn)}
                   </span>
-                  {vakt.ttx_project_cache ? (
-                    <Button
-                      variant="ghost"
-                      className="w-full h-auto p-3 justify-start text-left"
-                      style={{ backgroundColor: getProjectColor(vakt.ttx_project_cache.tripletex_project_id) }}
-                      onClick={() => setSelectedProject(vakt.ttx_project_cache)}
-                    >
-                      <div className="text-white w-full">
-                        <div className="font-bold text-lg">
-                          {vakt.ttx_project_cache.project_number}
-                        </div>
-                        <div className="text-sm opacity-90 truncate">
-                          {vakt.ttx_project_cache.project_name}
-                        </div>
-                      </div>
-                    </Button>
-                  ) : (
-                    <div className="text-muted-foreground p-3 text-center border border-dashed rounded">
-                      Ikke tilordnet
-                    </div>
-                  )}
                 </div>
-                {vakt.vakt_timer.map((timer) => (
-                  <div key={timer.id} className="flex items-center justify-between text-xs bg-muted/50 p-2 rounded">
-                    <div className="flex-1">
-                      <div>{formatTimeValue(timer.timer)} t - {timer.ttx_activity_cache?.navn || 'Ingen aktivitet'}</div>
-                      <div className="text-muted-foreground">{timer.lonnstype}</div>
+                {vakt.ttx_project_cache ? (
+                  <Button
+                    variant="ghost"
+                    className="w-full h-auto p-2 sm:p-3 justify-start text-left"
+                    style={{ backgroundColor: getProjectColor(vakt.ttx_project_cache.tripletex_project_id) }}
+                    onClick={() => setSelectedProject(vakt.ttx_project_cache)}
+                  >
+                    <div className="text-white w-full">
+                      <div className="font-bold text-sm sm:text-lg">
+                        {vakt.ttx_project_cache.project_number}
+                      </div>
+                      <div className="text-xs sm:text-sm opacity-90 truncate">
+                        {vakt.ttx_project_cache.project_name}
+                      </div>
                     </div>
-                    <div className="flex gap-1">
-                      {timer.notat && <MessageSquare className="h-3 w-3" />}
-                      <Paperclip className="h-3 w-3" />
-                    </div>
+                  </Button>
+                ) : (
+                  <div className="text-muted-foreground p-2 sm:p-3 text-center border border-dashed rounded text-xs">
+                    Ikke tilordnet
                   </div>
-                ))}
+                )}
+                <div className="space-y-1">
+                  {vakt.vakt_timer.map((timer) => (
+                    <div key={timer.id} className="flex items-center justify-between text-xs bg-muted/50 p-1.5 sm:p-2 rounded">
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">{formatTimeValue(timer.timer)} t - {timer.ttx_activity_cache?.navn || 'Ingen aktivitet'}</div>
+                        <div className="text-muted-foreground text-xs">{timer.lonnstype}</div>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        {timer.notat && <MessageSquare className="h-3 w-3" />}
+                        <Paperclip className="h-3 w-3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="w-full"
+                      className="w-full text-xs sm:text-sm"
                       onClick={() => setSelectedVakt(vakt.id)}
                     >
                       <Plus className="h-3 w-3 mr-1" />
                       {vakt.vakt_timer.length > 0 ? 'Rediger timer' : 'Legg til timer'}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
                     <DialogHeader>
-                      <DialogTitle>
+                      <DialogTitle className="text-base sm:text-lg">
                         Timeføring - {vakt.ttx_project_cache?.project_name || 'Prosjekt'}
                       </DialogTitle>
-                      <DialogDescription>
+                      <DialogDescription className="text-sm">
                         Legg til eller rediger timer for denne arbeidsoppgaven.
                       </DialogDescription>
                     </DialogHeader>
@@ -384,7 +390,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
 
         {vakter.length === 0 && (
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground text-center py-4">
+            <div className="text-xs sm:text-sm text-muted-foreground text-center py-2 sm:py-4">
               Ingen arbeidsoppdrag planlagt
             </div>
             <ProjectRequestDialog
@@ -399,7 +405,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
         <Button
           variant="outline"
           size="sm"
-          className="w-full"
+          className="w-full text-xs sm:text-sm"
           onClick={copyFromPreviousDay}
         >
           <Copy className="h-3 w-3 mr-1" />
