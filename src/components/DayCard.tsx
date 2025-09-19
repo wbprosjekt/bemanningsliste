@@ -27,6 +27,7 @@ interface DayCardProps {
 
 interface VaktWithTimer {
   id: string;
+  project_id: string | null;
   person: {
     fornavn: string;
     etternavn: string;
@@ -41,6 +42,7 @@ interface VaktWithTimer {
     id: string;
     timer: number;
     status: string;
+    aktivitet_id?: string | null;
     ttx_activity_cache: {
       navn: string;
     } | null;
@@ -79,6 +81,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
         .from('vakt')
         .select(`
           id,
+          project_id,
           person:person_id (
             fornavn, 
             etternavn, 
@@ -96,6 +99,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
             notat,
             lonnstype,
             is_overtime,
+            aktivitet_id,
             ttx_activity_cache:aktivitet_id (
               navn
             )
@@ -152,64 +156,128 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   };
 
   const copyFromPreviousDay = async () => {
+    if (!personId) {
+      toast({
+        title: "Kan ikke kopiere",
+        description: "Fant ikke ansatt-ID for denne visningen.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const previousDay = new Date(date);
     previousDay.setDate(previousDay.getDate() - 1);
 
+    const previousDateStr = previousDay.toISOString().split('T')[0];
+    const todayDateStr = date.toISOString().split('T')[0];
+
     try {
-      // Find previous day's entries for the same person and projects
       const { data: prevEntries, error } = await supabase
         .from('vakt_timer')
         .select(`
           timer,
           aktivitet_id,
           lonnstype,
+          notat,
+          is_overtime,
           vakt:vakt_id (
             person_id,
-            project_id
+            project_id,
+            id
           )
         `)
-        .eq('vakt.dato', previousDay.toISOString().split('T')[0])
-        .eq('vakt.org_id', orgId);
+        .eq('vakt.dato', previousDateStr)
+        .eq('vakt.org_id', orgId)
+        .eq('vakt.person_id', personId);
 
       if (error) throw error;
 
-      if (prevEntries && prevEntries.length > 0) {
-        // Copy entries to today's corresponding vakter
-        for (const entry of prevEntries) {
-          // Find matching vakt for today
-          const matchingVakt = vakter.find(v => 
-            v.person && entry.vakt &&
-            // We would need to check person_id and project_id but the query structure makes this complex
-            // For now, copy to the first available vakt
-            v.vakt_timer.length === 0
-          );
-
-          if (matchingVakt) {
-            await supabase
-              .from('vakt_timer')
-              .insert({
-                vakt_id: matchingVakt.id,
-                org_id: orgId,
-                timer: entry.timer,
-                aktivitet_id: entry.aktivitet_id,
-                lonnstype: entry.lonnstype,
-                status: 'utkast'
-              });
-          }
-        }
-
-        toast({
-          title: "Kopiert fra forrige dag",
-          description: "Timer og aktiviteter er kopiert fra forrige dag."
-        });
-
-        loadDayData();
-      } else {
+      if (!prevEntries || prevEntries.length === 0) {
         toast({
           title: "Ingen data å kopiere",
           description: "Fant ingen timeføringer å kopiere fra forrige dag."
         });
+        return;
       }
+
+      const entriesByProject = new Map<string, Array<(typeof prevEntries)[number]>>();
+      prevEntries.forEach(entry => {
+        const projectId = entry.vakt?.project_id;
+        if (!projectId) return;
+        const existing = entriesByProject.get(projectId) ?? [];
+        existing.push(entry);
+        entriesByProject.set(projectId, existing);
+      });
+
+      let insertedCount = 0;
+
+      for (const [projectId, entries] of entriesByProject) {
+        const matchingVakt = vakter.find(v => v.project_id === projectId);
+        let targetVaktId = matchingVakt?.id;
+
+        if (!targetVaktId) {
+          const { data: newVakt, error: createError } = await supabase
+            .from('vakt')
+            .insert({
+              person_id: personId,
+              project_id: projectId,
+              dato: todayDateStr,
+              org_id: orgId
+            })
+            .select('id')
+            .single();
+
+          if (createError) throw createError;
+          targetVaktId = newVakt?.id;
+        }
+
+        if (!targetVaktId) {
+          continue;
+        }
+
+        for (const entry of entries) {
+          const alreadyExists = matchingVakt?.vakt_timer?.some(timer => {
+            return (
+              timer.aktivitet_id === entry.aktivitet_id &&
+              Number(timer.timer) === Number(entry.timer)
+            );
+          });
+
+          if (alreadyExists) {
+            continue;
+          }
+
+          const { error: insertError } = await supabase
+            .from('vakt_timer')
+            .insert({
+              vakt_id: targetVaktId,
+              org_id: orgId,
+              timer: entry.timer,
+              aktivitet_id: entry.aktivitet_id,
+              lonnstype: entry.lonnstype,
+              notat: entry.notat,
+              status: 'utkast',
+              is_overtime: entry.is_overtime ?? false
+            });
+
+          if (insertError) throw insertError;
+          insertedCount += 1;
+        }
+      }
+
+      if (insertedCount > 0) {
+        toast({
+          title: "Kopiert fra forrige dag",
+          description: `${insertedCount} timeføring${insertedCount === 1 ? '' : 'er'} kopiert.`
+        });
+      } else {
+        toast({
+          title: "Ingen nye timeføringer",
+          description: "Timeføringer fra forrige dag finnes allerede i dag."
+        });
+      }
+
+      loadDayData();
     } catch (error: any) {
       toast({
         title: "Kopiering feilet",
@@ -351,7 +419,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                     </div>
                   </Button>
                 ) : (
-                  <div className="text-muted-foreground p-2 sm:p-3 text-center border border-dashed rounded text-xs">
+                <div className="text-muted-foreground p-2 sm:p-3 text-center border border-dashed rounded text-xs">
                     Ikke tilordnet
                   </div>
                 )}
@@ -381,8 +449,17 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                       {vakt.vakt_timer.length > 0 ? 'Rediger timer' : 'Legg til timer'}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl h-[95vh] flex flex-col p-0">
-                    <div className="flex-1 overflow-y-auto p-6">
+                  <DialogContent 
+                    className="max-w-2xl h-[95vh] flex flex-col p-0" 
+                    style={{ 
+                      maxHeight: '95vh !important', 
+                      height: '95vh !important', 
+                      display: 'flex !important', 
+                      flexDirection: 'column !important', 
+                      padding: '0 !important'
+                    }}
+                  >
+                    <div className="flex-1 overflow-y-auto p-6" style={{ flex: '1 !important', overflowY: 'auto !important', padding: '1.5rem !important' }}>
                       <DialogHeader className="pb-4">
                         <DialogTitle className="text-base sm:text-lg">
                           Timeføring - {vakt.ttx_project_cache?.project_name || 'Prosjekt'}

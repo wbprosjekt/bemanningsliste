@@ -1408,8 +1408,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             height: '95vh !important', 
             display: 'flex !important', 
             flexDirection: 'column !important', 
-            padding: '0 !important',
-            border: '2px solid red !important' // Debug border
+            padding: '0 !important'
           }}
         >
           <div className="flex-1 overflow-y-auto p-6" style={{ flex: '1 !important', overflowY: 'auto !important', padding: '1.5rem !important' }}>
