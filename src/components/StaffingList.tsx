@@ -663,6 +663,23 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       const targetEmployee = employees.find(e => e.id === targetPersonId);
 
+      // Check if target employee already has this project on this date
+      const existingEntry = staffingData.find(e => 
+        e.person.id === targetPersonId && 
+        e.date === targetDate && 
+        e.project?.id === sourceEntry.project?.id
+      );
+
+      if (existingEntry) {
+        toast({
+          title: "Prosjekt finnes allerede",
+          description: `${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'Ansatt'} har allerede ${sourceEntry.project?.project_name} på ${new Date(targetDate).toLocaleDateString('no-NO')}`,
+          variant: "destructive"
+        });
+        setIsProcessingUpdate(false);
+        return;
+      }
+
       if (shouldCopy) {
         // Optimistically add copied entry to target
         const copiedEntry: StaffingEntry = {
@@ -816,17 +833,35 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       const person = employees.find(e => e.id === personId);
       const project = projects.find(p => p.id === projectId);
       
+      // Check if person already has this project on this date
+      const existingEntry = staffingData.find(e => 
+        e.person.id === personId && 
+        e.date === date && 
+        e.project?.id === projectId
+      );
+
+      if (existingEntry) {
+        toast({
+          title: "Prosjekt finnes allerede",
+          description: `${person ? getPersonDisplayName(person.fornavn, person.etternavn) : 'Ansatt'} har allerede ${project?.project_name} på ${new Date(date).toLocaleDateString('no-NO')}`,
+          variant: "destructive"
+        });
+        return;
+      }
+      
       // Optimistically add/update the entry
       updateStaffingDataOptimistically(data => {
-        const existingEntry = data.find(e => e.person.id === personId && e.date === date);
+        const existingVakt = data.find(e => e.person.id === personId && e.date === date);
         
-        if (existingEntry) {
+        if (existingVakt && !existingVakt.project) {
+          // Update existing vakt that has no project
           return data.map(entry =>
-            entry.id === existingEntry.id
+            entry.id === existingVakt.id
               ? { ...entry, project }
               : entry
           );
         } else {
+          // Add new entry
           const newEntry: StaffingEntry = {
             id: `temp-${Date.now()}`,
             date,
