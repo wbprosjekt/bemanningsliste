@@ -50,8 +50,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   }, [orgId, existingEntry]);
 
   const loadExistingOvertime = async () => {
-    if (!existingEntry) return;
-    
     try {
       // Load existing overtime entries for this vakt
       const { data, error } = await supabase
