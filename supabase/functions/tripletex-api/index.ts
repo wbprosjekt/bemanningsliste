@@ -281,6 +281,48 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
   }
 }
 
+// === helpers: participant & activity checks ===
+async function getProjectParticipantIds(orgId: string, projectId: number) {
+  const res = await callTripletexAPI(`/project/${projectId}`, 'GET', undefined, orgId);
+  if (!res.success) return [];
+  const ids = (res.data?.value?.participants || []).map((p: any) => p.id).filter((x: any) => typeof x === 'number');
+  return ids;
+}
+
+async function isEmployeeParticipant(orgId: string, projectId: number, employeeId: number) {
+  const ids = await getProjectParticipantIds(orgId, projectId);
+  for (const pid of ids) {
+    const p = await callTripletexAPI(`/project/participant/${pid}`, 'GET', undefined, orgId);
+    const pEmpId = p?.data?.value?.employee?.id;
+    if (p.success && Number(pEmpId) === Number(employeeId)) {
+      return { found: true, participantId: pid };
+    }
+  }
+  return { found: false };
+}
+
+async function ensureParticipant(orgId: string, projectId: number, employeeId: number) {
+  const existing = await isEmployeeParticipant(orgId, projectId, employeeId);
+  if (existing.found) return { ok: true, participantId: existing.participantId };
+
+  const body = { project: { id: Number(projectId) }, employee: { id: Number(employeeId) } };
+  const addRes = await callTripletexAPI('/project/participant', 'POST', body, orgId);
+
+  const after = await isEmployeeParticipant(orgId, projectId, employeeId);
+  if (after.found) return { ok: true, participantId: after.participantId };
+
+  return { ok: false, reason: addRes.error || 'could_not_add_participant' };
+}
+
+async function ensureActivityOnProject(orgId: string, projectId: number, activityId: number) {
+  const res = await callTripletexAPI(`/activity?project.id=${projectId}&count=1000`, 'GET', undefined, orgId);
+  if (!res.success) return { ok: false, reason: res.error || 'activity_lookup_failed' };
+  const list = res.data?.values || [];
+  const found = list.some((a: any) => Number(a?.id) === Number(activityId));
+  return { ok: found, reason: found ? undefined : 'activity_not_on_project' };
+}
+// === end helpers ===
+
 async function exponentialBackoff(fn: () => Promise<any>, maxRetries: number = 3): Promise<any> {
   let delay = 1000; // Start with 1 second
   
@@ -625,66 +667,42 @@ Deno.serve(async (req) => {
               continue;
             }
 
-            const clientReference = `${orgId}-${entry.id}`;
-            
-            const hoursItem = {
-              date: entry.date,
+            // Bygg Tripletex-entry for /timesheet/entry (ett og ett objekt)
+            const entryDate = entry.date;
+            const entryBody = {
+              date: entryDate,
               employee: { id: parseInt(employeeData.tripletex_employee_id.toString()) },
-              project: { id: parseInt(entry.projectId.toString()) },
+              project:  { id: parseInt(entry.projectId.toString()) },
               activity: { id: parseInt(activityData.ttx_id.toString()) },
-              count: parseFloat(entry.hours.toString()),
-              description: entry.comment || '',
-              clientReference
+              hours: parseFloat(entry.hours.toString()),
+              comment: entry.comment || ''
             };
 
-            const hoursPayload = { hours: [hoursItem] };
-
             if (dryRun) {
-              exportResults.push({ 
-                id: entry.id, 
-                success: true, 
-                dryRun: true,
-                payload: hoursPayload
-              });
+              exportResults.push({ id: entry.id, success: true, dryRun: true, payload: entryBody });
               continue;
             }
 
+            // Viktig: riktig endpoint
             const exportResult = await exponentialBackoff(async () => {
-              return await callTripletexAPI('/timesheet/hours', 'POST', hoursPayload, orgId);
+              return await callTripletexAPI('/timesheet/entry', 'POST', entryBody, orgId);
             });
 
             if (exportResult.success) {
-              // Update vakt_timer with Tripletex entry ID and status
               await supabase
                 .from('vakt_timer')
                 .update({
-                  tripletex_entry_id: exportResult.data.value?.id,
-                  client_reference: clientReference,
+                  tripletex_entry_id: exportResult.data?.value?.id,
                   status: 'sendt'
                 })
                 .eq('id', entry.id);
 
-              exportResults.push({ 
-                id: entry.id, 
-                success: true, 
-                tripletexId: exportResult.data.value?.id 
-              });
+              exportResults.push({ id: entry.id, success: true, tripletexId: exportResult.data?.value?.id });
             } else {
-              // Handle period locked error specifically
-              if (exportResult.error?.includes('locked') || exportResult.error?.includes('låst') || 
-                  exportResult.error?.includes('period is closed')) {
-                exportResults.push({ 
-                  id: entry.id, 
-                  success: false, 
-                  error: 'Periode er låst i Tripletex - kontakt lønn',
-                  errorType: 'period_locked'
-                });
+              if (exportResult.error?.includes('locked') || exportResult.error?.includes('låst') || exportResult.error?.includes('period is closed')) {
+                exportResults.push({ id: entry.id, success: false, error: 'Periode er låst i Tripletex - kontakt lønn', errorType: 'period_locked' });
               } else {
-                exportResults.push({ 
-                  id: entry.id, 
-                  success: false, 
-                  error: exportResult.error 
-                });
+                exportResults.push({ id: entry.id, success: false, error: exportResult.error });
               }
             }
           } catch (error: any) {
@@ -729,149 +747,83 @@ Deno.serve(async (req) => {
         }
 
         result = await exponentialBackoff(async () => {
-          // Preflight checks - validate all IDs exist in Tripletex before sending hours
-          console.log('Preflight checks starting', { employeeId: employee_id, projectId: project_id, activityId: activity_id });
-          
-          // Check employee exists
+          console.log('Preflight IDs', { employeeId: employee_id, projectId: project_id, activityId: activity_id });
+
+          // 1) Finnes entiteter?
           const employeeCheck = await callTripletexAPI(`/employee/${employee_id}`, 'GET', undefined, orgId);
-          console.log('Employee check ->', employeeCheck.success ? 200 : 404);
           if (!employeeCheck.success) {
-            return {
-              success: false,
-              error: "Employee not found in Tripletex",
-              missing: "employee",
-              id: employee_id
-            };
+            return { success: false, error: 'Tripletex-ID finnes ikke', missing: 'employee', id: employee_id };
           }
-          
-          // Check project exists
           const projectCheck = await callTripletexAPI(`/project/${project_id}`, 'GET', undefined, orgId);
-          console.log('Project check ->', projectCheck.success ? 200 : 404);
           if (!projectCheck.success) {
-            return {
-              success: false,
-              error: "Project not found in Tripletex", 
-              missing: "project",
-              id: project_id
-            };
+            return { success: false, error: 'Tripletex-ID finnes ikke', missing: 'project', id: project_id };
           }
-          
-          // Check activity exists (if provided)
           if (activity_id) {
             const activityCheck = await callTripletexAPI(`/activity/${activity_id}`, 'GET', undefined, orgId);
-            console.log('Activity check ->', activityCheck.success ? 200 : 404);
             if (!activityCheck.success) {
-              return {
-                success: false,
-                error: "Activity not found in Tripletex",
-                missing: "activity", 
-                id: activity_id
-              };
+              return { success: false, error: 'Tripletex-ID finnes ikke', missing: 'activity', id: activity_id };
             }
           }
-          // Helper: Ensure employee is participant on project
-          const ensureParticipant = async (empId: number, projId: number) => {
-            const participantCheck = await callTripletexAPI(`/project/participant?project.id=${projId}&employee.id=${empId}&count=1`, 'GET', undefined, orgId);
-            
-            if (!participantCheck.success || (participantCheck.data?.count || 0) === 0) {
-              console.log(`Adding employee ${empId} as participant to project ${projId}`);
-              const addParticipant = await callTripletexAPI('/project/participant', 'POST', {
-                project: { id: projId },
-                employee: { id: empId }
-              }, orgId);
-              
-              if (!addParticipant.success) {
-                throw new Error(`Failed to add employee as project participant: ${addParticipant.error}`);
-              }
-            }
-          };
 
-          // Helper: Ensure activity exists on project
-          const ensureActivityOnProject = async (projId: number, actId: number) => {
-            const activityCheck = await callTripletexAPI(`/activity?project.id=${projId}&count=1000`, 'GET', undefined, orgId);
-            
-            if (!activityCheck.success) {
-              throw new Error('Failed to fetch project activities');
-            }
-            
-            const activities = activityCheck.data?.values || [];
-            const activityExists = activities.some((act: any) => act.id === actId);
-            
-            if (!activityExists) {
-              throw new Error(`Activity ${actId} not found on project ${projId}`);
-            }
-          };
+          // 2) Sørg for deltaker
+          const part = await ensureParticipant(orgId, Number(project_id), Number(employee_id));
+          if (!part.ok) {
+            return { success: false, error: 'employee_not_participant', projectId: project_id, employeeId: employee_id, details: part.reason };
+          }
 
-          // Ensure employee is participant
-          await ensureParticipant(employee_id, project_id);
-          
-          // Ensure activity is on project (if activity provided)
+          // 3) Sjekk at aktiviteten hører til prosjektet (hvis satt)
           if (activity_id) {
-            await ensureActivityOnProject(project_id, activity_id);
+            const actOk = await ensureActivityOnProject(orgId, Number(project_id), Number(activity_id));
+            if (!actOk.ok) {
+              return { success: false, error: 'activity_not_on_project', projectId: project_id, activityId: activity_id, details: actOk.reason };
+            }
           }
 
-          console.log('All preflight checks and participant setup completed - proceeding with timesheet submission');
+          console.log('All preflight checks passed - proceeding with timesheet submission');
 
-          // Build correct payload for /timesheet/entry
+          // 4) Bygg korrekt payload for /timesheet/entry (IKKE array, IKKE clientReference, IKKE count/description)
           const entryDate = new Date(date).toISOString().split('T')[0];
-          const hoursNumber = parseFloat(String(hours).replace(',', '.'));
+          const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
 
-          const entryPayload: any = {
+          const entryPayload = {
             date: entryDate,
             employee: { id: Number(employee_id) },
-            project: { id: Number(project_id) },
+            project:  { id: Number(project_id) },
+            ...(activity_id ? { activity: { id: Number(activity_id) } } : {}),
             hours: hoursNumber,
             comment: description || ''
           };
-          if (activity_id) entryPayload.activity = { id: Number(activity_id) };
 
-console.log('Sending /timesheet/entry payload:', { ...entryPayload, employee: '***', project: '***' });
+          console.log('POST /timesheet/entry with payload:', { ...entryPayload, employee: '***', project: '***' });
 
-// Kall /timesheet/entry med ÉN entry (ikke hours-array)
-const response = await callTripletexAPI('/timesheet/entry', 'POST', entryPayload, orgId);
+          const response = await callTripletexAPI('/timesheet/entry', 'POST', entryPayload, orgId);
 
-// Les ut id fra value.id
-const createdId = response?.data?.value?.id;
+          const createdId = response?.data?.value?.id;
+          if (response.success && createdId) {
+            const { error: updateError } = await supabase
+              .from('vakt_timer')
+              .update({
+                tripletex_entry_id: createdId,
+                tripletex_synced_at: new Date().toISOString(),
+                sync_error: null,
+                status: 'sendt'
+              })
+              .eq('id', vakt_timer_id);
 
-if (response.success && createdId) {
-  // Oppdater lokalt
-  const { error: updateError } = await supabase
-    .from('vakt_timer')
-    .update({
-      tripletex_entry_id: createdId,
-      tripletex_synced_at: new Date().toISOString(),
-      sync_error: null,
-      status: 'sendt'
-    })
-    .eq('id', vakt_timer_id);
+            if (updateError) {
+              console.error('Failed to update vakt_timer after sync:', updateError);
+              return { success: true, data: response.data, warning: 'Tripletex ok, men lokal status ikke oppdatert' };
+            }
 
-  if (updateError) {
-    console.error('Failed to update vakt_timer after sync:', updateError);
-    return {
-      success: true, // Tripletex OK, men lokal oppdatering feilet
-      data: response.data,
-      warning: 'Timesheet created in Tripletex but local sync status not updated'
-    };
-  }
+            return { success: true, data: { tripletex_id: createdId, message: 'Timesheet entry created' } };
+          }
 
-  return {
-    success: true,
-    data: { tripletex_id: createdId, message: 'Timesheet entry created successfully' }
-  };
-}
+          await supabase
+            .from('vakt_timer')
+            .update({ sync_error: response.error || 'Unknown error', tripletex_synced_at: null })
+            .eq('id', vakt_timer_id);
 
-// Feilhåndtering — lagre sync_error for visning i UI
-if (vakt_timer_id) {
-  await supabase
-    .from('vakt_timer')
-    .update({
-      sync_error: response.error || 'Unknown error',
-      tripletex_synced_at: null
-    })
-    .eq('id', vakt_timer_id);
-}
-
-return response;
+          return response;
         });
         break;
 
