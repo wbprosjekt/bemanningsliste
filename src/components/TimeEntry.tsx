@@ -38,7 +38,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   // Separate overtime time entry
   const [overtimeHours, setOvertimeHours] = useState(0);
   const [overtimeMinutes, setOvertimeMinutes] = useState(0);
-  const [showOvertime, setShowOvertime] = useState(false);
+  const [showOvertime, setShowOvertime] = useState(true); // Show by default
 
   // Calculate total timer value from hours and minutes
   const timer = hours + (minutes / 60);
@@ -46,7 +46,35 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
 
   useEffect(() => {
     loadActivities();
-  }, [orgId]);
+    loadExistingOvertime();
+  }, [orgId, existingEntry]);
+
+  const loadExistingOvertime = async () => {
+    if (!existingEntry) return;
+    
+    try {
+      // Load existing overtime entries for this vakt
+      const { data, error } = await supabase
+        .from('vakt_timer')
+        .select('timer, lonnstype')
+        .eq('vakt_id', vaktId)
+        .eq('lonnstype', 'overtid');
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        const totalOvertime = data.reduce((sum, entry) => sum + entry.timer, 0);
+        const overtimeHours = Math.floor(totalOvertime);
+        const overtimeMinutes = Math.round((totalOvertime % 1) * 60);
+        
+        setOvertimeHours(overtimeHours);
+        setOvertimeMinutes(overtimeMinutes);
+        setShowOvertime(true);
+      }
+    } catch (error) {
+      console.error('Error loading existing overtime:', error);
+    }
+  };
 
   const loadActivities = async () => {
     try {
@@ -152,8 +180,16 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
 
       if (result.error) throw result.error;
 
-      // Save overtime entry if overtime timer > 0
+      // Handle overtime entries
       if (overtimeTimer > 0) {
+        // First, delete existing overtime entries
+        await supabase
+          .from('vakt_timer')
+          .delete()
+          .eq('vakt_id', vaktId)
+          .eq('lonnstype', 'overtid');
+
+        // Then insert new overtime entry
         const overtimeData = {
           vakt_id: vaktId,
           org_id: orgId,
@@ -170,6 +206,13 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           .insert(overtimeData);
 
         if (overtimeResult.error) throw overtimeResult.error;
+      } else {
+        // If no overtime, delete any existing overtime entries
+        await supabase
+          .from('vakt_timer')
+          .delete()
+          .eq('vakt_id', vaktId)
+          .eq('lonnstype', 'overtid');
       }
 
       toast({
