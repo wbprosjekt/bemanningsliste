@@ -1402,9 +1402,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       {/* Time Entry Edit Dialog */}
       {editDialog && (
         <Dialog open={!!editDialog} onOpenChange={() => setEditDialog(null)}>
-          <DialogContent className="max-w-2xl max-h-[95vh]">
-            <ScrollArea className="h-[85vh]">
-              <DialogHeader>
+          <DialogContent className="max-w-2xl h-[95vh] flex flex-col p-0">
+            <div className="flex-1 overflow-y-auto p-6">
+              <DialogHeader className="pb-4">
                 <DialogTitle>Rediger timeføring</DialogTitle>
                 <DialogDescription>
                   Rediger timer, aktivitet og andre detaljer for denne arbeidsoppgaven.
@@ -1420,7 +1420,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                 defaultTimer={8.0}
                 existingEntry={editDialog.existingEntry}
               />
-            </ScrollArea>
+            </div>
           </DialogContent>
         </Dialog>
       )}

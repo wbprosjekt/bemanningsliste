@@ -381,9 +381,9 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                       {vakt.vakt_timer.length > 0 ? 'Rediger timer' : 'Legg til timer'}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[95vh]">
-                    <ScrollArea className="h-[85vh]">
-                      <DialogHeader>
+                  <DialogContent className="max-w-2xl h-[95vh] flex flex-col p-0">
+                    <div className="flex-1 overflow-y-auto p-6">
+                      <DialogHeader className="pb-4">
                         <DialogTitle className="text-base sm:text-lg">
                           Timeføring - {vakt.ttx_project_cache?.project_name || 'Prosjekt'}
                         </DialogTitle>
@@ -398,7 +398,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                         defaultTimer={vakt.person?.forventet_dagstimer || 8.0}
                         existingEntry={vakt.vakt_timer[0]} // For simplicity, edit first entry
                       />
-                    </ScrollArea>
+                    </div>
                   </DialogContent>
                 </Dialog>
               </div>
