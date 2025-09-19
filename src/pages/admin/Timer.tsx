@@ -771,7 +771,12 @@ const AdminTimer = () => {
                         {entry.ttx_activity_cache?.navn || 'Ingen aktivitet'}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{entry.lonnstype}</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">{entry.lonnstype}</Badge>
+                          {entry.lonnstype === 'overtid' && (
+                            <span className="text-yellow-600 font-bold" title="Overtid">⚡</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {formatTimeValue(entry.timer)}

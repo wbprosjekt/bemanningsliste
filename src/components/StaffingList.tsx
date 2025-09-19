@@ -864,6 +864,17 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       return;
     }
 
+    // Check if all activities are approved
+    const unapprovedActivities = entry.activities.filter(a => a.status !== 'godkjent');
+    if (unapprovedActivities.length > 0) {
+      toast({
+        title: "Timer ikke godkjent",
+        description: "Alle timer må være godkjent før sending til Tripletex",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setSendingToTripletex(prev => new Set(prev).add(entry.id));
 
     try {
@@ -960,16 +971,29 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         .filter(e => entryIds.includes(e.id))
         .flatMap(e => e.activities.map(a => a.id));
 
+      if (timerIds.length === 0) {
+        toast({
+          title: "Ingen timer å godkjenne",
+          description: "Velg timer som skal godkjennes",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('vakt_timer')
-        .update({ status: 'godkjent' })
+        .update({ 
+          status: 'godkjent',
+          approved_at: new Date().toISOString(),
+          approved_by: user?.id
+        })
         .in('id', timerIds);
 
       if (error) throw error;
 
       toast({
         title: "Timer godkjent",
-        description: `${entryIds.length} oppføringer godkjent`
+        description: `${entryIds.length} oppføringer godkjent og klar for sending til Tripletex`
       });
 
       setSelectedEntries(new Set());
@@ -986,11 +1010,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const getStatusBadge = (status: StaffingEntry['status']) => {
     switch (status) {
       case 'approved':
-        return <Badge className="bg-green-500 text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">✓</Badge>;
+        return <Badge className="bg-green-600 text-white text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center font-bold">✓</Badge>;
       case 'sent':
-        return <Badge className="bg-blue-500 text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">→</Badge>;
+        return <Badge className="bg-blue-600 text-white text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center font-bold">→</Badge>;
       case 'ready':
-        return <Badge className="bg-orange-500 text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">!</Badge>;
+        return <Badge className="bg-orange-500 text-white text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center font-bold">!</Badge>;
       case 'draft':
         return <Badge variant="outline" className="text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">✎</Badge>;
       default:
@@ -1196,34 +1220,40 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   >
                                     {/* Action icons overlay */}
                                     <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover/project:opacity-100 transition-opacity">
+                                      {/* Only show delete button if not sent to Tripletex */}
+                                      {!entry.activities.some(a => a.tripletex_synced_at) && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteEntry(entry.id);
+                                          }}
+                                          className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md border border-white/20"
+                                          title="Slett prosjekt"
+                                        >
+                                          <X className="h-2 w-2" />
+                                        </button>
+                                      )}
+                                      {/* Only show send button if approved and not already sent */}
+                                      {entry.status === 'approved' && !entry.activities.some(a => a.tripletex_synced_at) && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            sendToTripletex(entry);
+                                          }}
+                                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20"
+                                          title="Send til Tripletex"
+                                          disabled={sendingToTripletex.has(entry.id)}
+                                        >
+                                          <Send className="h-2 w-2" />
+                                        </button>
+                                      )}
                                       <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          deleteEntry(entry.id);
-                                        }}
-                                        className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md border border-white/20"
-                                        title="Slett prosjekt"
+                                        onClick={(e) => handleProjectColorClick(entry.project, e)}
+                                        className="bg-white rounded-full p-1 shadow-md border"
+                                        title="Endre farge"
                                       >
-                                        <X className="h-2 w-2" />
+                                        <Palette className="h-2 w-2 text-gray-600" />
                                       </button>
-                                       <button
-                                         onClick={(e) => {
-                                           e.stopPropagation();
-                                           sendToTripletex(entry);
-                                         }}
-                                         className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20"
-                                         title="Send til Tripletex"
-                                         disabled={sendingToTripletex.has(entry.id)}
-                                       >
-                                         <Send className="h-2 w-2" />
-                                       </button>
-                                       <button
-                                         onClick={(e) => handleProjectColorClick(entry.project, e)}
-                                         className="bg-white rounded-full p-1 shadow-md border"
-                                         title="Endre farge"
-                                       >
-                                         <Palette className="h-2 w-2 text-gray-600" />
-                                       </button>
                                     </div>
                                      <div className="space-y-1">
                                        {/* Project name */}
@@ -1248,7 +1278,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                          <div className="text-sm font-medium">
                                            {formatTimeValue(entry.totalHours)} t
                                            {entry.activities.some(a => a.is_overtime) && (
-                                             <span className="ml-1 text-yellow-200" title="Inneholder overtid">⚡</span>
+                                             <span className="ml-1 text-yellow-200 font-bold" title="Inneholder overtid">⚡</span>
                                            )}
                                          </div>
                                        )}

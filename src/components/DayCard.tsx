@@ -222,6 +222,14 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     }, 0);
   };
 
+  const getOvertimeHours = () => {
+    return vakter.reduce((total, vakt) => {
+      return total + vakt.vakt_timer.reduce((vaktTotal, timer) => {
+        return vaktTotal + (timer.is_overtime ? timer.timer : 0);
+      }, 0);
+    }, 0);
+  };
+
   const getExpectedHours = () => {
     if (vakter.length === 0) return forventetTimer;
     
@@ -300,7 +308,12 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
         <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Timer ført:</span>
-            <span className="font-medium">{formatTimeValue(getTotalHours())}</span>
+            <span className="font-medium">
+              {formatTimeValue(getTotalHours())}
+              {getOvertimeHours() > 0 && (
+                <span className="ml-1 text-yellow-600 font-bold" title={`${formatTimeValue(getOvertimeHours())} overtid`}>⚡</span>
+              )}
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Forventet:</span>
