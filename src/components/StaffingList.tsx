@@ -732,18 +732,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       // No timer copying - both move and copy create empty project assignments
 
-      // If moving (not copying), remove the original entry
-      if (!shouldCopy && sourceEntry.id.indexOf('empty-') !== 0) {
-        // Delete original activities
-        if (sourceEntry.activities.length > 0) {
-          const activityIds = sourceEntry.activities.map(a => a.id);
-          await supabase
-            .from('vakt_timer')
-            .delete()
-            .in('id', activityIds);
-        }
-
-        // Delete original vakt
+      // If moving (not copying), only remove original if it has no timer entries
+      // This prevents losing existing time entries
+      if (!shouldCopy && sourceEntry.id.indexOf('empty-') !== 0 && sourceEntry.activities.length === 0) {
+        // Only delete original vakt if it has no timer entries
         await supabase
           .from('vakt')
           .delete()
@@ -751,10 +743,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       }
 
       const action = shouldCopy ? "kopiert til" : "flyttet til";
+      const timerNote = (!shouldCopy && sourceEntry.activities.length > 0) ? " (kopiert for å bevare timer)" : " (tom tilordning)";
       
       toast({
         title: `Prosjekt ${action}`,
-        description: `${sourceEntry.project?.project_name} ${action} ${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'ukjent ansatt'} på ${new Date(targetDate).toLocaleDateString('no-NO')} (tom tilordning)`
+        description: `${sourceEntry.project?.project_name} ${action} ${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'ukjent ansatt'} på ${new Date(targetDate).toLocaleDateString('no-NO')}${timerNote}`
       });
 
       revalidateInBackground();
@@ -1038,7 +1031,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             className="w-64"
           />
           <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded">
-            💡 Tips: Dra prosjekter mellom ansatte (tom tilordning). Hold Shift/Option for å kopiere (tom tilordning). Prosjekter sorteres etter nummer. Klikk på prosjekt for å endre farge.
+            💡 Tips: Dra prosjekter mellom ansatte. Prosjekter med timer kopieres (bevarer original), tomme prosjekter flyttes. Hold Shift/Option for å alltid kopiere. Prosjekter sorteres etter nummer. Klikk på prosjekt for å endre farge.
           </div>
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
@@ -1199,7 +1192,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                           existingEntry: firstActivity || null 
                                         });
                                       }}
-                                     title={`#${entry.project?.tripletex_project_id} - ${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nDra for å flytte prosjekt (tom tilordning)\nHold Shift/Option og dra for å kopiere (tom tilordning)`}
+                                     title={`#${entry.project?.tripletex_project_id} - ${entry.project?.project_name}\n${formatTimeValue(entry.totalHours)} timer\nKlikk for å redigere timer\nDra for å flytte/kopiere prosjekt\nHold Shift/Option for å alltid kopiere`}
                                   >
                                     {/* Action icons overlay */}
                                     <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover/project:opacity-100 transition-opacity">
