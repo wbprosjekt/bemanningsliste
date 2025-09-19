@@ -380,7 +380,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                       {vakt.vakt_timer.length > 0 ? 'Rediger timer' : 'Legg til timer'}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+                  <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle className="text-base sm:text-lg">
                         Timeføring - {vakt.ttx_project_cache?.project_name || 'Prosjekt'}
