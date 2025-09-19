@@ -1400,16 +1400,16 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       />
 
       {/* Time Entry Edit Dialog */}
-      {editDialog && (
-        <Dialog open={!!editDialog} onOpenChange={() => setEditDialog(null)}>
-          <DialogContent className="max-w-2xl h-[95vh] flex flex-col p-0">
-            <div className="flex-1 overflow-y-auto p-6">
-              <DialogHeader className="pb-4">
-                <DialogTitle>Rediger timeføring</DialogTitle>
-                <DialogDescription>
-                  Rediger timer, aktivitet og andre detaljer for denne arbeidsoppgaven.
-                </DialogDescription>
-              </DialogHeader>
+      <Dialog open={!!editDialog} onOpenChange={() => setEditDialog(null)}>
+        <DialogContent className="max-w-2xl h-[95vh] flex flex-col p-0">
+          <div className="flex-1 overflow-y-auto p-6">
+            <DialogHeader className="pb-4">
+              <DialogTitle>Rediger timeføring</DialogTitle>
+              <DialogDescription>
+                Rediger timer, aktivitet og andre detaljer for denne arbeidsoppgaven.
+              </DialogDescription>
+            </DialogHeader>
+            {editDialog && (
               <TimeEntry
                 vaktId={editDialog.vaktId}
                 orgId={profile?.org_id || ''}
@@ -1420,10 +1420,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                 defaultTimer={8.0}
                 existingEntry={editDialog.existingEntry}
               />
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
