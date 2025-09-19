@@ -30,7 +30,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   const [aktivitetId, setAktivitetId] = useState(existingEntry?.aktivitet_id || '');
   const [notat, setNotat] = useState(existingEntry?.notat || '');
   const [status, setStatus] = useState(existingEntry?.status || 'utkast');
-  const [lonnstype, setLonnstype] = useState(existingEntry?.lonnstype || 'normal');
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -58,28 +57,22 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
       // Load existing overtime entries for this vakt
       const { data, error } = await supabase
         .from('vakt_timer')
-        .select('timer, lonnstype')
+        .select('timer, is_overtime')
         .eq('vakt_id', vaktId)
-        .in('lonnstype', ['overtid_100', 'overtid_50']);
+        .eq('is_overtime', true);
 
       if (error) throw error;
       
       if (data && data.length > 0) {
-        // Separate 100% and 50% overtime
-        const overtime100 = data.filter(entry => entry.lonnstype === 'overtid_100');
-        const overtime50 = data.filter(entry => entry.lonnstype === 'overtid_50');
+        // Load all overtime entries
+        const overtimeEntries = data;
         
-        if (overtime100.length > 0) {
-          const total100 = overtime100.reduce((sum, entry) => sum + entry.timer, 0);
-          setOvertime100Hours(Math.floor(total100));
-          setOvertime100Minutes(Math.round((total100 % 1) * 60));
-        }
-        
-        if (overtime50.length > 0) {
-          const total50 = overtime50.reduce((sum, entry) => sum + entry.timer, 0);
-          setOvertime50Hours(Math.floor(total50));
-          setOvertime50Minutes(Math.round((total50 % 1) * 60));
-        }
+        if (overtimeEntries.length > 0) {
+          // For now, we'll just show the total overtime
+          // In the future, we could distinguish between 100% and 50% if needed
+          const totalOvertime = overtimeEntries.reduce((sum, entry) => sum + entry.timer, 0);
+          setOvertime100Hours(Math.floor(totalOvertime));
+          setOvertime100Minutes(Math.round((totalOvertime % 1) * 60));
         
         setShowOvertime(true);
       }
@@ -184,12 +177,11 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
         aktivitet_id: aktivitetId,
         notat: notat || null,
         status,
-        lonnstype: 'normal',
         is_overtime: false
       };
 
       let result;
-      if (existingEntry && existingEntry.lonnstype === 'normal') {
+      if (existingEntry) {
         result = await supabase
           .from('vakt_timer')
           .update(normalTimeData)
@@ -207,7 +199,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
         .from('vakt_timer')
         .delete()
         .eq('vakt_id', vaktId)
-        .in('lonnstype', ['overtid_100', 'overtid_50']);
+        .eq('is_overtime', true);
 
       // Insert 100% overtime if exists
       if (overtime100Timer > 0) {
@@ -218,7 +210,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           aktivitet_id: aktivitetId,
           notat: notat || null,
           status,
-          lonnstype: 'overtid_100',
           is_overtime: true
         };
 
@@ -238,7 +229,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           aktivitet_id: aktivitetId,
           notat: notat || null,
           status,
-          lonnstype: 'overtid_50',
           is_overtime: true
         };
 
