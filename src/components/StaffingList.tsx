@@ -607,6 +607,22 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       const sourceEntry = staffingData.find(e => e.id === entryId);
       if (!sourceEntry) return;
 
+      // Check if same person already has this project on target date
+      const existingEntry = staffingData.find(e => 
+        e.person.id === sourceEntry.person.id && 
+        e.date === targetDate && 
+        e.project?.id === sourceEntry.project?.id
+      );
+
+      if (existingEntry) {
+        toast({
+          title: "Prosjekt finnes allerede",
+          description: `${getPersonDisplayName(sourceEntry.person.fornavn, sourceEntry.person.etternavn)} har allerede ${sourceEntry.project?.project_name} på ${new Date(targetDate).toLocaleDateString('no-NO')}`,
+          variant: "destructive"
+        });
+        return;
+      }
+
       // Create new vakt for target date
       const { data: newVakt, error: vaktError } = await supabase
         .from('vakt')
@@ -663,24 +679,24 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       const targetEmployee = employees.find(e => e.id === targetPersonId);
 
-      // Check if target employee already has this project on this date
-      const existingEntry = staffingData.find(e => 
-        e.person.id === targetPersonId && 
-        e.date === targetDate && 
-        e.project?.id === sourceEntry.project?.id
-      );
-
-      if (existingEntry) {
-        toast({
-          title: "Prosjekt finnes allerede",
-          description: `${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'Ansatt'} har allerede ${sourceEntry.project?.project_name} på ${new Date(targetDate).toLocaleDateString('no-NO')}`,
-          variant: "destructive"
-        });
-        setIsProcessingUpdate(false);
-        return;
-      }
-
       if (shouldCopy) {
+        // For copying, check if target person already has this project on target date
+        const existingEntry = staffingData.find(e => 
+          e.person.id === targetPersonId && 
+          e.date === targetDate && 
+          e.project?.id === sourceEntry.project?.id
+        );
+
+        if (existingEntry) {
+          toast({
+            title: "Prosjekt finnes allerede",
+            description: `${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'Ansatt'} har allerede ${sourceEntry.project?.project_name} på ${new Date(targetDate).toLocaleDateString('no-NO')}`,
+            variant: "destructive"
+          });
+          setIsProcessingUpdate(false);
+          return;
+        }
+        
         // Optimistically add copied entry to target
         const copiedEntry: StaffingEntry = {
           ...sourceEntry,
@@ -735,6 +751,25 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         });
 
         revalidateInBackground();
+        return;
+      }
+
+      // For moving, check if target person already has this project on target date
+      // (but exclude the source entry itself if it's the same person)
+      const existingEntry = staffingData.find(e => 
+        e.person.id === targetPersonId && 
+        e.date === targetDate && 
+        e.project?.id === sourceEntry.project?.id &&
+        e.id !== entryId // Exclude the source entry itself
+      );
+
+      if (existingEntry) {
+        toast({
+          title: "Prosjekt finnes allerede",
+          description: `${targetEmployee ? getPersonDisplayName(targetEmployee.fornavn, targetEmployee.etternavn) : 'Ansatt'} har allerede ${sourceEntry.project?.project_name} på ${new Date(targetDate).toLocaleDateString('no-NO')}`,
+          variant: "destructive"
+        });
+        setIsProcessingUpdate(false);
         return;
       }
 
