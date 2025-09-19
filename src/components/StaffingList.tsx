@@ -1132,9 +1132,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                        </button>
                                     </div>
                                      <div className="space-y-0.5">
-                                       {/* Project number prominent display */}
-                                       <div className="font-bold text-sm">
-                                         #{entry.project?.tripletex_project_id}
+                                       {/* Project name with integrated number */}
+                                       <div className="text-xs font-semibold leading-tight overflow-hidden" 
+                                            style={{ 
+                                              display: '-webkit-box',
+                                              WebkitLineClamp: 2,
+                                              WebkitBoxOrient: 'vertical',
+                                              maxHeight: '2rem'
+                                            }}>
+                                         {entry.project?.project_name}
                                          {entry.activities.some(a => a.tripletex_synced_at) && (
                                            <span className="ml-1 text-xs">✓</span>
                                          )}
@@ -1143,18 +1149,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                          )}
                                        </div>
                                        
-                                       {/* Project name with smart truncation */}
-                                       <div className="text-xs font-medium leading-tight overflow-hidden" 
-                                            style={{ 
-                                              display: '-webkit-box',
-                                              WebkitLineClamp: 2,
-                                              WebkitBoxOrient: 'vertical',
-                                              maxHeight: '2rem'
-                                            }}>
-                                         {entry.project?.project_name}
-                                       </div>
-                                       
-                                       {/* Hours and activity in one line */}
+                                       {/* Hours, project number and activity in bottom row */}
                                        <div className="flex items-center justify-between text-xs opacity-90">
                                          {entry.totalHours > 0 && (
                                            <span>
@@ -1164,12 +1159,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                              )}
                                            </span>
                                          )}
-                                         {entry.activities.length > 0 && (
-                                           <span className="truncate max-w-16 opacity-75" title={entry.activities[0].activity_name}>
-                                             {entry.activities[0].activity_name}
-                                           </span>
-                                         )}
+                                         <span className="text-xs opacity-75">
+                                           #{entry.project?.tripletex_project_id}
+                                         </span>
                                        </div>
+                                       {entry.activities.length > 0 && (
+                                         <div className="text-xs opacity-75 truncate">
+                                           {entry.activities[0].activity_name}
+                                         </div>
+                                       )}
                                      </div>
                                     
                                     {/* Status indicator */}
