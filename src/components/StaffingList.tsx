@@ -1401,7 +1401,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       {/* Time Entry Edit Dialog */}
       {editDialog && (
         <Dialog open={!!editDialog} onOpenChange={() => setEditDialog(null)}>
-          <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto flex flex-col">
             <DialogHeader>
               <DialogTitle>Rediger timeføring</DialogTitle>
               <DialogDescription>

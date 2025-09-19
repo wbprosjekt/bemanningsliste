@@ -269,7 +269,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   };
 
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 flex-1 overflow-y-auto">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
