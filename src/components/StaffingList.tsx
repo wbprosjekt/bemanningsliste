@@ -1360,14 +1360,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                     </div>
                                      <div className="space-y-1">
                                        {/* Project name */}
-                                       <div className="text-sm font-semibold leading-tight overflow-hidden" 
-                                            style={{ 
-                                              display: '-webkit-box',
-                                              WebkitLineClamp: 2,
-                                              WebkitBoxOrient: 'vertical',
-                                              maxHeight: '2.5rem'
-                                            }}>
-                                         {entry.project?.project_name}
+                                       <div className="text-sm font-semibold leading-tight">
+                                         <span className="block max-w-[200px] truncate">
+                                           {entry.project?.project_name}
+                                         </span>
                                          {entry.activities.some(a => a.tripletex_synced_at) && (
                                            <span className="ml-1 text-xs">✓</span>
                                          )}
