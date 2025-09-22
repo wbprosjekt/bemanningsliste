@@ -448,7 +448,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
     try {
       const { data, error } = await supabase
-        .from('project_colors')
+        .from('project_color')
         .select('*')
         .eq('org_id', profile.org_id);
 
@@ -475,8 +475,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       const { data, error } = await supabase
         .from('kalender_dag')
         .select('*')
-        .in('dato', dateStrings)
-        .eq('org_id', profile.org_id);
+        .in('dato', dateStrings);
 
       if (error) throw error;
       

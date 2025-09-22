@@ -84,7 +84,7 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
   const loadProjectColors = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from('project_colors')
+        .from('project_color')
         .select('*')
         .eq('org_id', orgId);
 
