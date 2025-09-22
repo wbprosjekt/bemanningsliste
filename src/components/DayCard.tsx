@@ -63,6 +63,11 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   const [loading, setLoading] = useState(true);
   const [activeVaktId, setActiveVaktId] = useState<string | null>(null);
   const [selectedTimer, setSelectedTimer] = useState<VaktWithTimer['vakt_timer'][number] | null>(null);
+  const [selectedProject, setSelectedProject] = useState<{
+    project_name: string;
+    project_number: number;
+    tripletex_project_id: number;
+  } | null>(null);
   const [showProjectDialog, setShowProjectDialog] = useState(false);
   const { toast } = useToast();
 

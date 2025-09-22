@@ -1278,7 +1278,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   .map((entry) => (
                                   <div
                                     key={entry.id}
-                                    className="w-full max-w-[220px] p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group/project truncate"
+                                    className="w-full flex-1 p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group/project truncate"
                                     style={{ 
                                       backgroundColor: getProjectColor(entry.project?.tripletex_project_id),
                                       color: getContrastColor(getProjectColor(entry.project?.tripletex_project_id))
