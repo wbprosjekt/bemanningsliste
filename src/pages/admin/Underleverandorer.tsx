@@ -52,8 +52,11 @@ const AdminUnderleverandorer = () => {
   const [formData, setFormData] = useState({
     navn: '',
     kontaktperson: '',
-    }
-  }, [user, loadUserProfile]);
+    epost: '',
+    telefon: '',
+    adresse: '',
+    org_id: ''
+  });
 
   useEffect(() => {
     if (profile) {

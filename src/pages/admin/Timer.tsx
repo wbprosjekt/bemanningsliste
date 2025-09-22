@@ -52,6 +52,14 @@ interface TimerEntry {
 }
 
 const AdminTimer = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [timerEntries, setTimerEntries] = useState<TimerEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [filters, setFilters] = useState({
+    dateFrom: '',
     dateTo: ''
   });
   const [dryRunMode, setDryRunMode] = useState(false);
