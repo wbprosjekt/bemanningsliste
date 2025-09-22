@@ -45,12 +45,6 @@ const MinUke = () => {
     return getWeekNumber(new Date(targetYear, 11, 31));
   };
 
-  useEffect(() => {
-    if (user) {
-      loadUserData();
-    }
-  }, [user, loadUserData]);
-
   const loadUserData = useCallback(async () => {
     if (!user) return;
 
@@ -100,6 +94,12 @@ const MinUke = () => {
       setLoading(false);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadUserData();
+    }
+  }, [user, loadUserData]);
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
