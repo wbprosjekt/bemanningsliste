@@ -228,11 +228,11 @@ const AdminBrukere = () => {
     try {
       console.log('🧪 Testing user lookup for abc@abc.no...');
       
-      // This would require service role, but let's test the edge function logic
+      // Test with a different employee that might not exist in Auth
       const { data, error } = await supabase.functions.invoke('tripletex-create-profile', {
         body: {
           orgId: profile?.org_id,
-          employeeId: 'ed8af632-58e1-46a0-a1a9-dd7e26898614' // The abc@abc.no employee
+          employeeId: '6964373e-4c22-4946-a75f-28fb9c55d51a' // Kenneth Suggesen (sugg@sugg.no)
         }
       });
 

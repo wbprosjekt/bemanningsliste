@@ -220,7 +220,8 @@ Deno.serve(async (req) => {
     console.log('Existing user check:', { 
       email: normalizedEmail, 
       usersFound: usersList?.users?.length || 0,
-      error: listUsersError?.message 
+      error: listUsersError?.message,
+      users: usersList?.users
     });
 
     if (listUsersError) {
