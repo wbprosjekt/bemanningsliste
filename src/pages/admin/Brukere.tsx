@@ -181,6 +181,47 @@ const AdminBrukere = () => {
     }
   }, [profile?.org_id, toast]);
 
+  // Test function to manually create a profile
+  const testCreateProfile = async () => {
+    try {
+      console.log('🧪 Testing manual profile creation...');
+      
+      const testProfile = {
+        user_id: 'cf05c311-2229-4894-a1c8-dfc003506a8f', // Your user ID
+        org_id: profile?.org_id,
+        display_name: 'Test User',
+        role: 'user'
+      };
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert(testProfile);
+
+      console.log('🧪 Manual profile creation result:', { data, error });
+      
+      if (error) {
+        toast({
+          title: "Test feilet",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Test vellykket",
+          description: "Profil opprettet manuelt",
+        });
+        loadUsers();
+      }
+    } catch (error) {
+      console.error('❌ Test error:', error);
+      toast({
+        title: "Test feilet",
+        description: "En uventet feil oppstod",
+        variant: "destructive"
+      });
+    }
+  };
+
   useEffect(() => {
     if (user) {
       loadUserProfile();
@@ -339,6 +380,9 @@ const AdminBrukere = () => {
             <Button onClick={loadUsers} variant="outline" size="sm">
               <RefreshCw className="h-4 w-4 mr-2" />
               Oppdater
+            </Button>
+            <Button onClick={testCreateProfile} variant="outline" size="sm">
+              🧪 Test Profil
             </Button>
             <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
               <DialogTrigger asChild>
