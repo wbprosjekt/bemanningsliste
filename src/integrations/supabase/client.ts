@@ -2,8 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jlndohflirfixbinqdwe.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpsbmRvaGZsaXJmaXhiaW5xZHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MzM2MDksImV4cCI6MjA3MzUwOTYwOX0.BWu2LjkwGTMEOVe5HQZyYEGPtsomVX7Vs7MzACzyxSU';
 
 // Ensure required environment variables are present before instantiating the client
 if (!SUPABASE_URL) {
