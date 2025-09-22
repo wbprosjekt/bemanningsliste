@@ -237,6 +237,7 @@ const AdminBrukere = () => {
       });
 
       console.log('🧪 Edge function test result:', { data, error });
+      console.log('🧪 Detailed response:', JSON.stringify(data, null, 2));
       
       if (error) {
         toast({
