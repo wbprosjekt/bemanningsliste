@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +32,7 @@ const TripletexIntegration = () => {
     if (user) {
       loadUserProfile();
     }
-  }, [user]);
+  }, [user, loadUserProfile]);
 
   // Load integration settings after profile is loaded
   useEffect(() => {
@@ -40,9 +40,9 @@ const TripletexIntegration = () => {
       loadIntegrationSettings();
       checkTokenConfig();
     }
-  }, [profile?.org_id]);
+  }, [profile?.org_id, loadIntegrationSettings, checkTokenConfig]);
 
-  const loadUserProfile = async () => {
+  const loadUserProfile = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -71,9 +71,9 @@ const TripletexIntegration = () => {
       });
       setShowOnboarding(true);
     }
-  };
+  }, [user, toast]);
 
-  const loadIntegrationSettings = async () => {
+  const loadIntegrationSettings = useCallback(async () => {
     if (!profile?.org_id) return;
 
     try {
@@ -106,9 +106,9 @@ const TripletexIntegration = () => {
     } catch (error) {
       console.error('Error loading integration settings:', error);
     }
-  };
+  }, [profile?.org_id, checkTokenConfig]);
 
-  const callTripletexAPI = async (action: string, additionalParams?: any) => {
+  const callTripletexAPI = useCallback(async (action: string, additionalParams?: any) => {
     if (!profile?.org_id) return null;
 
     const params = new URLSearchParams({
@@ -128,7 +128,7 @@ const TripletexIntegration = () => {
       console.error(`Error calling Tripletex API (${action}):`, error);
       throw error;
     }
-  };
+  }, [profile?.org_id]);
 
   const testAPISession = async () => {
     setLoading({ ...loading, testSession: true });
@@ -226,7 +226,7 @@ const TripletexIntegration = () => {
     }
   };
 
-  const checkTokenConfig = async () => {
+  const checkTokenConfig = useCallback(async () => {
     if (!profile?.org_id) return;
 
     try {
@@ -237,7 +237,7 @@ const TripletexIntegration = () => {
     } catch (error) {
       console.error('Error checking token config:', error);
     }
-  };
+  }, [profile?.org_id, callTripletexAPI]);
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);

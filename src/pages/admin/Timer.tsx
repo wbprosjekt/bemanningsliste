@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -72,15 +72,15 @@ const AdminTimer = () => {
     if (user) {
       loadUserProfile();
     }
-  }, [user]);
+  }, [user, loadUserProfile]);
 
   useEffect(() => {
     if (profile) {
       loadTimerEntries();
     }
-  }, [profile, filters]);
+  }, [profile, filters, loadTimerEntries]);
 
-  const loadUserProfile = async () => {
+  const loadUserProfile = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -95,9 +95,9 @@ const AdminTimer = () => {
     } catch (error) {
       console.error('Error loading profile:', error);
     }
-  };
+  }, [user]);
 
-  const loadTimerEntries = async () => {
+  const loadTimerEntries = useCallback(async () => {
     if (!profile?.org_id) return;
 
     setLoading(true);
@@ -172,7 +172,7 @@ const AdminTimer = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.org_id, filters, toast]);
 
   const toggleEntrySelection = (entryId: string) => {
     const newSelection = new Set(selectedEntries);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,15 +75,15 @@ const Uke = () => {
     if (user) {
       loadUserProfile();
     }
-  }, [user]);
+  }, [user, loadUserProfile]);
 
   useEffect(() => {
     if (profile) {
       loadWeekData();
     }
-  }, [profile, currentYear, currentWeek]);
+  }, [profile, currentYear, currentWeek, loadWeekData]);
 
-  const loadUserProfile = async () => {
+  const loadUserProfile = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -98,9 +98,9 @@ const Uke = () => {
     } catch (error) {
       console.error('Error loading profile:', error);
     }
-  };
+  }, [user]);
 
-  const loadWeekData = async () => {
+  const loadWeekData = useCallback(async () => {
     if (!profile?.org_id) return;
 
     setLoading(true);
@@ -175,7 +175,7 @@ const Uke = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.org_id, currentYear, currentWeek, toast]);
 
   const navigateWeek = (delta: number) => {
     let newYear = currentYear;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -61,15 +61,15 @@ const AdminBrukere = () => {
     if (user) {
       loadUserProfile();
     }
-  }, [user]);
+  }, [user, loadUserProfile]);
 
   useEffect(() => {
     if (profile) {
       loadUsers();
     }
-  }, [profile]);
+  }, [profile, loadUsers]);
 
-  const loadUserProfile = async () => {
+  const loadUserProfile = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -100,9 +100,9 @@ const AdminBrukere = () => {
       console.error('Error loading profile:', error);
       setShowOnboarding(true);
     }
-  };
+  }, [user, toast]);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     if (!profile?.org_id) return;
 
     setLoading(true);
@@ -140,7 +140,7 @@ const AdminBrukere = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.org_id, toast]);
 
   const handleInviteUser = async () => {
     if (!profile?.org_id) return;

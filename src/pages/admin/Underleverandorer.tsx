@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -64,15 +64,15 @@ const AdminUnderleverandorer = () => {
     if (user) {
       loadUserProfile();
     }
-  }, [user]);
+  }, [user, loadUserProfile]);
 
   useEffect(() => {
     if (profile) {
       loadUnderleverandorer();
     }
-  }, [profile]);
+  }, [profile, loadUnderleverandorer]);
 
-  const loadUserProfile = async () => {
+  const loadUserProfile = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -87,9 +87,9 @@ const AdminUnderleverandorer = () => {
     } catch (error) {
       console.error('Error loading profile:', error);
     }
-  };
+  }, [user]);
 
-  const loadUnderleverandorer = async () => {
+  const loadUnderleverandorer = useCallback(async () => {
     if (!profile?.org_id) return;
 
     setLoading(true);
@@ -112,7 +112,7 @@ const AdminUnderleverandorer = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.org_id, toast]);
 
   const resetForm = () => {
     setFormData({
