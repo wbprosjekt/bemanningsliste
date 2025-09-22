@@ -211,10 +211,10 @@ const AdminTimer = () => {
 
       setSelectedEntries(new Set());
       loadTimerEntries();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Godkjenning feilet",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     } finally {
@@ -248,7 +248,7 @@ const AdminTimer = () => {
           // Extract vakt ID from the vakt object structure
           if (typeof e.vakt === 'object' && e.vakt !== null) {
             // The vakt object should have an id property or we need to find it differently
-            return (e.vakt as any).id;
+            return (e.vakt as { id: string }).id;
           }
           return null;
         })
@@ -265,14 +265,14 @@ const AdminTimer = () => {
 
       // Prepare timesheet entries for export with proper mapping
       const timesheetEntries = selectedTimerEntries.map(entry => {
-        const vaktId = (entry.vakt as any)?.id;
+        const vaktId = (entry.vakt as { id: string })?.id;
         const personId = vaktToPersonMap.get(vaktId) || '';
         
         return {
           id: entry.id,
           personId: personId,
           projectId: entry.vakt?.ttx_project_cache?.project_number || '',
-          activityId: entry.ttx_activity_cache ? (entry.ttx_activity_cache as any).ttx_id || '' : '',
+          activityId: entry.ttx_activity_cache ? (entry.ttx_activity_cache as { ttx_id: string }).ttx_id || '' : '',
           date: entry.vakt?.dato,
           hours: entry.timer,
           comment: entry.notat || '',
@@ -304,17 +304,18 @@ const AdminTimer = () => {
       if (error) throw error;
 
       const results = data?.data?.results || [];
-      const successful = results.filter((r: any) => r.success);
-      const failed = results.filter((r: any) => !r.success);
+      const successful = results.filter((r: unknown) => (r as { success: boolean }).success);
+      const failed = results.filter((r: unknown) => !(r as { success: boolean }).success);
 
       // Handle period locked errors
-      const periodLockedErrors = failed.filter((r: any) => 
-        r.errorType === 'period_locked' || r.error?.includes('period is locked')
-      );
+      const periodLockedErrors = failed.filter((r: unknown) => {
+        const result = r as { errorType?: string; error?: string };
+        return result.errorType === 'period_locked' || result.error?.includes('period is locked');
+      });
       
       if (periodLockedErrors.length > 0) {
         // Don't change status for period locked entries
-        const firstPeriodError = periodLockedErrors[0];
+        const firstPeriodError = periodLockedErrors[0] as { weekNumber?: string };
         const weekInfo = firstPeriodError.weekNumber || 'ukjent';
         setPeriodLockBanner(`Uke ${weekInfo} er låst i Tripletex – åpne perioden i Tripletex for å eksportere timer.`);
         
@@ -342,10 +343,10 @@ const AdminTimer = () => {
 
       setSelectedEntries(new Set());
       loadTimerEntries();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Eksport til Tripletex feilet",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     } finally {
@@ -387,10 +388,10 @@ const AdminTimer = () => {
           variant: "destructive"
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Status-sjekk feilet",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     }

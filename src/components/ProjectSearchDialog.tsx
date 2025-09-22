@@ -91,7 +91,7 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
       if (error) throw error;
       
       const colorsMap: { [key: number]: string } = {};
-      data?.forEach((color: any) => {
+      data?.forEach((color: ProjectColor) => {
         colorsMap[color.tripletex_project_id] = color.hex;
       });
       

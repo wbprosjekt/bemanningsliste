@@ -25,6 +25,13 @@ import {
   getContrastColor 
 } from '@/lib/displayNames';
 
+interface Profile {
+  id: string;
+  org_id: string;
+  user_id: string;
+  created_at: string;
+}
+
 interface CalendarDay {
   dato: string;
   iso_uke: number;
@@ -59,7 +66,7 @@ const Uke = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [weekEntries, setWeekEntries] = useState<WeekEntry[]>([]);
   const [projectColors, setProjectColors] = useState<Record<number, string>>({});

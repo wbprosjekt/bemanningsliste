@@ -13,7 +13,7 @@ interface TripletexConfig {
 
 interface TripletexResponse {
   success: boolean;
-  data?: any;
+  data?: unknown;
   error?: string;
 }
 
@@ -34,11 +34,11 @@ function maskAuthHeader(auth?: string): string {
   return '****';
 }
 
-function safeBody(body: any) {
+function safeBody(body: unknown) {
   if (!body) return undefined;
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(body)) {
-    out[k] = k.toLowerCase().includes('token') ? '***masked***' : (body as any)[k];
+    out[k] = k.toLowerCase().includes('token') ? '***masked***' : (body as Record<string, unknown>)[k];
   }
   return out;
 }
@@ -69,7 +69,7 @@ async function getTripletexConfig(orgId: string): Promise<TripletexConfig> {
   console.log('Integration settings query result:', { settings, error });
 
   if (settings?.settings) {
-    const orgSettings = settings.settings as any;
+    const orgSettings = settings.settings as { consumer_token?: string; employee_token?: string; api_base_url?: string };
     console.log('Processing org settings:', { ...orgSettings, consumer_token: orgSettings.consumer_token ? '***masked***' : undefined, employee_token: orgSettings.employee_token ? '***masked***' : undefined });
     if (orgSettings.consumer_token && orgSettings.employee_token) {
       const config = {
@@ -115,7 +115,7 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
     console.error('Error reading integration settings for session:', readErr);
   }
 
-  const currentSettings = (row?.settings as any) || {};
+  const currentSettings = (row?.settings as Record<string, unknown>) || {};
   const now = new Date();
 
   // Check if we have a valid cached session with companyId
@@ -224,7 +224,7 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
   return { token: String(token), expirationDate: String(exp), companyId: Number(companyId) };
 }
 
-async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: any, orgId?: string): Promise<TripletexResponse> {
+async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: unknown, orgId?: string): Promise<TripletexResponse> {
   const config = await getTripletexConfig(orgId || '');
   if (!config.consumerToken || !config.employeeToken) {
     return { success: false, error: 'Tripletex tokens not configured for this organization' };
@@ -244,7 +244,7 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
         Authorization: `Basic ${btoa(`${session.companyId}:${session.token}`)}`
       };
     } catch (e) {
-      return { success: false, error: (e as any).message || 'Failed to create session' };
+      return { success: false, error: (e as Error).message || 'Failed to create session' };
     }
   }
 
@@ -271,7 +271,7 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
     if (!response.ok) {
       // Optional: throw on 429/5xx to let exponentialBackoff handle it
       if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
-        const err: any = new Error(responseData?.message || `HTTP ${response.status}`);
+        const err: Error = new Error(responseData?.message || `HTTP ${response.status}`);
         err.status = response.status;
         throw err;
       }
@@ -283,7 +283,7 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
     }
 
     return { success: true, data: responseData };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Network error calling Tripletex API:', error);
     return { success: false, error: error.message ?? String(error) };
   }
@@ -293,7 +293,7 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
 async function getProjectParticipantIds(orgId: string, projectId: number) {
   const res = await callTripletexAPI(`/project/${projectId}`, 'GET', undefined, orgId);
   if (!res.success) return [];
-  const ids = (res.data?.value?.participants || []).map((p: any) => p.id).filter((x: any) => typeof x === 'number');
+  const ids = (res.data?.value?.participants || []).map((p: unknown) => (p as { id: number }).id).filter((x: unknown) => typeof x === 'number');
   return ids;
 }
 
@@ -326,18 +326,18 @@ async function ensureActivityOnProject(orgId: string, projectId: number, activit
   const res = await callTripletexAPI(`/activity?project.id=${projectId}&count=1000`, 'GET', undefined, orgId);
   if (!res.success) return { ok: false, reason: res.error || 'activity_lookup_failed' };
   const list = res.data?.values || [];
-  const found = list.some((a: any) => Number(a?.id) === Number(activityId));
+  const found = list.some((a: unknown) => Number((a as { id: number })?.id) === Number(activityId));
   return { ok: found, reason: found ? undefined : 'activity_not_on_project' };
 }
 // === end helpers ===
 
-async function exponentialBackoff(fn: () => Promise<any>, maxRetries: number = 3): Promise<any> {
+async function exponentialBackoff(fn: () => Promise<unknown>, maxRetries: number = 3): Promise<unknown> {
   let delay = 1000; // Start with 1 second
   
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (i === maxRetries - 1) throw error;
       
       const status = error?.status;
@@ -363,7 +363,7 @@ Deno.serve(async (req) => {
     let action = url.searchParams.get('action');
     let orgId = url.searchParams.get('orgId');
 
-    let payload: any = {};
+    let payload: unknown = {};
     try {
       // Try to read JSON body once and reuse for all cases
       payload = await req.json();
@@ -406,7 +406,7 @@ Deno.serve(async (req) => {
         break;
       }
 
-      case 'test-session':
+      case 'test-session': {
         try {
           console.log(`Testing session creation for org ${orgId}`);
           const session = await getOrCreateSession(orgId);
@@ -419,28 +419,32 @@ Deno.serve(async (req) => {
               tokenLength: session.token.length
             } 
           };
-        } catch (e: any) {
-          console.error('Session test failed:', e.message);
-          result = { success: false, error: e.message || 'Failed to create session' };
+        } catch (e: unknown) {
+          console.error('Session test failed:', e instanceof Error ? e.message : 'Unknown error');
+          result = { success: false, error: e instanceof Error ? e.message : 'Failed to create session' };
         }
         break;
+      }
 
-      case 'sync-employees':
+      case 'sync-employees': {
         result = await exponentialBackoff(async () => {
           const response = await callTripletexAPI('/employee?count=100', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             console.log(`Syncing ${response.data.values.length} employees for org ${orgId}`);
             
             // Cache employees in database
-            const employees = response.data.values.map((emp: any) => ({
-              org_id: orgId,
-              tripletex_employee_id: emp.id,
-              fornavn: emp.firstName || '',
-              etternavn: emp.lastName || '',
-              epost: emp.email,
-              aktiv: emp.isActive !== false, // Default to true if undefined
-              last_synced: new Date().toISOString()
-            }));
+            const employees = response.data.values.map((emp: unknown) => {
+              const employee = emp as { id: number; firstName?: string; lastName?: string; email?: string; isActive?: boolean };
+              return {
+                org_id: orgId,
+                tripletex_employee_id: employee.id,
+                fornavn: employee.firstName || '',
+                etternavn: employee.lastName || '',
+                epost: employee.email,
+                aktiv: employee.isActive !== false, // Default to true if undefined
+                last_synced: new Date().toISOString()
+              };
+            });
 
             // Upsert employees with proper conflict resolution
             const { error: upsertError } = await supabase
@@ -456,15 +460,18 @@ Deno.serve(async (req) => {
             }
 
             // Create person records for each employee
-            const persons = employees.map((emp: any) => ({
-              org_id: orgId,
-              fornavn: emp.fornavn,
-              etternavn: emp.etternavn,
-              epost: emp.epost,
-              tripletex_employee_id: emp.tripletex_employee_id,
-              aktiv: emp.aktiv,
-              person_type: 'ansatt'
-            }));
+            const persons = employees.map((emp: unknown) => {
+              const employee = emp as { fornavn: string; etternavn: string; epost?: string; tripletex_employee_id: number; aktiv: boolean };
+              return {
+                org_id: orgId,
+                fornavn: employee.fornavn,
+                etternavn: employee.etternavn,
+                epost: employee.epost,
+                tripletex_employee_id: employee.tripletex_employee_id,
+                aktiv: employee.aktiv,
+                person_type: 'ansatt'
+              };
+            });
 
             const { error: personError } = await supabase
               .from('person')
@@ -533,24 +540,27 @@ Deno.serve(async (req) => {
           return response;
         });
         break;
+      }
 
-
-      case 'sync-projects':
+      case 'sync-projects': {
         result = await exponentialBackoff(async () => {
           const response = await callTripletexAPI('/project?count=100', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             console.log(`Syncing ${response.data.values.length} projects for org ${orgId}`);
             
             // Cache projects in database
-            const projects = response.data.values.map((proj: any) => ({
-              org_id: orgId,
-              tripletex_project_id: proj.id,
-              project_number: proj.number,
-              project_name: proj.displayName || proj.name,
-              customer_name: proj.customer?.name,
-              is_active: proj.isActive !== false, // Default to true if undefined
-              last_synced: new Date().toISOString()
-            }));
+            const projects = response.data.values.map((proj: unknown) => {
+              const project = proj as { id: number; number?: string; displayName?: string; name?: string; customer?: { name?: string }; isActive?: boolean };
+              return {
+                org_id: orgId,
+                tripletex_project_id: project.id,
+                project_number: project.number,
+                project_name: project.displayName || project.name,
+                customer_name: project.customer?.name,
+                is_active: project.isActive !== false, // Default to true if undefined
+                last_synced: new Date().toISOString()
+              };
+            });
 
             const { error: upsertError } = await supabase
               .from('ttx_project_cache')
@@ -570,19 +580,23 @@ Deno.serve(async (req) => {
           return response;
         });
         break;
+      }
 
-      case 'sync-activities':
+      case 'sync-activities': {
         result = await exponentialBackoff(async () => {
           const response = await callTripletexAPI('/activity?count=1000', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             // Cache activities in database
-            const activities = response.data.values.map((act: any) => ({
-              org_id: orgId,
-              ttx_id: act.id,
-              navn: act.name,
-              aktiv: act.isActive,
-              last_synced: new Date().toISOString()
-            }));
+            const activities = response.data.values.map((act: unknown) => {
+              const activity = act as { id: number; name?: string; isActive?: boolean };
+              return {
+                org_id: orgId,
+                ttx_id: activity.id,
+                navn: activity.name,
+                aktiv: activity.isActive,
+                last_synced: new Date().toISOString()
+              };
+            });
 
             const { error: upsertError } = await supabase
               .from('ttx_activity_cache')
@@ -601,22 +615,26 @@ Deno.serve(async (req) => {
           return response;
         });
         break;
+      }
 
-      case 'search-projects':
+      case 'search-projects': {
         const query = url.searchParams.get('q') || '';
         result = await callTripletexAPI(`/project?count=50&displayName=${encodeURIComponent(query)}`, 'GET', undefined, orgId);
         
         // Cache search results
         if (result.success && result.data?.values) {
-          const projects = result.data.values.map((proj: any) => ({
-            org_id: orgId,
-            tripletex_project_id: proj.id,
-            project_number: proj.number,
-            project_name: proj.displayName || proj.name,
-            customer_name: proj.customer?.name,
-            is_active: proj.isActive,
-            last_synced: new Date().toISOString()
-          }));
+          const projects = result.data.values.map((proj: unknown) => {
+            const project = proj as { id: number; number?: string; displayName?: string; name?: string; customer?: { name?: string }; isActive?: boolean };
+            return {
+              org_id: orgId,
+              tripletex_project_id: project.id,
+              project_number: project.number,
+              project_name: project.displayName || project.name,
+              customer_name: project.customer?.name,
+              is_active: project.isActive,
+              last_synced: new Date().toISOString()
+            };
+          });
 
           await supabase
             .from('ttx_project_cache')
@@ -626,6 +644,7 @@ Deno.serve(async (req) => {
             });
         }
         break;
+      }
 
       case 'export-timesheet': {
         const timesheetEntries = payload?.timesheetEntries;
@@ -714,7 +733,7 @@ Deno.serve(async (req) => {
                 exportResults.push({ id: entry.id, success: false, error: exportResult.error });
               }
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             console.error(`Error exporting timesheet entry ${entry.id}:`, error);
             exportResults.push({ 
               id: entry.id, 
@@ -749,7 +768,7 @@ Deno.serve(async (req) => {
         break;
       }
 
-      case 'send_timesheet_entry':
+      case 'send_timesheet_entry': {
         const { vakt_timer_id, employee_id, project_id, activity_id, hours, date, is_overtime, description } = payload;
         
         if (!vakt_timer_id || !employee_id || !project_id || !hours || !date) {
@@ -837,8 +856,9 @@ Deno.serve(async (req) => {
           return response;
         });
         break;
+      }
 
-      case 'approve_timesheet_entries':
+      case 'approve_timesheet_entries': {
         const { entry_ids, approved_by_user_id } = payload;
         
         if (!entry_ids || !Array.isArray(entry_ids) || entry_ids.length === 0) {
@@ -868,12 +888,13 @@ Deno.serve(async (req) => {
               } 
             };
           }
-        } catch (e: any) {
-          result = { success: false, error: e.message || 'Failed to approve entries' };
+        } catch (e: unknown) {
+          result = { success: false, error: e instanceof Error ? e.message : 'Failed to approve entries' };
         }
         break;
+      }
 
-      case 'unapprove_timesheet_entries':
+      case 'unapprove_timesheet_entries': {
         const { entry_ids: unapproveIds } = payload;
         
         if (!unapproveIds || !Array.isArray(unapproveIds) || unapproveIds.length === 0) {
@@ -903,12 +924,13 @@ Deno.serve(async (req) => {
               } 
             };
           }
-        } catch (e: any) {
-          result = { success: false, error: e.message || 'Failed to unapprove entries' };
+        } catch (e: unknown) {
+          result = { success: false, error: e instanceof Error ? e.message : 'Failed to unapprove entries' };
         }
         break;
+      }
 
-      case 'delete_timesheet_entry':
+      case 'delete_timesheet_entry': {
         const { tripletex_entry_id, vakt_timer_id: deleteVaktTimerId } = payload;
         
         if (!tripletex_entry_id && !deleteVaktTimerId) {
@@ -950,8 +972,9 @@ Deno.serve(async (req) => {
             : deleteResponse;
         });
         break;
+      }
 
-      case 'get_project_details':
+      case 'get_project_details': {
         const projectId = payload?.project_id;
         
         if (!projectId) {
@@ -1030,6 +1053,7 @@ Deno.serve(async (req) => {
           return { success: true, data: projectDetails };
         });
         break;
+      }
 
       default:
         return new Response(JSON.stringify({ error: 'Unknown action' }), {
@@ -1042,7 +1066,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in tripletex-api function:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,

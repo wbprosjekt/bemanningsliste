@@ -10,7 +10,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-async function syncOrganizationData(orgId: string): Promise<{ success: boolean; results: any }> {
+async function syncOrganizationData(orgId: string): Promise<{ success: boolean; results: unknown }> {
   console.log(`Starting nightly sync for organization: ${orgId}`);
   
   const results = {
@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
 
     // Filter organizations that have nightly sync enabled
     const nightlySyncOrgs = integrations.filter(integration => {
-      const settings = integration.settings as any;
+      const settings = integration.settings as { nightly_sync?: boolean };
       return settings && settings.nightly_sync === true;
     });
 
@@ -134,14 +134,14 @@ Deno.serve(async (req) => {
         const result = await syncOrganizationData(integration.org_id);
         syncResults.push({
           orgId: integration.org_id,
-          orgName: (integration.org as any)?.name || 'Unknown',
+          orgName: (integration.org as { name?: string })?.name || 'Unknown',
           ...result
         });
       } catch (error) {
         console.error(`Failed to sync organization ${integration.org_id}:`, error);
         syncResults.push({
           orgId: integration.org_id,
-          orgName: (integration.org as any)?.name || 'Unknown',
+          orgName: (integration.org as { name?: string })?.name || 'Unknown',
           success: false,
           error: error.message
         });

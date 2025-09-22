@@ -193,7 +193,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const { week: safeStartWeek, year: safeStartYear } = coerceWeekRef({ week: startWeek, year: startYear });
 
   // Get multiple weeks of data with robust date handling
-  const getMultipleWeeksData = (): WeekData[] => {
+  const getMultipleWeeksData = useCallback((): WeekData[] => {
     const weeks: WeekData[] = [];
     let currentWeek = Math.max(1, Math.min(53, safeStartWeek)); // Clamp week to valid range
     let currentYear = Math.max(1970, Math.min(3000, safeStartYear)); // Clamp year to reasonable range
@@ -245,10 +245,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
     
     return weeks;
-  };
+  }, [safeStartWeek, safeStartYear, weeksToShow]);
 
   // Memoize multiWeekData to prevent infinite loops
-  const multiWeekData = useMemo(() => getMultipleWeeksData(), [safeStartWeek, safeStartYear, weeksToShow]);
+  const multiWeekData = useMemo(() => getMultipleWeeksData(), [getMultipleWeeksData]);
   
   // Memoize allDates to prevent infinite loops
   const allDates = useMemo(() => {
@@ -338,8 +338,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       if (error) throw error;
 
       // Create a map of existing vakt data
-      const vaktMap = new Map<string, any>();
-      vaktData?.forEach((vakt: any) => {
+      const vaktMap = new Map<string, VaktTimer>();
+      vaktData?.forEach((vakt: VaktTimer) => {
         const key = `${vakt.dato}-${vakt.person_id}`;
         vaktMap.set(key, vakt);
       });
@@ -347,7 +347,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       // Generate staffing entries for all employees and dates
       const entries: StaffingEntry[] = [];
       
-      allEmployees?.forEach((employee: any) => {
+      allEmployees?.forEach((employee: Employee) => {
         allDates.forEach((date) => {
           const dateKey = toDateKey(date);
           if (!dateKey) return;
@@ -480,7 +480,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       if (error) throw error;
       
       const colorMap: Record<number, string> = {};
-      data?.forEach((color: any) => {
+      data?.forEach((color: ProjectColor) => {
         colorMap[color.tripletex_project_id] = color.hex;
       });
       
@@ -505,7 +505,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       if (error) throw error;
       
       const calendarMap: Record<string, CalendarDay> = {};
-      data?.forEach((day: any) => {
+      data?.forEach((day: CalendarDay) => {
         calendarMap[day.dato] = day;
       });
       

@@ -127,7 +127,7 @@ const MinUke = () => {
     navigate(`/min/uke/${newYear}/${newWeek.toString().padStart(2, '0')}`);
   };
 
-  const getWeekDays = () => {
+  const getWeekDays = useCallback(() => {
     const startDate = getDateFromWeek(currentYear, currentWeek);
     const days = [];
     
@@ -138,7 +138,7 @@ const MinUke = () => {
     }
     
     return days;
-  };
+  }, [currentYear, currentWeek]);
 
   const isToday = (date: Date) => {
     const today = new Date();
@@ -146,7 +146,7 @@ const MinUke = () => {
   };
 
   // Memoize weekDays to prevent infinite loops. Must be declared before any early return.
-  const weekDays = useMemo(() => getWeekDays(), [currentYear, currentWeek]);
+  const weekDays = useMemo(() => getWeekDays(), [getWeekDays]);
 
   if (showOnboarding) {
     return <OnboardingDialog onComplete={handleOnboardingComplete} />;

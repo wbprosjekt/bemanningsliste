@@ -109,7 +109,7 @@ export default async function handler(req: Request): Promise<Response> {
       JSON.stringify({ ok: true, orgId, organization: orgInsert }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('onboarding-setup unexpected error:', e);
     return new Response(
       JSON.stringify({ ok: false, message: 'Unexpected error', details: e?.message || String(e) }),

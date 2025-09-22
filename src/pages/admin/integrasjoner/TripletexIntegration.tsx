@@ -11,15 +11,47 @@ import { useToast } from '@/hooks/use-toast';
 import { RefreshCw, CheckCircle, XCircle, Users, FolderOpen, Activity, Clock, Settings, Eye, EyeOff } from 'lucide-react';
 import OnboardingDialog from '@/components/OnboardingDialog';
 
+interface Profile {
+  id: string;
+  org_id: string;
+  user_id: string;
+  created_at: string;
+}
+
+interface IntegrationSettings {
+  id: string;
+  org_id: string;
+  tripletex_consumer_token: string;
+  tripletex_employee_token: string;
+  tripletex_api_base_url: string;
+  nightly_sync_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SessionInfo {
+  id: string;
+  org_id: string;
+  session_token: string;
+  expires_at: string;
+  created_at: string;
+}
+
+interface TokenConfig {
+  consumerToken: string;
+  employeeToken: string;
+  apiBaseUrl: string;
+}
+
 const TripletexIntegration = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [profile, setProfile] = useState<any>(null);
-  const [integrationSettings, setIntegrationSettings] = useState<any>(null);
-  const [sessionInfo, setSessionInfo] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [integrationSettings, setIntegrationSettings] = useState<IntegrationSettings | null>(null);
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
   const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
   const [nightlySync, setNightlySync] = useState(false);
-  const [tokenConfig, setTokenConfig] = useState<any>(null);
+  const [tokenConfig, setTokenConfig] = useState<TokenConfig | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showTokens, setShowTokens] = useState(false);
   const [tokenForm, setTokenForm] = useState({
@@ -60,7 +92,7 @@ const TripletexIntegration = () => {
     }
   }, [user, toast]);
 
-  const callTripletexAPI = useCallback(async (action: string, additionalParams?: any) => {
+  const callTripletexAPI = useCallback(async (action: string, additionalParams?: unknown) => {
     if (!profile?.org_id) return null;
 
     const params = new URLSearchParams({
@@ -127,10 +159,10 @@ const TripletexIntegration = () => {
           variant: "destructive"
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Kunne ikke opprette sesjon",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     } finally {
@@ -167,10 +199,10 @@ const TripletexIntegration = () => {
           variant: "destructive"
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: `Synkronisering av ${titleMap[type]} feilet`,
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     } finally {
@@ -211,7 +243,7 @@ const TripletexIntegration = () => {
       
       // Load existing tokens if they exist
       if (data?.settings) {
-        const settings = data.settings as any;
+        const settings = data.settings as { consumer_token?: string; employee_token?: string; api_base_url?: string };
         setTokenForm({
           consumerToken: settings.consumer_token || '',
           employeeToken: settings.employee_token || '',
@@ -289,10 +321,10 @@ const TripletexIntegration = () => {
 
       // Refresh token config to reflect changes
       checkTokenConfig();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Feil ved lagring av tokens",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     } finally {
@@ -330,10 +362,10 @@ const TripletexIntegration = () => {
         title: enabled ? "Nattlig synkronisering aktivert" : "Nattlig synkronisering deaktivert",
         description: enabled ? "Data vil synkroniseres automatisk kl. 02:00 hver natt." : "Automatisk synkronisering er deaktivert."
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Feil ved endring av innstillinger",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     }

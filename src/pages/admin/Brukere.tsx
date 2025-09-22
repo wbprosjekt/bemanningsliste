@@ -25,6 +25,13 @@ import { getPersonDisplayName } from '@/lib/displayNames';
 import OnboardingDialog from '@/components/OnboardingDialog';
 import UserInviteSystem from '@/components/UserInviteSystem';
 
+interface Profile {
+  id: string;
+  org_id: string;
+  user_id: string;
+  created_at: string;
+}
+
 interface UserProfile {
   id: string;
   user_id: string;
@@ -45,7 +52,7 @@ interface UserProfile {
 const AdminBrukere = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -159,10 +166,10 @@ const AdminBrukere = () => {
 
       setShowInviteDialog(false);
       setInviteForm({ email: '', role: 'user', display_name: '' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Feil ved sending av invitasjon",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     }
@@ -186,10 +193,10 @@ const AdminBrukere = () => {
       });
 
       loadUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Feil ved endring av brukerstatus",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     }
@@ -210,10 +217,10 @@ const AdminBrukere = () => {
       });
 
       loadUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Feil ved oppdatering av rolle",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     }

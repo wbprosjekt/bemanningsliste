@@ -69,7 +69,7 @@ const formatDate = (date: Date): string => {
   return date.toISOString().split('T')[0];
 };
 
-const ensureCalendarWindow = async (supabase: any, monthsAhead: number = 12) => {
+const ensureCalendarWindow = async (supabase: SupabaseClient, monthsAhead: number = 12) => {
   console.log(`Starting calendar sync for ${monthsAhead} months ahead`);
   
   const today = new Date();

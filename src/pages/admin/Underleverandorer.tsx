@@ -25,6 +25,13 @@ import {
   FileText
 } from 'lucide-react';
 
+interface Profile {
+  id: string;
+  org_id: string;
+  user_id: string;
+  created_at: string;
+}
+
 interface Underleverandor {
   id: string;
   navn: string;
@@ -43,7 +50,7 @@ interface Underleverandor {
 const AdminUnderleverandorer = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [underleverandorer, setUnderleverandorer] = useState<Underleverandor[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -194,10 +201,10 @@ const AdminUnderleverandorer = () => {
       setShowDialog(false);
       resetForm();
       loadUnderleverandorer();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: editingId ? "Feil ved oppdatering" : "Feil ved opprettelse",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     }
@@ -218,10 +225,10 @@ const AdminUnderleverandorer = () => {
       });
 
       loadUnderleverandorer();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Feil ved endring av status",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     }
@@ -247,10 +254,10 @@ const AdminUnderleverandorer = () => {
         title: "Person opprettet",
         description: "Underleverandøren kan nå brukes i bemanningslisten."
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Feil ved opprettelse av person",
-        description: error.message,
+        description: error instanceof Error ? error.message : "En uventet feil oppstod",
         variant: "destructive"
       });
     }
