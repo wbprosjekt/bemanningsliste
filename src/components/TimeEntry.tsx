@@ -437,9 +437,9 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
             </SelectTrigger>
             <SelectContent className="bg-background border z-50">
               {activities.length === 0 ? (
-                <SelectItem value="" disabled>
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
                   Ingen aktiviteter tilgjengelig
-                </SelectItem>
+                </div>
               ) : (
                 activities.map((activity) => (
                   <SelectItem key={activity.id} value={activity.id}>

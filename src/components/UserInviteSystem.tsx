@@ -93,6 +93,12 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
     try {
       setCreatingUserId(employee.id);
 
+      console.log('Creating user for employee:', { 
+        employeeId: employee.id, 
+        orgId, 
+        email: employee.epost 
+      });
+
       const { data, error } = await supabase.functions.invoke('tripletex-create-profile', {
         body: {
           orgId,
@@ -100,11 +106,15 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
         }
       });
 
+      console.log('tripletex-create-profile response:', { data, error });
+
       if (error) {
+        console.error('Supabase function error:', error);
         throw error;
       }
 
       if (!data?.success) {
+        console.error('Function returned error:', data?.error);
         throw new Error(data?.error || 'Kunne ikke opprette bruker.');
       }
 
@@ -119,9 +129,27 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
       onUsersUpdated();
       setShowTripletexDialog(false);
     } catch (error: unknown) {
+      console.error('Error creating user:', error);
+      
+      let errorMessage = 'En ukjent feil oppstod';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Show specific error messages for common issues
+      if (errorMessage.includes('mangler e-postadresse')) {
+        errorMessage = 'Ansatt mangler e-postadresse i Tripletex';
+      } else if (errorMessage.includes('allerede tilknyttet')) {
+        errorMessage = 'Brukeren er allerede tilknyttet en annen organisasjon';
+      } else if (errorMessage.includes('admin eller manager')) {
+        errorMessage = 'Du må være admin eller manager for å opprette brukere';
+      } else if (errorMessage.includes('tilgang til valgt organisasjon')) {
+        errorMessage = 'Du har ikke tilgang til denne organisasjonen';
+      }
+
       toast({
         title: "Feil ved oppretting",
-        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {

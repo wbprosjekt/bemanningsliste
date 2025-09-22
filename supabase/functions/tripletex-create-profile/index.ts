@@ -21,7 +21,10 @@ Deno.serve(async (req) => {
     const requestBody = (await req.json()) as TripletexCreateProfileRequest;
     const { orgId, employeeId } = requestBody;
 
+    console.log('tripletex-create-profile called with:', { orgId, employeeId });
+
     if (!orgId || !employeeId) {
+      console.log('Missing required parameters:', { orgId, employeeId });
       return new Response(
         JSON.stringify({ success: false, error: 'orgId og employeeId er påkrevd.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -52,7 +55,10 @@ Deno.serve(async (req) => {
       error: userError
     } = await supabaseWithUser.auth.getUser();
 
+    console.log('User auth check:', { user: user?.id, error: userError?.message });
+
     if (userError || !user) {
+      console.log('Authentication failed:', userError);
       return new Response(
         JSON.stringify({ success: false, error: 'Kunne ikke identifisere innlogget bruker.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
@@ -65,6 +71,8 @@ Deno.serve(async (req) => {
       .eq('user_id', user.id)
       .maybeSingle();
 
+    console.log('Profile lookup:', { profile, error: profileError?.message });
+
     if (profileError) {
       console.error('Feil ved henting av profil for bruker', user.id, profileError);
       return new Response(
@@ -74,6 +82,11 @@ Deno.serve(async (req) => {
     }
 
     if (!profile || profile.org_id !== orgId) {
+      console.log('Access denied - profile check:', { 
+        hasProfile: !!profile, 
+        profileOrgId: profile?.org_id, 
+        requestedOrgId: orgId 
+      });
       return new Response(
         JSON.stringify({ success: false, error: 'Bruker har ikke tilgang til valgt organisasjon.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
@@ -81,6 +94,7 @@ Deno.serve(async (req) => {
     }
 
     if (!['admin', 'manager'].includes(profile.role)) {
+      console.log('Access denied - role check:', { role: profile.role });
       return new Response(
         JSON.stringify({ success: false, error: 'Du må være admin eller manager for å opprette brukere.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
@@ -94,7 +108,10 @@ Deno.serve(async (req) => {
       .eq('org_id', orgId)
       .maybeSingle();
 
+    console.log('Employee lookup:', { employee: employee?.id, error: employeeError?.message });
+
     if (employeeError || !employee) {
+      console.log('Employee not found:', { employeeId, orgId, error: employeeError });
       return new Response(
         JSON.stringify({ success: false, error: 'Fant ikke Tripletex-ansatt.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
@@ -102,6 +119,7 @@ Deno.serve(async (req) => {
     }
 
     if (!employee.epost) {
+      console.log('Employee missing email:', { employeeId, epost: employee.epost });
       return new Response(
         JSON.stringify({ success: false, error: 'Ansatt mangler e-postadresse i Tripletex.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -150,10 +168,13 @@ Deno.serve(async (req) => {
 
     const { data: existingUser } = await supabaseAdmin.auth.admin.getUserByEmail(normalizedEmail);
 
+    console.log('Existing user check:', { email: normalizedEmail, existingUserId: existingUser?.user?.id });
+
     let authUserId: string | undefined = existingUser?.user?.id;
     let invitationSent = false;
 
     if (!authUserId) {
+      console.log('Creating new user invitation for:', normalizedEmail);
       const { data: invitedUser, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
         normalizedEmail,
         {
@@ -163,6 +184,8 @@ Deno.serve(async (req) => {
           }
         }
       );
+
+      console.log('Invitation result:', { invitedUserId: invitedUser?.user?.id, error: inviteError?.message });
 
       if (inviteError) {
         console.error('Feil ved utsendelse av invitasjon', inviteError);
@@ -222,6 +245,13 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
+
+    console.log('Success - user created/updated:', { 
+      invitationSent, 
+      personId: upsertedPerson.id, 
+      userId: authUserId,
+      email: normalizedEmail 
+    });
 
     return new Response(
       JSON.stringify({
