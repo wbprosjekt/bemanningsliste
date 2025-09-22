@@ -108,6 +108,22 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const loadActivities = useCallback(async () => {
     try {
       console.log('Loading activities for orgId:', orgId);
+      
+      // First, let's check what data exists in the table
+      const { data: allData, error: allError } = await supabase
+        .from('ttx_activity_cache')
+        .select('id, navn, aktiv, org_id')
+        .eq('org_id', orgId);
+      
+      console.log('All activities for org:', allData);
+      console.log('All activities error:', allError);
+      
+      if (allError) {
+        console.error('Supabase error loading all activities:', allError);
+        throw allError;
+      }
+      
+      // Now try the filtered query
       const { data, error } = await supabase
         .from('ttx_activity_cache')
         .select('id, navn')
@@ -115,20 +131,43 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         .eq('aktiv', true)
         .order('navn');
 
+      console.log('Filtered activities (aktiv=true):', data);
+      console.log('Filtered activities error:', error);
+
       if (error) {
         console.error('Supabase error loading activities:', error);
         throw error;
       }
       
-      console.log('Loaded activities:', data);
+      // If no active activities found, try without the aktiv filter
+      if (!data || data.length === 0) {
+        console.log('No active activities found, trying without aktiv filter...');
+        const { data: allActiveData, error: allActiveError } = await supabase
+          .from('ttx_activity_cache')
+          .select('id, navn')
+          .eq('org_id', orgId)
+          .order('navn');
+        
+        console.log('All activities without aktiv filter:', allActiveData);
+        
+        if (!allActiveError && allActiveData && allActiveData.length > 0) {
+          console.log('Found activities without aktiv filter, using them');
+          setActivities(allActiveData);
+          return;
+        }
+      }
+      
       setActivities(data || []);
       
       if (!data || data.length === 0) {
+        console.log('No activities found for orgId:', orgId);
         toast({
           title: "Ingen aktiviteter funnet",
           description: "Det er ingen aktive aktiviteter konfigurert for denne organisasjonen.",
           variant: "destructive"
         });
+      } else {
+        console.log(`Successfully loaded ${data.length} activities`);
       }
     } catch (error) {
       console.error('Error loading activities:', error);
