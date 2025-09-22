@@ -60,41 +60,6 @@ const TripletexIntegration = () => {
     }
   }, [user, toast]);
 
-  const loadIntegrationSettings = useCallback(async () => {
-    if (!profile?.org_id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('integration_settings')
-        .select('*')
-        .eq('org_id', profile.org_id)
-        .eq('integration_type', 'tripletex')
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      
-      setIntegrationSettings(data);
-      if (data?.settings && typeof data.settings === 'object' && 'nightly_sync' in data.settings) {
-        setNightlySync(data.settings.nightly_sync as boolean);
-      }
-      
-      // Load existing tokens if they exist
-      if (data?.settings) {
-        const settings = data.settings as any;
-        setTokenForm({
-          consumerToken: settings.consumer_token || '',
-          employeeToken: settings.employee_token || '',
-          apiBaseUrl: settings.api_base_url || 'https://api-test.tripletex.tech/v2'
-        });
-      }
-      
-      // Refresh token config when integration settings change
-      checkTokenConfig();
-    } catch (error) {
-      console.error('Error loading integration settings:', error);
-    }
-  }, [profile?.org_id, checkTokenConfig]);
-
   const callTripletexAPI = useCallback(async (action: string, additionalParams?: any) => {
     if (!profile?.org_id) return null;
 
@@ -225,6 +190,41 @@ const TripletexIntegration = () => {
       console.error('Error checking token config:', error);
     }
   }, [profile?.org_id, callTripletexAPI]);
+
+  const loadIntegrationSettings = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('integration_settings')
+        .select('*')
+        .eq('org_id', profile.org_id)
+        .eq('integration_type', 'tripletex')
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      setIntegrationSettings(data);
+      if (data?.settings && typeof data.settings === 'object' && 'nightly_sync' in data.settings) {
+        setNightlySync(data.settings.nightly_sync as boolean);
+      }
+      
+      // Load existing tokens if they exist
+      if (data?.settings) {
+        const settings = data.settings as any;
+        setTokenForm({
+          consumerToken: settings.consumer_token || '',
+          employeeToken: settings.employee_token || '',
+          apiBaseUrl: settings.api_base_url || 'https://api-test.tripletex.tech/v2'
+        });
+      }
+      
+      // Refresh token config when integration settings change
+      checkTokenConfig();
+    } catch (error) {
+      console.error('Error loading integration settings:', error);
+    }
+  }, [profile?.org_id, checkTokenConfig]);
 
   useEffect(() => {
     if (user) {

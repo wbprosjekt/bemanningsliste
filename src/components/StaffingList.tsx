@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -247,8 +247,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     return weeks;
   };
 
-  const multiWeekData = getMultipleWeeksData();
-  const allDates = multiWeekData.flatMap(w => w.dates).filter(d => d instanceof Date && !isNaN(d.getTime()));
+  // Memoize multiWeekData to prevent infinite loops
+  const multiWeekData = useMemo(() => getMultipleWeeksData(), [safeStartWeek, safeStartYear, weeksToShow]);
+  
+  // Memoize allDates to prevent infinite loops
+  const allDates = useMemo(() => {
+    return multiWeekData.flatMap(w => w.dates).filter(d => d instanceof Date && !isNaN(d.getTime()));
+  }, [multiWeekData]);
 
   // Safe access to last week data with fallback
   const lastWeekData = multiWeekData.length > 0 ? multiWeekData[multiWeekData.length - 1] : null;

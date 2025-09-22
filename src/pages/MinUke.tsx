@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -178,7 +178,8 @@ const MinUke = () => {
     );
   }
 
-  const weekDays = getWeekDays();
+  // Memoize weekDays to prevent infinite loops
+  const weekDays = useMemo(() => getWeekDays(), [currentYear, currentWeek]);
   const missingPersonRecord = !person;
 
   return (
