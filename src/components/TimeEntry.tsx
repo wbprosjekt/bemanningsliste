@@ -65,10 +65,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
     setStatus(existingEntry?.status || 'utkast');
   }, [existingEntry, defaultTimer]);
 
-  useEffect(() => {
-    loadActivities();
-    loadExistingOvertime();
-  }, [orgId, existingEntry, vaktId, loadActivities, loadExistingOvertime]);
 
   const loadExistingOvertime = useCallback(async () => {
     try {
@@ -114,6 +110,11 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
       console.error('Error loading activities:', error);
     }
   }, [orgId]);
+
+  useEffect(() => {
+    loadActivities();
+    loadExistingOvertime();
+  }, [loadActivities, loadExistingOvertime]);
 
   const adjustHours = (delta: number) => {
     const newHours = Math.max(0, Math.min(8, hours + delta));
