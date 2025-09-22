@@ -513,7 +513,11 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                         key={selectedTimer?.id ?? 'new'}
                         vaktId={vakt.id}
                         orgId={orgId}
-                        onSave={loadDayData}
+                        onSave={() => {
+                          loadDayData();
+                          setActiveVaktId(null);
+                          setSelectedTimer(null);
+                        }}
                         defaultTimer={vakt.person?.forventet_dagstimer || 8.0}
                         existingEntry={selectedTimer || undefined}
                       />
