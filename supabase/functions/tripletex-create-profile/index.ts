@@ -210,12 +210,33 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: existingUser } = await supabaseAdmin.auth.admin.getUserByEmail(normalizedEmail);
+    // Check if user already exists using listUsers
+    const { data: usersList, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1,
+      email: normalizedEmail
+    });
 
-    console.log('Existing user check:', { email: normalizedEmail, existingUserId: existingUser?.user?.id });
+    console.log('Existing user check:', { 
+      email: normalizedEmail, 
+      usersFound: usersList?.users?.length || 0,
+      error: listUsersError?.message 
+    });
 
-    let authUserId: string | undefined = existingUser?.user?.id;
+    if (listUsersError) {
+      console.error('❌ RETURN 500: Feil ved oppslag av eksisterende bruker', listUsersError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Kunne ikke sjekke om bruker allerede eksisterer.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    const existingUser = usersList?.users?.[0];
+
+    let authUserId: string | undefined = existingUser?.id;
     let invitationSent = false;
+
+    console.log('User ID from listUsers:', { existingUserId: authUserId });
 
     if (!authUserId) {
       console.log('Creating new user invitation for:', normalizedEmail);
