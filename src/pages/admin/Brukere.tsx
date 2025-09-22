@@ -101,7 +101,7 @@ const AdminBrukere = () => {
   const loadUsers = useCallback(async () => {
     if (!profile?.org_id) return;
 
-    console.log('Loading users for org:', profile.org_id);
+    console.log('🔄 loadUsers called for org:', profile.org_id);
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -116,7 +116,11 @@ const AdminBrukere = () => {
         .eq('org_id', profile.org_id)
         .order('created_at', { ascending: false });
 
-      console.log('Profiles query result:', { data, error });
+      console.log('📊 Profiles query result:', { 
+        data: data?.length || 0, 
+        error: error?.message,
+        rawData: data 
+      });
 
       if (error) throw error;
 
@@ -128,10 +132,10 @@ const AdminBrukere = () => {
         person: null // We'll handle person linking separately if needed
       }));
 
-      console.log('Processed users:', usersWithEmails);
+      console.log('👥 Processed users:', usersWithEmails.length, 'users');
       setUsers(usersWithEmails);
     } catch (error) {
-      console.error('Error loading users:', error);
+      console.error('❌ Error loading users:', error);
       toast({
         title: "Feil ved lasting av brukere",
         description: "Kunne ikke laste brukerliste.",
