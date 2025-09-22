@@ -223,6 +223,43 @@ const AdminBrukere = () => {
     }
   };
 
+  // Test function to check if user exists in Supabase Auth
+  const testCheckUser = async () => {
+    try {
+      console.log('🧪 Testing user lookup for abc@abc.no...');
+      
+      // This would require service role, but let's test the edge function logic
+      const { data, error } = await supabase.functions.invoke('tripletex-create-profile', {
+        body: {
+          orgId: profile?.org_id,
+          employeeId: 'ed8af632-58e1-46a0-a1a9-dd7e26898614' // The abc@abc.no employee
+        }
+      });
+
+      console.log('🧪 Edge function test result:', { data, error });
+      
+      if (error) {
+        toast({
+          title: "Test feilet",
+          description: error.message || 'Ukjent feil',
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Test vellykket",
+          description: `Resultat: ${data?.success ? 'Success' : 'Failed'}`,
+        });
+      }
+    } catch (error) {
+      console.error('❌ Test error:', error);
+      toast({
+        title: "Test feilet",
+        description: "En uventet feil oppstod",
+        variant: "destructive"
+      });
+    }
+  };
+
   useEffect(() => {
     if (user) {
       loadUserProfile();
@@ -384,6 +421,9 @@ const AdminBrukere = () => {
             </Button>
             <Button onClick={testCreateProfile} variant="outline" size="sm">
               🧪 Test Profil
+            </Button>
+            <Button onClick={testCheckUser} variant="outline" size="sm">
+              🔍 Test Edge
             </Button>
             <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
               <DialogTrigger asChild>
