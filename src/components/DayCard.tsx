@@ -9,7 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, getPersonDisplayName } from '@/lib/displayNames';
 import TimeEntry from './TimeEntry';
-import ProjectRequestDialog from './ProjectRequestDialog';
+import ProjectSearchDialog from './ProjectSearchDialog';
 import ProjectDetailDialog from './ProjectDetailDialog';
 
 interface DayCardProps {
@@ -63,11 +63,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   const [loading, setLoading] = useState(true);
   const [activeVaktId, setActiveVaktId] = useState<string | null>(null);
   const [selectedTimer, setSelectedTimer] = useState<VaktWithTimer['vakt_timer'][number] | null>(null);
-  const [selectedProject, setSelectedProject] = useState<{
-    project_name: string;
-    project_number: number;
-    tripletex_project_id: number;
-  } | null>(null);
+  const [showProjectDialog, setShowProjectDialog] = useState(false);
   const { toast } = useToast();
 
 
@@ -529,11 +525,22 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
             <div className="text-xs sm:text-sm text-muted-foreground text-center py-2 sm:py-4">
               Ingen arbeidsoppdrag planlagt
             </div>
-            <ProjectRequestDialog
-              date={date}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+              onClick={() => setShowProjectDialog(true)}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Finn prosjekt
+            </Button>
+            <ProjectSearchDialog
+              open={showProjectDialog}
+              onClose={() => setShowProjectDialog(false)}
+              date={date.toISOString().split('T')[0]}
               orgId={orgId}
               personId={personId}
-              onRequestSent={loadDayData}
+              onProjectAssigned={loadDayData}
             />
           </div>
         )}

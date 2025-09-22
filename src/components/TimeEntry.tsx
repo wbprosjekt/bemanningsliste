@@ -30,7 +30,7 @@ interface Activity {
   navn: string;
 }
 
-const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }: TimeEntryProps) => {
+const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }: TimeEntryProps) => {
   const [hours, setHours] = useState(Math.floor(existingEntry?.timer || defaultTimer));
   const [minutes, setMinutes] = useState(Math.round(((existingEntry?.timer || defaultTimer) % 1) * 60));
   const [aktivitetId, setAktivitetId] = useState(existingEntry?.aktivitet_id || '');
@@ -54,16 +54,26 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   const totalOvertimeTimer = overtime100Timer + overtime50Timer;
 
   useEffect(() => {
-    const baseTimer = existingEntry?.timer ?? defaultTimer;
-    const baseHours = Math.floor(baseTimer);
-    const baseMinutes = Math.round((baseTimer % 1) * 60);
+    // Only update state when existingEntry actually changes, not on every render
+    if (existingEntry) {
+      const baseTimer = existingEntry.timer ?? defaultTimer;
+      const baseHours = Math.floor(baseTimer);
+      const baseMinutes = Math.round((baseTimer % 1) * 60);
 
-    setHours(Math.max(0, Math.min(8, baseHours)));
-    setMinutes(Math.max(0, Math.min(45, Math.round(baseMinutes / 15) * 15)));
-    setAktivitetId(existingEntry?.aktivitet_id || '');
-    setNotat(existingEntry?.notat || '');
-    setStatus(existingEntry?.status || 'utkast');
-  }, [existingEntry, defaultTimer]);
+      setHours(Math.max(0, Math.min(8, baseHours)));
+      setMinutes(Math.max(0, Math.min(45, Math.round(baseMinutes / 15) * 15)));
+      setAktivitetId(existingEntry.aktivitet_id || '');
+      setNotat(existingEntry.notat || '');
+      setStatus(existingEntry.status || 'utkast');
+    } else {
+      // For new entries, reset to default values
+      setHours(Math.floor(defaultTimer));
+      setMinutes(Math.round((defaultTimer % 1) * 60));
+      setAktivitetId('');
+      setNotat('');
+      setStatus('utkast');
+    }
+  }, [existingEntry?.id, defaultTimer, existingEntry]); // Include existingEntry for exhaustive deps
 
 
   const loadExistingOvertime = useCallback(async () => {
@@ -97,6 +107,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
 
   const loadActivities = useCallback(async () => {
     try {
+      console.log('Loading activities for orgId:', orgId);
       const { data, error } = await supabase
         .from('ttx_activity_cache')
         .select('id, navn')
@@ -104,12 +115,30 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
         .eq('aktiv', true)
         .order('navn');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error loading activities:', error);
+        throw error;
+      }
+      
+      console.log('Loaded activities:', data);
       setActivities(data || []);
+      
+      if (!data || data.length === 0) {
+        toast({
+          title: "Ingen aktiviteter funnet",
+          description: "Det er ingen aktive aktiviteter konfigurert for denne organisasjonen.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error('Error loading activities:', error);
+      toast({
+        title: "Feil ved lasting av aktiviteter",
+        description: error instanceof Error ? error.message : "Kunne ikke laste aktiviteter.",
+        variant: "destructive"
+      });
     }
-  }, [orgId]);
+  }, [orgId, toast]);
 
   useEffect(() => {
     loadActivities();
@@ -159,10 +188,32 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   };
 
   const handleSave = async (nextStatus: 'utkast' | 'sendt' | 'godkjent' = status) => {
+    console.log('handleSave called with:', { aktivitetId, timer, nextStatus, activities: activities.length });
+    
     if (!aktivitetId) {
       toast({
         title: "Aktivitet påkrevd",
         description: "Du må velge en aktivitet før du kan lagre.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (activities.length === 0) {
+      toast({
+        title: "Ingen aktiviteter tilgjengelig",
+        description: "Det er ingen aktive aktiviteter konfigurert. Kontakt administrator.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Verify the selected activity exists
+    const selectedActivity = activities.find(a => a.id === aktivitetId);
+    if (!selectedActivity) {
+      toast({
+        title: "Ugyldig aktivitet",
+        description: "Den valgte aktiviteten eksisterer ikke lenger.",
         variant: "destructive"
       });
       return;
@@ -373,18 +424,36 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
 
         <div className="space-y-2">
           <Label htmlFor="aktivitet">Aktivitet *</Label>
-          <Select value={aktivitetId} onValueChange={setAktivitetId}>
+          <Select 
+            value={aktivitetId} 
+            onValueChange={(value) => {
+              console.log('Activity selected:', value);
+              setAktivitetId(value);
+            }}
+            disabled={activities.length === 0}
+          >
             <SelectTrigger>
-              <SelectValue placeholder="Velg aktivitet" />
+              <SelectValue placeholder={activities.length === 0 ? "Ingen aktiviteter tilgjengelig" : "Velg aktivitet"} />
             </SelectTrigger>
             <SelectContent className="bg-background border z-50">
-              {activities.map((activity) => (
-                <SelectItem key={activity.id} value={activity.id}>
-                  {activity.navn}
+              {activities.length === 0 ? (
+                <SelectItem value="" disabled>
+                  Ingen aktiviteter tilgjengelig
                 </SelectItem>
-              ))}
+              ) : (
+                activities.map((activity) => (
+                  <SelectItem key={activity.id} value={activity.id}>
+                    {activity.navn}
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
+          {activities.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Kontakt administrator for å få aktiviteter konfigurert.
+            </p>
+          )}
         </div>
 
         {/* Overtime Section */}
