@@ -198,11 +198,12 @@ const AdminBrukere = () => {
         .insert(testProfile);
 
       console.log('🧪 Manual profile creation result:', { data, error });
+      console.log('🧪 Detailed error:', JSON.stringify(error, null, 2));
       
       if (error) {
         toast({
           title: "Test feilet",
-          description: error.message,
+          description: error.message || 'Ukjent feil',
           variant: "destructive"
         });
       } else {
