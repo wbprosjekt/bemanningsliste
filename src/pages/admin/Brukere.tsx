@@ -68,6 +68,7 @@ const AdminBrukere = () => {
   const loadUserProfile = useCallback(async () => {
     if (!user) return;
 
+    console.log('🔍 Loading profile for user:', user.id);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -75,13 +76,26 @@ const AdminBrukere = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
+      console.log('👤 Profile query result:', { 
+        data: data ? 'Found profile' : 'No profile found', 
+        error: error?.message,
+        userEmail: user.email 
+      });
+
       if (error && error.code !== 'PGRST116') throw error;
       
       if (!data) {
+        console.log('❌ No profile found, showing onboarding');
         setShowOnboarding(true);
         return;
       }
       
+      console.log('✅ Profile found:', { 
+        profileId: data.id, 
+        orgId: data.org_id, 
+        role: data.role,
+        orgName: data.org?.name 
+      });
       setProfile(data);
 
       if (!data) {
@@ -93,7 +107,7 @@ const AdminBrukere = () => {
         setShowOnboarding(true);
       }
     } catch (error) {
-      console.error('Error loading profile:', error);
+      console.error('❌ Error loading profile:', error);
       setShowOnboarding(true);
     }
   }, [user, toast]);
@@ -104,6 +118,26 @@ const AdminBrukere = () => {
     console.log('🔄 loadUsers called for org:', profile.org_id);
     setLoading(true);
     try {
+      // First, let's check ALL profiles in the database (without org filter)
+      const { data: allProfiles, error: allError } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          user_id,
+          display_name,
+          role,
+          org_id,
+          created_at
+        `)
+        .order('created_at', { ascending: false });
+
+      console.log('🌍 ALL profiles in database:', { 
+        count: allProfiles?.length || 0, 
+        error: allError?.message,
+        profiles: allProfiles 
+      });
+
+      // Now get profiles for current org
       const { data, error } = await supabase
         .from('profiles')
         .select(`
@@ -116,7 +150,8 @@ const AdminBrukere = () => {
         .eq('org_id', profile.org_id)
         .order('created_at', { ascending: false });
 
-      console.log('📊 Profiles query result:', { 
+      console.log('📊 Profiles query result for org:', { 
+        orgId: profile.org_id,
         data: data?.length || 0, 
         error: error?.message,
         rawData: data 
