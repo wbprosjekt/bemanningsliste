@@ -52,17 +52,6 @@ const AdminUnderleverandorer = () => {
   const [formData, setFormData] = useState({
     navn: '',
     kontaktperson: '',
-    epost: '',
-    telefon: '',
-    adresse: '',
-    organisasjonsnummer: '',
-    timepris: '',
-    notater: ''
-  });
-
-  useEffect(() => {
-    if (user) {
-      loadUserProfile();
     }
   }, [user, loadUserProfile]);
 
@@ -113,6 +102,18 @@ const AdminUnderleverandorer = () => {
       setLoading(false);
     }
   }, [profile?.org_id, toast]);
+
+  useEffect(() => {
+    if (user) {
+      loadUserProfile();
+    }
+  }, [user, loadUserProfile]);
+
+  useEffect(() => {
+    if (profile) {
+      loadUnderleverandorer();
+    }
+  }, [profile, loadUnderleverandorer]);
 
   const resetForm = () => {
     setFormData({

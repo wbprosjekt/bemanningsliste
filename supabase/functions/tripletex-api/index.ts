@@ -393,7 +393,7 @@ Deno.serve(async (req) => {
     let result: TripletexResponse;
 
     switch (action) {
-      case 'check-config':
+      case 'check-config': {
         const checkConfig = await getTripletexConfig(orgId);
         result = {
           success: true,
@@ -404,6 +404,7 @@ Deno.serve(async (req) => {
           }
         };
         break;
+      }
 
       case 'test-session':
         try {
@@ -626,7 +627,7 @@ Deno.serve(async (req) => {
         }
         break;
 
-      case 'export-timesheet':
+      case 'export-timesheet': {
         const timesheetEntries = payload?.timesheetEntries;
         const dryRun = payload?.dryRun === true;
 
@@ -725,8 +726,9 @@ Deno.serve(async (req) => {
 
         result = { success: true, data: { results: exportResults } };
         break;
+      }
 
-      case 'verify-timesheet-entry':
+      case 'verify-timesheet-entry': {
         const tripletexEntryId = payload?.tripletexEntryId;
 
         if (!tripletexEntryId) {
@@ -745,6 +747,7 @@ Deno.serve(async (req) => {
           }
         };
         break;
+      }
 
       case 'send_timesheet_entry':
         const { vakt_timer_id, employee_id, project_id, activity_id, hours, date, is_overtime, description } = payload;

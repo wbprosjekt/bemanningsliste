@@ -52,17 +52,6 @@ interface TimerEntry {
 }
 
 const AdminTimer = () => {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [profile, setProfile] = useState<any>(null);
-  const [timerEntries, setTimerEntries] = useState<TimerEntry[]>([]);
-  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<{ [key: string]: boolean }>({});
-  const [filters, setFilters] = useState({
-    search: '',
-    status: 'all',
-    dateFrom: '',
     dateTo: ''
   });
   const [dryRunMode, setDryRunMode] = useState(false);
@@ -173,6 +162,18 @@ const AdminTimer = () => {
       setLoading(false);
     }
   }, [profile?.org_id, filters, toast]);
+
+  useEffect(() => {
+    if (user) {
+      loadUserProfile();
+    }
+  }, [user, loadUserProfile]);
+
+  useEffect(() => {
+    if (profile) {
+      loadTimerEntries();
+    }
+  }, [profile, filters, loadTimerEntries]);
 
   const toggleEntrySelection = (entryId: string) => {
     const newSelection = new Set(selectedEntries);

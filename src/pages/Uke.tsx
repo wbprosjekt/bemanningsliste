@@ -71,17 +71,6 @@ const Uke = () => {
   const currentYear = parseInt(year || new Date().getFullYear().toString());
   const currentWeek = parseInt(week || getWeekNumber(new Date()).toString());
 
-  useEffect(() => {
-    if (user) {
-      loadUserProfile();
-    }
-  }, [user, loadUserProfile]);
-
-  useEffect(() => {
-    if (profile) {
-      loadWeekData();
-    }
-  }, [profile, currentYear, currentWeek, loadWeekData]);
 
   const loadUserProfile = useCallback(async () => {
     if (!user) return;
@@ -176,6 +165,18 @@ const Uke = () => {
       setLoading(false);
     }
   }, [profile?.org_id, currentYear, currentWeek, toast]);
+
+  useEffect(() => {
+    if (user) {
+      loadUserProfile();
+    }
+  }, [user, loadUserProfile]);
+
+  useEffect(() => {
+    if (profile) {
+      loadWeekData();
+    }
+  }, [profile, currentYear, currentWeek, loadWeekData]);
 
   const navigateWeek = (delta: number) => {
     let newYear = currentYear;

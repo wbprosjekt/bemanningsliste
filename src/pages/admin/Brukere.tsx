@@ -57,17 +57,6 @@ const AdminBrukere = () => {
   });
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadUserProfile();
-    }
-  }, [user, loadUserProfile]);
-
-  useEffect(() => {
-    if (profile) {
-      loadUsers();
-    }
-  }, [profile, loadUsers]);
 
   const loadUserProfile = useCallback(async () => {
     if (!user) return;
@@ -141,6 +130,18 @@ const AdminBrukere = () => {
       setLoading(false);
     }
   }, [profile?.org_id, toast]);
+
+  useEffect(() => {
+    if (user) {
+      loadUserProfile();
+    }
+  }, [user, loadUserProfile]);
+
+  useEffect(() => {
+    if (profile) {
+      loadUsers();
+    }
+  }, [profile, loadUsers]);
 
   const handleInviteUser = async () => {
     if (!profile?.org_id) return;
