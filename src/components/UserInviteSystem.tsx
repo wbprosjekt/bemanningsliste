@@ -121,10 +121,10 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
       }
 
       toast({
-        title: data.invitationSent ? "Invitasjon sendt" : "Bruker oppdatert",
+        title: data.invitationSent ? "Invitasjon sendt" : "Bruker opprettet/oppdatert",
         description: data.invitationSent
-          ? `En invitasjon er sendt til ${employee.epost}.`
-          : `${employee.fornavn} ${employee.etternavn} er allerede klar til innlogging.`
+          ? `En invitasjon er sendt til ${employee.epost}. Brukeren har fått 'bruker'-rolle og kan logge inn.`
+          : `${employee.fornavn} ${employee.etternavn} er opprettet/oppdatert med 'bruker'-rolle.`
       });
 
       await loadTripletexEmployees();
