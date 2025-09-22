@@ -6,7 +6,8 @@ export const getPersonDisplayName = (fornavn: string, etternavn: string): string
   return `${fornavn} ${etternavnInitial}`;
 };
 
-export const formatTimeValue = (timer: number): string => {
+export const formatTimeValue = (timer?: number): string => {
+  if (typeof timer !== 'number' || Number.isNaN(timer)) return '0,00';
   return timer.toFixed(2).replace('.', ',');
 };
 

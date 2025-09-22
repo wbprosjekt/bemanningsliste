@@ -356,28 +356,48 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           const existingVakt = vaktMap.get(vaktKey);
           
           if (existingVakt) {
-            // Use existing vakt data
+            // Use existing vakt data and transform vaktTimer to activities
+            const activities = (existingVakt.vakt_timer || []).map((timer: VaktTimer) => ({
+              id: timer.id,
+              timer: timer.timer ?? 0,
+              status: timer.status,
+              activity_name: timer.ttx_activity_cache?.navn || 'Ukjent aktivitet',
+              lonnstype: timer.lonnstype,
+              notat: timer.notat,
+              is_overtime: timer.is_overtime,
+              approved_at: timer.approved_at,
+              approved_by: timer.approved_by,
+              tripletex_synced_at: timer.tripletex_synced_at,
+              tripletex_entry_id: timer.tripletex_entry_id,
+              sync_error: timer.sync_error,
+              aktivitet_id: timer.aktivitet_id,
+              ttx_activity_id: timer.ttx_activity_cache?.id
+            }));
+            
+            // Calculate total hours from activities
+            const totalHours = activities.reduce((sum, activity) => sum + (activity.timer ?? 0), 0);
+            
             entries.push({
               id: existingVakt.id,
               date: dateKey,
-              personId: employee.id,
               person: existingVakt.person,
-              projectId: existingVakt.project_id,
               project: existingVakt.ttx_project_cache,
-              vaktTimer: existingVakt.vakt_timer || [],
-              isNew: false
+              activities: activities,
+              totalHours: totalHours,
+              status: activities.length > 0 ? 
+                (activities.every(a => a.status === 'godkjent') ? 'approved' : 'draft') : 
+                'missing'
             });
           } else {
             // Create new entry
             entries.push({
               id: `new-${employee.id}-${dateKey}`,
               date: dateKey,
-              personId: employee.id,
               person: employee,
-              projectId: null,
               project: null,
-              vaktTimer: [],
-              isNew: true
+              activities: [],
+              totalHours: 0,
+              status: 'missing'
             });
           }
         });
