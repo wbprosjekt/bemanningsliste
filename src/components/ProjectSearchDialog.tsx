@@ -40,6 +40,67 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
   const [projectColors, setProjectColors] = useState<{ [key: number]: string }>({});
   const { toast } = useToast();
 
+  const loadProjects = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('ttx_project_cache')
+        .select('*')
+        .eq('org_id', orgId)
+        .eq('is_active', true)
+        .order('project_name');
+
+      if (error) throw error;
+      setProjects(data || []);
+    } catch (error) {
+      console.error('Error loading projects:', error);
+      toast({
+        title: "Feil ved lasting av prosjekter",
+        description: "Kunne ikke laste prosjektliste.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId, toast]);
+
+  const loadPerson = useCallback(async () => {
+    if (!personId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('person')
+        .select('*')
+        .eq('id', personId)
+        .single();
+
+      if (error) throw error;
+      setPerson(data);
+    } catch (error) {
+      console.error('Error loading person:', error);
+    }
+  }, [personId]);
+
+  const loadProjectColors = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('project_colors')
+        .select('*')
+        .eq('org_id', orgId);
+
+      if (error) throw error;
+      
+      const colorsMap: { [key: number]: string } = {};
+      data?.forEach((color: any) => {
+        colorsMap[color.tripletex_project_id] = color.hex;
+      });
+      
+      setProjectColors(colorsMap);
+    } catch (error) {
+      console.error('Error loading project colors:', error);
+    }
+  }, [orgId]);
+
   useEffect(() => {
     if (open) {
       loadProjects();
@@ -62,65 +123,6 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
     }
   }, [searchTerm, projects]);
 
-  const loadProjects = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('ttx_project_cache')
-        .select('*')
-        .eq('org_id', orgId)
-        .eq('is_active', true)
-        .order('project_name');
-
-      if (error) throw error;
-      setProjects(data || []);
-      setFilteredProjects(data || []);
-    } catch (error) {
-      console.error('Error loading projects:', error);
-      toast({
-        title: "Feil ved lasting av prosjekter",
-        description: "Kunne ikke laste prosjektliste",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, toast]);
-
-  const loadPerson = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('person')
-        .select('*')
-        .eq('id', personId)
-        .single();
-
-      if (error) throw error;
-      setPerson(data);
-    } catch (error) {
-      console.error('Error loading person:', error);
-    }
-  }, [personId]);
-
-  const loadProjectColors = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('project_color')
-        .select('tripletex_project_id, hex')
-        .eq('org_id', orgId);
-
-      if (error) throw error;
-      
-      const colorsMap = data?.reduce((acc, item) => {
-        acc[item.tripletex_project_id] = item.hex;
-        return acc;
-      }, {} as { [key: number]: string }) || {};
-      
-      setProjectColors(colorsMap);
-    } catch (error) {
-      console.error('Error loading project colors:', error);
-    }
-  }, [orgId]);
 
   const assignProject = async (project: Project) => {
     try {
