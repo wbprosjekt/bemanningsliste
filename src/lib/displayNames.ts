@@ -24,7 +24,14 @@ export const getWeekNumber = (date: Date): number => {
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  const weekNumber = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  
+  // Handle edge case where week 1 of next year is returned as week 0
+  if (weekNumber === 0) {
+    return 53;
+  }
+  
+  return weekNumber;
 };
 
 export const getDateFromWeek = (year: number, week: number): Date => {

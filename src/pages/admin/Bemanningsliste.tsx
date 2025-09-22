@@ -9,7 +9,11 @@ const Bemanningsliste = () => {
   const { year, week } = useParams<{ year: string; week: string }>();
   const navigate = useNavigate();
   
-  const getWeeksInYear = (targetYear: number) => getWeekNumber(new Date(targetYear, 11, 31));
+  const getWeeksInYear = (targetYear: number) => {
+    // Use ISO week calculation to get the correct number of weeks
+    const dec28 = new Date(targetYear, 11, 28); // December 28th is always in the last week
+    return getWeekNumber(dec28);
+  };
 
   const now = new Date();
   const defaultYear = now.getFullYear();
@@ -20,13 +24,15 @@ const Bemanningsliste = () => {
   const weeksInCurrentYear = getWeeksInYear(currentYear);
   const currentWeek = Number.isNaN(parsedWeek) ? defaultWeek : Math.max(1, Math.min(weeksInCurrentYear, parsedWeek));
 
-  // Redirect away from invalid URL params like NaN/NaN
+  // Redirect to current week if no URL params or invalid params
   useEffect(() => {
     const invalid = Number.isNaN(parsedYear) || Number.isNaN(parsedWeek);
-    if (invalid) {
+    const noParams = !year || !week;
+    
+    if (invalid || noParams) {
       navigate(`/admin/bemanningsliste/${currentYear}/${String(currentWeek).padStart(2,'0')}`, { replace: true });
     }
-  }, [parsedYear, parsedWeek, navigate, currentYear, currentWeek]);
+  }, [parsedYear, parsedWeek, navigate, currentYear, currentWeek, year, week]);
 
   const navigateWeeks = (delta: number) => {
     let newYear = currentYear;

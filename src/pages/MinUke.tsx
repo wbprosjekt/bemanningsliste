@@ -41,8 +41,9 @@ const MinUke = () => {
   const currentWeek = parseInt(week || getWeekNumber(new Date()).toString());
 
   const getWeeksInYear = (targetYear: number) => {
-    // ISO week-date years can have 52 or 53 weeks. Week number of Dec 31 gives us the count.
-    return getWeekNumber(new Date(targetYear, 11, 31));
+    // Use ISO week calculation to get the correct number of weeks
+    const dec28 = new Date(targetYear, 11, 28); // December 28th is always in the last week
+    return getWeekNumber(dec28);
   };
 
   const loadUserData = useCallback(async () => {
