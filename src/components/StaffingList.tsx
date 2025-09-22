@@ -254,23 +254,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const lastWeekData = multiWeekData.length > 0 ? multiWeekData[multiWeekData.length - 1] : null;
   const safeLastWeek = coerceWeekRef(lastWeekData);
 
-  useEffect(() => {
-    if (user) {
-      loadUserProfile();
-    }
-  }, [user, loadUserProfile]);
-
-  useEffect(() => {
-    if (profile) {
-      loadStaffingData();
-      loadProjects();
-      loadActivities();
-      loadEmployees();
-      loadProjectColors();
-      loadCalendarDays();
-    }
-  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjects, loadActivities, loadEmployees, loadProjectColors, loadCalendarDays]);
-
   const loadUserProfile = useCallback(async () => {
     if (!user) return;
 
@@ -287,6 +270,23 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       console.error('Error loading profile:', error);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadUserProfile();
+    }
+  }, [user, loadUserProfile]);
+
+  useEffect(() => {
+    if (profile) {
+      loadStaffingData();
+      loadProjects();
+      loadActivities();
+      loadEmployees();
+      loadProjectColors();
+      loadCalendarDays();
+    }
+  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjects, loadActivities, loadEmployees, loadProjectColors, loadCalendarDays]);
 
   const loadStaffingData = useCallback(async (silent: boolean = false) => {
     if (!profile?.org_id) return;

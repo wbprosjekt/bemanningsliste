@@ -48,12 +48,6 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (open && project) {
-      loadProjectDetails();
-    }
-  }, [open, project, loadProjectDetails]);
-
   const loadProjectDetails = useCallback(async () => {
     setLoading(true);
     try {
@@ -87,6 +81,12 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
       setLoading(false);
     }
   }, [project, orgId, toast]);
+
+  useEffect(() => {
+    if (open && project) {
+      loadProjectDetails();
+    }
+  }, [open, project, loadProjectDetails]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
