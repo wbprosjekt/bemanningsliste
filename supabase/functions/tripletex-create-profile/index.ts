@@ -286,7 +286,7 @@ Deno.serve(async (req) => {
     });
 
     // If user already has a profile in this org, skip further processing
-    if (existingProfileForUser && existingProfileForUser.org_id === orgId) {
+    if (existingProfileForUser) {
       console.log('✅ RETURN 200: User already exists in this organization:', {
         userId: authUserId,
         email: normalizedEmail,
