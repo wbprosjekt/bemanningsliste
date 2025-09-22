@@ -28,19 +28,6 @@ const TripletexIntegration = () => {
     apiBaseUrl: 'https://api-test.tripletex.tech/v2'
   });
 
-  useEffect(() => {
-    if (user) {
-      loadUserProfile();
-    }
-  }, [user, loadUserProfile]);
-
-  // Load integration settings after profile is loaded
-  useEffect(() => {
-    if (profile?.org_id) {
-      loadIntegrationSettings();
-      checkTokenConfig();
-    }
-  }, [profile?.org_id, loadIntegrationSettings, checkTokenConfig]);
 
   const loadUserProfile = useCallback(async () => {
     if (!user) return;
@@ -238,6 +225,20 @@ const TripletexIntegration = () => {
       console.error('Error checking token config:', error);
     }
   }, [profile?.org_id, callTripletexAPI]);
+
+  useEffect(() => {
+    if (user) {
+      loadUserProfile();
+    }
+  }, [user, loadUserProfile]);
+
+  // Load integration settings after profile is loaded
+  useEffect(() => {
+    if (profile?.org_id) {
+      loadIntegrationSettings();
+      checkTokenConfig();
+    }
+  }, [profile?.org_id, loadIntegrationSettings, checkTokenConfig]);
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
