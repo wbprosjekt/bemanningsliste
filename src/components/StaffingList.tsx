@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -75,22 +75,82 @@ interface WeekData {
   dates: Date[];
 }
 
+interface Profile {
+  id: string;
+  user_id: string;
+  org_id: string;
+  org?: {
+    name: string;
+  };
+}
+
+interface Project {
+  id: string;
+  tripletex_project_id: number;
+  project_name: string;
+  project_number: number;
+  color?: string;
+}
+
+interface Activity {
+  id: string;
+  navn: string;
+}
+
+interface Employee {
+  id: string;
+  fornavn: string;
+  etternavn: string;
+  forventet_dagstimer: number;
+  tripletex_employee_id?: number;
+}
+
 interface StaffingListProps {
   startWeek: number;
   startYear: number;
   weeksToShow?: number;
 }
 
+interface TimeEntry {
+  id: string;
+  timer: number;
+  aktivitet_id: string;
+  notat: string;
+  status: string;
+}
+
+interface VaktTimer {
+  id: string;
+  timer: number;
+  status: string;
+  lonnstype: string;
+  notat?: string;
+  is_overtime?: boolean;
+  approved_at?: string;
+  approved_by?: string;
+  tripletex_synced_at?: string;
+  tripletex_entry_id?: number;
+  sync_error?: string;
+  aktivitet_id?: string;
+  ttx_activity_id?: number;
+}
+
+interface CalendarDay {
+  dato: string;
+  is_weekend: boolean;
+  is_holiday: boolean;
+}
+
 const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [staffingData, setStaffingData] = useState<StaffingEntry[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
-  const [activities, setActivities] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [projectColors, setProjectColors] = useState<Record<number, string>>({});
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -103,10 +163,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   } | null>(null);
   const [calendarDays, setCalendarDays] = useState<Record<string, { isWeekend: boolean; isHoliday: boolean }>>({});
   const [sendingToTripletex, setSendingToTripletex] = useState<Set<string>>(new Set());
-  const [editDialog, setEditDialog] = useState<{ vaktId: string; existingEntry?: any } | null>(null);
+  const [editDialog, setEditDialog] = useState<{ vaktId: string; existingEntry?: TimeEntry } | null>(null);
   const [isProcessingUpdate, setIsProcessingUpdate] = useState(false);
 
-  const toDateKey = (d: Date): string => {
+  const toDateKey = useCallback((d: Date): string => {
     try {
       if (!isValidDate(d)) return '';
       return formatDate(d, 'yyyy-MM-dd');
@@ -114,7 +174,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       console.error('Error formatting date:', error, d);
       return '';
     }
-  };
+  }, []);
   
   // Helper to safely access week/year with fallbacks
   const coerceWeekRef = (item?: { week?: number; year?: number } | null): { week: number; year: number } => {
@@ -130,7 +190,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   };
 
   // Coerce incoming props to safe week/year
-  const { week: safeStartWeek, year: safeStartYear } = coerceWeekRef({ week: startWeek as any, year: startYear as any });
+  const { week: safeStartWeek, year: safeStartYear } = coerceWeekRef({ week: startWeek, year: startYear });
 
   // Get multiple weeks of data with robust date handling
   const getMultipleWeeksData = (): WeekData[] => {
@@ -198,7 +258,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     if (user) {
       loadUserProfile();
     }
-  }, [user]);
+  }, [user, loadUserProfile]);
 
   useEffect(() => {
     if (profile) {
@@ -209,9 +269,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       loadProjectColors();
       loadCalendarDays();
     }
-  }, [profile, startWeek, startYear, weeksToShow]);
+  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjects, loadActivities, loadEmployees, loadProjectColors, loadCalendarDays]);
 
-  const loadUserProfile = async () => {
+  const loadUserProfile = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -226,9 +286,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     } catch (error) {
       console.error('Error loading profile:', error);
     }
-  };
+  }, [user]);
 
-  const loadStaffingData = async (silent: boolean = false) => {
+  const loadStaffingData = useCallback(async (silent: boolean = false) => {
     if (!profile?.org_id) return;
 
     if (!silent) setLoading(true);
@@ -310,16 +370,16 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           if (matchingVakts.length > 0) {
             matchingVakts.forEach(existingVakt => {
               // Use existing data
-              const totalHours = existingVakt.vakt_timer.reduce((sum: number, timer: any) => sum + timer.timer, 0);
+              const totalHours = existingVakt.vakt_timer.reduce((sum: number, timer: VaktTimer) => sum + timer.timer, 0);
               
               let status: StaffingEntry['status'] = 'missing';
               if (existingVakt.vakt_timer.length > 0) {
-                const allApproved = existingVakt.vakt_timer.every((t: any) => t.status === 'godkjent');
-                const allSent = existingVakt.vakt_timer.every((t: any) => t.status === 'sendt');
+                const allApproved = existingVakt.vakt_timer.every((t: VaktTimer) => t.status === 'godkjent');
+                const allSent = existingVakt.vakt_timer.every((t: VaktTimer) => t.status === 'sendt');
                 
                 if (allSent) status = 'sent';
                 else if (allApproved) status = 'approved';
-                else if (existingVakt.vakt_timer.some((t: any) => t.status === 'klar')) status = 'ready';
+                else if (existingVakt.vakt_timer.some((t: VaktTimer) => t.status === 'klar')) status = 'ready';
                 else status = 'draft';
               }
 
@@ -340,7 +400,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   project_number: existingVakt.ttx_project_cache.project_number,
                   color: projectColors[existingVakt.ttx_project_cache.tripletex_project_id]
                 } : null,
-                activities: existingVakt.vakt_timer.map((timer: any) => ({
+                activities: existingVakt.vakt_timer.map((timer: VaktTimer) => ({
                   id: timer.id,
                   timer: timer.timer,
                   status: timer.status,
@@ -393,7 +453,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, [profile?.org_id, allDates, toDateKey, projectColors, toast]);
 
   // Optimistic update helpers
   const updateStaffingDataOptimistically = (updateFn: (data: StaffingEntry[]) => StaffingEntry[]) => {
@@ -413,7 +473,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     });
   };
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     if (!profile?.org_id) return;
 
     try {
@@ -429,9 +489,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     } catch (error) {
       console.error('Error loading projects:', error);
     }
-  };
+  }, [profile?.org_id]);
 
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     if (!profile?.org_id) return;
 
     try {
@@ -447,9 +507,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     } catch (error) {
       console.error('Error loading activities:', error);
     }
-  };
+  }, [profile?.org_id]);
 
-  const loadEmployees = async () => {
+  const loadEmployees = useCallback(async () => {
     if (!profile?.org_id) return;
 
     try {
@@ -465,9 +525,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     } catch (error) {
       console.error('Error loading employees:', error);
     }
-  };
+  }, [profile?.org_id]);
 
-  const loadProjectColors = async () => {
+  const loadProjectColors = useCallback(async () => {
     if (!profile?.org_id) return;
 
     try {
@@ -486,9 +546,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     } catch (error) {
       console.error('Error loading project colors:', error);
     }
-  };
+  }, [profile?.org_id]);
 
-  const loadCalendarDays = async () => {
+  const loadCalendarDays = useCallback(async () => {
     try {
       const dateStrings = allDates.map(toDateKey).filter(Boolean);
       if (dateStrings.length === 0) {
@@ -504,14 +564,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       if (error) throw error;
 
       const map: Record<string, { isWeekend: boolean; isHoliday: boolean }> = {};
-      data?.forEach((d: any) => {
+      data?.forEach((d: CalendarDay) => {
         map[d.dato] = { isWeekend: d.is_weekend, isHoliday: d.is_holiday };
       });
       setCalendarDays(map);
     } catch (error) {
       console.error('Error loading calendar days:', error);
     }
-  };
+  }, [allDates, toDateKey]);
   const getProjectColor = (tripletexProjectId?: number) => {
     if (!tripletexProjectId) return '#94a3b8';
     return projectColors[tripletexProjectId] || generateProjectColor(tripletexProjectId);
@@ -557,7 +617,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
-  const handleProjectColorClick = (project: any, e: React.MouseEvent) => {
+  const handleProjectColorClick = (project: Project, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent drag from starting
     setShowColorPicker({
       projectName: project.project_name,
@@ -599,8 +659,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       });
 
       revalidateInBackground();
-    } catch (error: any) {
-      rollbackUpdate(previousData, error.message);
+    } catch (error: unknown) {
+      rollbackUpdate(previousData, error instanceof Error ? error.message : 'En ukjent feil oppstod');
     }
   };
 
@@ -753,8 +813,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       });
 
       revalidateInBackground();
-    } catch (error: any) {
-      rollbackUpdate(previousData, error.message);
+    } catch (error: unknown) {
+      rollbackUpdate(previousData, error instanceof Error ? error.message : 'En ukjent feil oppstod');
     } finally {
       setIsProcessingUpdate(false);
     }
@@ -842,8 +902,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       revalidateInBackground();
       setShowProjectSearch(null);
-    } catch (error: any) {
-      rollbackUpdate(previousData, error.message);
+    } catch (error: unknown) {
+      rollbackUpdate(previousData, error instanceof Error ? error.message : 'En ukjent feil oppstod');
     }
   };
 
@@ -897,7 +957,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         });
 
         if (error) {
-          throw new Error(error.message || 'Failed to send to Tripletex');
+          throw new Error(error instanceof Error ? error.message : 'Failed to send to Tripletex');
         }
 
         if (!data?.success) {
@@ -911,11 +971,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       });
 
       revalidateInBackground(); // Refresh to show updated sync status
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error sending to Tripletex:', error);
       toast({
         title: "Feil ved sending til Tripletex",
-        description: error.message || "Ukjent feil oppstod",
+        description: error instanceof Error ? error.message : "Ukjent feil oppstod",
         variant: "destructive"
       });
     } finally {
@@ -941,7 +1001,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           });
 
           if (error) {
-            throw new Error(error.message || 'Failed to recall from Tripletex');
+            throw new Error(error instanceof Error ? error.message : 'Failed to recall from Tripletex');
           }
 
           if (!data?.success) {
@@ -956,10 +1016,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       });
 
       revalidateInBackground();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Tilbakekalling feilet",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
         variant: "destructive"
       });
     }
@@ -981,7 +1041,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       });
 
       if (error) {
-        throw new Error(error.message || 'Failed to unapprove entries');
+        throw new Error(error instanceof Error ? error.message : 'Failed to unapprove entries');
       }
 
       if (!data?.success) {
@@ -995,10 +1055,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       setSelectedEntries(new Set());
       revalidateInBackground();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Tilbaketrekking feilet", 
-        description: error.message || "Ukjent feil oppstod",
+        description: error instanceof Error ? error.message : "Ukjent feil oppstod",
         variant: "destructive"
       });
     }
@@ -1038,10 +1098,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       setSelectedEntries(new Set());
       revalidateInBackground();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Godkjenning feilet",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
         variant: "destructive"
       });
     }
@@ -1188,7 +1248,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 try {
                                   const copyMod = e.shiftKey || e.altKey || e.metaKey || e.ctrlKey;
                                   e.dataTransfer.dropEffect = copyMod ? 'copy' : 'move';
-                                } catch {}
+                                } catch (error) {
+                                  // Ignore dataTransfer errors in some browsers
+                                  console.debug('DataTransfer error:', error);
+                                }
                                 e.currentTarget.classList.add('bg-blue-50', 'border-blue-300');
                               }}
                               onDragLeave={(e) => {

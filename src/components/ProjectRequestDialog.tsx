@@ -71,10 +71,10 @@ const ProjectRequestDialog = ({ date, orgId, personId, onRequestSent }: ProjectR
       setMessage('');
       setPreferredHours('8');
       onRequestSent?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Feil ved sending",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
         variant: "destructive"
       });
     } finally {

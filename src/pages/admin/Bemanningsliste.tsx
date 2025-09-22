@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -9,13 +9,16 @@ const Bemanningsliste = () => {
   const { year, week } = useParams<{ year: string; week: string }>();
   const navigate = useNavigate();
   
+  const getWeeksInYear = (targetYear: number) => getWeekNumber(new Date(targetYear, 11, 31));
+
   const now = new Date();
   const defaultYear = now.getFullYear();
   const defaultWeek = getWeekNumber(now);
   const parsedYear = parseInt(year ?? '');
   const parsedWeek = parseInt(week ?? '');
   const currentYear = Number.isNaN(parsedYear) ? defaultYear : parsedYear;
-  const currentWeek = Number.isNaN(parsedWeek) ? defaultWeek : Math.max(1, Math.min(53, parsedWeek));
+  const weeksInCurrentYear = getWeeksInYear(currentYear);
+  const currentWeek = Number.isNaN(parsedWeek) ? defaultWeek : Math.max(1, Math.min(weeksInCurrentYear, parsedWeek));
 
   // Redirect away from invalid URL params like NaN/NaN
   useEffect(() => {
@@ -28,17 +31,18 @@ const Bemanningsliste = () => {
   const navigateWeeks = (delta: number) => {
     let newYear = currentYear;
     let newWeek = currentWeek + delta;
+    let weeksInYear = getWeeksInYear(newYear);
 
-    // Handle year transitions properly for ISO weeks
-    if (newWeek > 52) {
-      const lastWeekOfYear = getWeekNumber(new Date(currentYear, 11, 31));
-      if (newWeek > lastWeekOfYear) {
-        newYear++;
-        newWeek = 1;
-      }
-    } else if (newWeek < 1) {
-      newYear--;
-      newWeek = 52;
+    while (newWeek > weeksInYear) {
+      newWeek -= weeksInYear;
+      newYear += 1;
+      weeksInYear = getWeeksInYear(newYear);
+    }
+
+    while (newWeek < 1) {
+      newYear -= 1;
+      weeksInYear = getWeeksInYear(newYear);
+      newWeek += weeksInYear;
     }
 
     navigate(`/admin/bemanningsliste/${newYear}/${newWeek.toString().padStart(2, '0')}`);

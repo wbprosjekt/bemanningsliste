@@ -39,41 +39,45 @@ export const withErrorHandling = <T extends unknown[], R>(
 };
 
 // Specific error handlers for common scenarios
-export const handleSupabaseError = (error: any, operation: string): AppError => {
-  if (error?.code === 'PGRST116') {
+export const handleSupabaseError = (error: unknown, operation: string): AppError => {
+  const errorObj = error as { code?: string; message?: string };
+  
+  if (errorObj?.code === 'PGRST116') {
     return new AppError(`Ingen data funnet for ${operation}`, 'NO_DATA_FOUND');
   }
   
-  if (error?.code === '23505') {
+  if (errorObj?.code === '23505') {
     return new AppError(`Data eksisterer allerede for ${operation}`, 'DUPLICATE_ENTRY');
   }
   
-  if (error?.code === '23503') {
+  if (errorObj?.code === '23503') {
     return new AppError(`Referanse-feil for ${operation}`, 'REFERENCE_ERROR');
   }
   
   return new AppError(
-    error?.message || `Feil ved ${operation}`,
+    errorObj?.message || `Feil ved ${operation}`,
     'SUPABASE_ERROR',
     error
   );
 };
 
-export const handleTripletexError = (error: any, operation: string): AppError => {
-  if (error?.status === 401) {
+export const handleTripletexError = (error: unknown, operation: string): AppError => {
+  const errorObj = error as { status?: number; message?: string };
+  
+  if (errorObj?.status === 401) {
     return new AppError('Ugyldige API-nøkler for Tripletex', 'INVALID_CREDENTIALS');
   }
   
-  if (error?.status === 429) {
+  if (errorObj?.status === 429) {
     return new AppError('For mange forespørsler til Tripletex', 'RATE_LIMITED');
   }
   
-  if (error?.status >= 500) {
+  if (errorObj?.status && errorObj.status >= 500) {
     return new AppError('Tripletex er midlertidig utilgjengelig', 'SERVICE_UNAVAILABLE');
   }
   
   return new AppError(
-    error?.message || `Feil ved ${operation} med Tripletex`,
+    errorObj?.message || `Feil ved ${operation} med Tripletex`,
     'TRIPLETEX_ERROR',
     error
   );

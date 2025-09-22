@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,9 +52,9 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
     if (open && project) {
       loadProjectDetails();
     }
-  }, [open, project]);
+  }, [open, project, loadProjectDetails]);
 
-  const loadProjectDetails = async () => {
+  const loadProjectDetails = useCallback(async () => {
     setLoading(true);
     try {
       // Call Tripletex API through our edge function using Supabase client
@@ -86,7 +86,7 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
     } finally {
       setLoading(false);
     }
-  };
+  }, [project, orgId, toast]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>

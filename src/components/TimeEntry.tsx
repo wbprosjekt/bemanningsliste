@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,13 @@ interface TimeEntryProps {
   orgId: string;
   onSave?: () => void;
   defaultTimer?: number;
-  existingEntry?: any;
+  existingEntry?: {
+    id: string;
+    timer: number;
+    aktivitet_id: string;
+    notat: string;
+    status: string;
+  };
 }
 
 interface Activity {
@@ -48,12 +54,31 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
   const totalOvertimeTimer = overtime100Timer + overtime50Timer;
 
   useEffect(() => {
+    const baseTimer = existingEntry?.timer ?? defaultTimer;
+    const baseHours = Math.floor(baseTimer);
+    const baseMinutes = Math.round((baseTimer % 1) * 60);
+
+    setHours(Math.max(0, Math.min(8, baseHours)));
+    setMinutes(Math.max(0, Math.min(45, Math.round(baseMinutes / 15) * 15)));
+    setAktivitetId(existingEntry?.aktivitet_id || '');
+    setNotat(existingEntry?.notat || '');
+    setStatus(existingEntry?.status || 'utkast');
+  }, [existingEntry, defaultTimer]);
+
+  useEffect(() => {
     loadActivities();
     loadExistingOvertime();
-  }, [orgId, existingEntry]);
+  }, [orgId, existingEntry, vaktId, loadActivities, loadExistingOvertime]);
 
-  const loadExistingOvertime = async () => {
+  const loadExistingOvertime = useCallback(async () => {
     try {
+      // Reset overtime state before loading to avoid stale values when switching entries
+      setOvertime100Hours(0);
+      setOvertime100Minutes(0);
+      setOvertime50Hours(0);
+      setOvertime50Minutes(0);
+      setShowOvertime(false);
+
       // Load existing overtime entries for this vakt
       const { data, error } = await supabase
         .from('vakt_timer')
@@ -62,27 +87,19 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
         .eq('is_overtime', true);
 
       if (error) throw error;
-      
+
       if (data && data.length > 0) {
-        // Load all overtime entries
-        const overtimeEntries = data;
-        
-        if (overtimeEntries.length > 0) {
-          // For now, we'll just show the total overtime
-          // In the future, we could distinguish between 100% and 50% if needed
-          const totalOvertime = overtimeEntries.reduce((sum, entry) => sum + entry.timer, 0);
-          setOvertime100Hours(Math.floor(totalOvertime));
-          setOvertime100Minutes(Math.round((totalOvertime % 1) * 60));
-        }
-        
+        const totalOvertime = data.reduce((sum, entry) => sum + (entry.timer ?? 0), 0);
+        setOvertime100Hours(Math.floor(totalOvertime));
+        setOvertime100Minutes(Math.round((totalOvertime % 1) * 60));
         setShowOvertime(true);
       }
     } catch (error) {
       console.error('Error loading existing overtime:', error);
     }
-  };
+  }, [vaktId]);
 
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('ttx_activity_cache')
@@ -96,7 +113,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
     } catch (error) {
       console.error('Error loading activities:', error);
     }
-  };
+  }, [orgId]);
 
   const adjustHours = (delta: number) => {
     const newHours = Math.max(0, Math.min(8, hours + delta));
@@ -140,7 +157,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
     setMinutes(Math.max(0, Math.min(45, Math.round(newMinutes / 15) * 15)));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (nextStatus: 'utkast' | 'sendt' | 'godkjent' = status) => {
     if (!aktivitetId) {
       toast({
         title: "Aktivitet påkrevd",
@@ -159,7 +176,10 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
       return;
     }
 
-    if (totalOvertimeTimer > 0 && (!validateTimeStep(overtime100Timer) || !validateTimeStep(overtime50Timer))) {
+    if (
+      totalOvertimeTimer > 0 &&
+      (!validateTimeStep(overtime100Timer) || !validateTimeStep(overtime50Timer))
+    ) {
       toast({
         title: "Ugyldig overtidstidsverdi",
         description: "Overtidstimer må være i 0,25-steg (f.eks. 1,25, 2,50, 3,75, 4,00).",
@@ -168,6 +188,8 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
       return;
     }
 
+    const previousStatus = status;
+    setStatus(nextStatus);
     setLoading(true);
     try {
       // Save normal time entry
@@ -177,7 +199,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
         timer,
         aktivitet_id: aktivitetId,
         notat: notat || null,
-        status,
+        status: nextStatus,
         is_overtime: false
       };
 
@@ -210,8 +232,9 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           timer: overtime100Timer,
           aktivitet_id: aktivitetId,
           notat: notat || null,
-          status,
-          is_overtime: true
+          status: nextStatus,
+          is_overtime: true,
+          overtime_type: '100'
         };
 
         const overtime100Result = await supabase
@@ -229,8 +252,9 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
           timer: overtime50Timer,
           aktivitet_id: aktivitetId,
           notat: notat || null,
-          status,
-          is_overtime: true
+          status: nextStatus,
+          is_overtime: true,
+          overtime_type: '50'
         };
 
         const overtime50Result = await supabase
@@ -246,12 +270,13 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
       });
 
       onSave?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Lagring feilet",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
         variant: "destructive"
       });
+      setStatus(previousStatus);
     } finally {
       setLoading(false);
     }
@@ -519,21 +544,15 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 8.0, existingEntry }:
         </div>
 
         <div className="flex gap-2">
-          <Button 
-            onClick={() => {
-              setStatus('utkast');
-              handleSave();
-            }} 
+          <Button
+            onClick={() => handleSave('utkast')}
             disabled={loading}
             variant="outline"
           >
             {loading && status === 'utkast' ? 'Lagrer...' : 'Lagre utkast'}
           </Button>
-          <Button 
-            onClick={() => {
-              setStatus('sendt');
-              handleSave();
-            }} 
+          <Button
+            onClick={() => handleSave('sendt')}
             disabled={loading}
           >
             {loading && status === 'sendt' ? 'Sender...' : 'Send til godkjenning'}

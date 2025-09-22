@@ -7,16 +7,25 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Users, Mail, UserPlus, RefreshCw } from 'lucide-react';
+import { Users, UserPlus, RefreshCw } from 'lucide-react';
 
 interface UserInviteSystemProps {
   orgId: string;
   onUsersUpdated: () => void;
 }
 
+interface TripletexEmployee {
+  id: string;
+  fornavn: string;
+  etternavn: string;
+  epost: string | null;
+  aktiv: boolean;
+}
+
 const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
-  const [tripletexEmployees, setTripletexEmployees] = useState<any[]>([]);
+  const [tripletexEmployees, setTripletexEmployees] = useState<TripletexEmployee[]>([]);
   const [loadingTripletexSync, setLoadingTripletexSync] = useState(false);
+  const [creatingUserId, setCreatingUserId] = useState<string | null>(null);
   const [showTripletexDialog, setShowTripletexDialog] = useState(false);
   const { toast } = useToast();
 
@@ -44,10 +53,10 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
       } else {
         throw new Error(data?.error || 'Synkronisering feilet');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Synkronisering feilet",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
         variant: "destructive"
       });
     } finally {
@@ -71,7 +80,7 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
     }
   };
 
-  const createUserFromEmployee = async (employee: any) => {
+  const createUserFromEmployee = async (employee: TripletexEmployee) => {
     if (!employee.epost) {
       toast({
         title: "Mangler e-post",
@@ -82,51 +91,41 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
     }
 
     try {
-      // Check if user already exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('org_id', orgId)
-        .eq('display_name', `${employee.fornavn} ${employee.etternavn}`)
-        .single();
+      setCreatingUserId(employee.id);
 
-      if (existingProfile) {
-        toast({
-          title: "Bruker eksisterer allerede",
-          description: `${employee.fornavn} ${employee.etternavn} har allerede en profil`,
-          variant: "destructive"
-        });
-        return;
+      const { data, error } = await supabase.functions.invoke('tripletex-create-profile', {
+        body: {
+          orgId,
+          employeeId: employee.id
+        }
+      });
+
+      if (error) {
+        throw error;
       }
 
-      // Create profile placeholder
-      const profileId = crypto.randomUUID();
-      
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: profileId,
-          user_id: profileId, // Temporary until actual signup
-          org_id: orgId,
-          display_name: `${employee.fornavn} ${employee.etternavn}`,
-          role: 'user'
-        });
-
-      if (profileError) throw profileError;
+      if (!data?.success) {
+        throw new Error(data?.error || 'Kunne ikke opprette bruker.');
+      }
 
       toast({
-        title: "Profil opprettet",
-        description: `Profil opprettet for ${employee.fornavn} ${employee.etternavn}. De kan nå logge inn med e-post: ${employee.epost}`
+        title: data.invitationSent ? "Invitasjon sendt" : "Bruker oppdatert",
+        description: data.invitationSent
+          ? `En invitasjon er sendt til ${employee.epost}.`
+          : `${employee.fornavn} ${employee.etternavn} er allerede klar til innlogging.`
       });
 
+      await loadTripletexEmployees();
       onUsersUpdated();
       setShowTripletexDialog(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Feil ved oppretting",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
         variant: "destructive"
       });
+    } finally {
+      setCreatingUserId(null);
     }
   };
 
@@ -194,10 +193,10 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
                         <Button
                           size="sm"
                           onClick={() => createUserFromEmployee(employee)}
-                          disabled={!employee.epost || !employee.aktiv}
+                          disabled={!employee.epost || !employee.aktiv || creatingUserId === employee.id}
                         >
                           <UserPlus className="h-4 w-4 mr-1" />
-                          Opprett bruker
+                          {creatingUserId === employee.id ? 'Oppretter...' : 'Opprett bruker'}
                         </Button>
                       </div>
                     ))}

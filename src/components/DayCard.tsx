@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -61,7 +61,8 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   const [vakter, setVakter] = useState<VaktWithTimer[]>([]);
   const [projectColors, setProjectColors] = useState<ProjectColor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedVakt, setSelectedVakt] = useState<string | null>(null);
+  const [activeVaktId, setActiveVaktId] = useState<string | null>(null);
+  const [selectedTimer, setSelectedTimer] = useState<VaktWithTimer['vakt_timer'][number] | null>(null);
   const [selectedProject, setSelectedProject] = useState<{
     project_name: string;
     project_number: number;
@@ -72,9 +73,9 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   useEffect(() => {
     loadDayData();
     loadProjectColors();
-  }, [date, orgId, personId]);
+  }, [date, orgId, personId, loadDayData, loadProjectColors]);
 
-  const loadDayData = async () => {
+  const loadDayData = useCallback(async () => {
     setLoading(true);
     try {
       let query = supabase
@@ -126,9 +127,9 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     } finally {
       setLoading(false);
     }
-  };
+  }, [date, orgId, personId, toast]);
 
-  const loadProjectColors = async () => {
+  const loadProjectColors = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('project_color')
@@ -140,7 +141,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     } catch (error) {
       console.error('Error loading project colors:', error);
     }
-  };
+  }, [orgId]);
 
   const getProjectColor = (tripletexProjectId?: number) => {
     if (!tripletexProjectId) return '#6b7280'; // default gray
@@ -278,10 +279,10 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
       }
 
       loadDayData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Kopiering feilet",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
         variant: "destructive"
       });
     }
@@ -425,7 +426,15 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                 )}
                 <div className="space-y-1">
                   {vakt.vakt_timer.map((timer) => (
-                    <div key={timer.id} className="flex items-center justify-between text-xs bg-muted/50 p-1.5 sm:p-2 rounded">
+                    <button
+                      key={timer.id}
+                      type="button"
+                      className="flex w-full items-center justify-between text-left text-xs bg-muted/50 p-1.5 sm:p-2 rounded hover:bg-muted"
+                      onClick={() => {
+                        setActiveVaktId(vakt.id);
+                        setSelectedTimer(timer);
+                      }}
+                    >
                       <div className="flex-1 min-w-0">
                         <div className="truncate">{formatTimeValue(timer.timer)} t - {timer.ttx_activity_cache?.navn || 'Ingen aktivitet'}</div>
                         <div className="text-muted-foreground text-xs">{timer.lonnstype}</div>
@@ -434,32 +443,46 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                         {timer.notat && <MessageSquare className="h-3 w-3" />}
                         <Paperclip className="h-3 w-3" />
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
-                <Dialog>
+                <Dialog
+                  open={activeVaktId === vakt.id}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setActiveVaktId(null);
+                      setSelectedTimer(null);
+                    }
+                  }}
+                >
                   <DialogTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="w-full text-xs sm:text-sm"
-                      onClick={() => setSelectedVakt(vakt.id)}
+                      onClick={() => {
+                        setActiveVaktId(vakt.id);
+                        setSelectedTimer(null);
+                      }}
                     >
                       <Plus className="h-3 w-3 mr-1" />
-                      {vakt.vakt_timer.length > 0 ? 'Rediger timer' : 'Legg til timer'}
+                      {vakt.vakt_timer.length > 0 ? 'Legg til / rediger' : 'Legg til timer'}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent 
-                    className="max-w-2xl h-[95vh] flex flex-col p-0" 
-                    style={{ 
-                      maxHeight: '95vh !important', 
-                      height: '95vh !important', 
-                      display: 'flex !important', 
-                      flexDirection: 'column !important', 
+                  <DialogContent
+                    className="max-w-2xl h-[95vh] flex flex-col p-0"
+                    style={{
+                      maxHeight: '95vh !important',
+                      height: '95vh !important',
+                      display: 'flex !important',
+                      flexDirection: 'column !important',
                       padding: '0 !important'
                     }}
                   >
-                    <div className="flex-1 overflow-y-auto p-6" style={{ flex: '1 !important', overflowY: 'auto !important', padding: '1.5rem !important' }}>
+                    <div
+                      className="flex-1 overflow-y-auto p-6"
+                      style={{ flex: '1 !important', overflowY: 'auto !important', padding: '1.5rem !important' }}
+                    >
                       <DialogHeader className="pb-4">
                         <DialogTitle className="text-base sm:text-lg">
                           Timeføring - {vakt.ttx_project_cache?.project_name || 'Prosjekt'}
@@ -469,11 +492,12 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                         </DialogDescription>
                       </DialogHeader>
                       <TimeEntry
+                        key={selectedTimer?.id ?? 'new'}
                         vaktId={vakt.id}
                         orgId={orgId}
                         onSave={loadDayData}
                         defaultTimer={vakt.person?.forventet_dagstimer || 8.0}
-                        existingEntry={vakt.vakt_timer[0]} // For simplicity, edit first entry
+                        existingEntry={selectedTimer || undefined}
                       />
                     </div>
                   </DialogContent>

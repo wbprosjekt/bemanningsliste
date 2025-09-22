@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -17,12 +17,26 @@ interface ProjectSearchDialogProps {
   onProjectAssigned: () => void;
 }
 
+interface Project {
+  id: string;
+  project_name: string;
+  project_number: number;
+  tripletex_project_id: number;
+  customer_name?: string;
+}
+
+interface Person {
+  id: string;
+  fornavn: string;
+  etternavn: string;
+}
+
 const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAssigned }: ProjectSearchDialogProps) => {
-  const [projects, setProjects] = useState<any[]>([]);
-  const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
-  const [person, setPerson] = useState<any>(null);
+  const [person, setPerson] = useState<Person | null>(null);
   const [projectColors, setProjectColors] = useState<{ [key: number]: string }>({});
   const { toast } = useToast();
 
@@ -33,7 +47,7 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
       loadProjectColors();
       setSearchTerm('');
     }
-  }, [open, orgId]);
+  }, [open, orgId, loadProjects, loadPerson, loadProjectColors]);
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -48,7 +62,7 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
     }
   }, [searchTerm, projects]);
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -71,9 +85,9 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
     } finally {
       setLoading(false);
     }
-  };
+  }, [orgId, toast]);
 
-  const loadPerson = async () => {
+  const loadPerson = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('person')
@@ -86,9 +100,9 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
     } catch (error) {
       console.error('Error loading person:', error);
     }
-  };
+  }, [personId]);
 
-  const loadProjectColors = async () => {
+  const loadProjectColors = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('project_color')
@@ -106,9 +120,9 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
     } catch (error) {
       console.error('Error loading project colors:', error);
     }
-  };
+  }, [orgId]);
 
-  const assignProject = async (project: any) => {
+  const assignProject = async (project: Project) => {
     try {
       // Get the project UUID from tripletex_project_id
       const { data: projectData } = await supabase
@@ -143,10 +157,10 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
 
       onProjectAssigned();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Tilordning feilet",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
         variant: "destructive"
       });
     }

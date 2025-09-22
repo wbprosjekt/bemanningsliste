@@ -162,8 +162,12 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
   });
 
   const text = await resp.text();
-  let data: any = {};
-  try { data = JSON.parse(text); } catch {}
+  let data: unknown = {};
+  try { 
+    data = JSON.parse(text); 
+  } catch (error) {
+    console.debug('Failed to parse JSON response:', error);
+  }
 
   console.log('Tripletex session response', { 
     status: resp.status, 
@@ -255,8 +259,12 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
     });
 
     const text = await response.text();
-    let responseData: any = {};
-    try { responseData = JSON.parse(text); } catch {}
+    let responseData: unknown = {};
+    try { 
+      responseData = JSON.parse(text); 
+    } catch (error) {
+      console.debug('Failed to parse JSON response:', error);
+    }
 
     console.log('Tripletex API response', { status: response.status, url });
 

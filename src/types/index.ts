@@ -64,7 +64,7 @@ export const API_ENDPOINTS = {
 } as const;
 
 // Error handling types
-export interface AppError {
+export interface AppErrorData {
   message: string;
   code?: string;
   details?: unknown;

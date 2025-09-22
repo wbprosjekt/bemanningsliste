@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,12 +11,28 @@ import DayCard from '@/components/DayCard';
 
 import OnboardingDialog from '@/components/OnboardingDialog';
 
+interface Profile {
+  id: string;
+  user_id: string;
+  org_id: string;
+  org?: {
+    name: string;
+  };
+}
+
+interface Person {
+  id: string;
+  fornavn: string;
+  etternavn: string;
+  forventet_dagstimer: number;
+}
+
 const MinUke = () => {
   const { year, week } = useParams<{ year: string; week: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [profile, setProfile] = useState<any>(null);
-  const [person, setPerson] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [person, setPerson] = useState<Person | null>(null);
   const [showFullWeek, setShowFullWeek] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -24,13 +40,18 @@ const MinUke = () => {
   const currentYear = parseInt(year || new Date().getFullYear().toString());
   const currentWeek = parseInt(week || getWeekNumber(new Date()).toString());
 
+  const getWeeksInYear = (targetYear: number) => {
+    // ISO week-date years can have 52 or 53 weeks. Week number of Dec 31 gives us the count.
+    return getWeekNumber(new Date(targetYear, 11, 31));
+  };
+
   useEffect(() => {
     if (user) {
       loadUserData();
     }
-  }, [user]);
+  }, [user, loadUserData]);
 
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -54,19 +75,23 @@ const MinUke = () => {
 
       setProfile(profileData);
 
-      // For now, assume user is also a person in the system
-      // In a real app, you'd link profiles to persons properly
-      const { data: personData, error: personError } = await supabase
-        .from('person')
-        .select('*')
-        .eq('org_id', profileData.org_id)
-        .limit(1)
-        .maybeSingle();
+      if (user.email) {
+        const normalizedEmail = user.email.toLowerCase();
 
-      if (personError && personError.code !== 'PGRST116') {
-        console.warn('Error loading person:', personError);
-      } else if (personData) {
-        setPerson(personData);
+        const { data: personData, error: personError } = await supabase
+          .from('person')
+          .select('*')
+          .eq('org_id', profileData.org_id)
+          .ilike('epost', normalizedEmail)
+          .maybeSingle();
+
+        if (personError && personError.code !== 'PGRST116') {
+          console.warn('Error loading person for email', normalizedEmail, personError);
+        } else {
+          setPerson(personData ?? null);
+        }
+      } else {
+        setPerson(null);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -74,7 +99,7 @@ const MinUke = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
@@ -84,13 +109,18 @@ const MinUke = () => {
   const navigateWeek = (delta: number) => {
     let newYear = currentYear;
     let newWeek = currentWeek + delta;
+    let weeksInYear = getWeeksInYear(newYear);
 
-    if (newWeek > 52) {
-      newYear++;
-      newWeek = 1;
-    } else if (newWeek < 1) {
-      newYear--;
-      newWeek = 52;
+    while (newWeek > weeksInYear) {
+      newWeek -= weeksInYear;
+      newYear += 1;
+      weeksInYear = getWeeksInYear(newYear);
+    }
+
+    while (newWeek < 1) {
+      newYear -= 1;
+      weeksInYear = getWeeksInYear(newYear);
+      newWeek += weeksInYear;
     }
 
     navigate(`/min/uke/${newYear}/${newWeek.toString().padStart(2, '0')}`);
@@ -149,6 +179,7 @@ const MinUke = () => {
   }
 
   const weekDays = getWeekDays();
+  const missingPersonRecord = !person;
 
   return (
     <div className="min-h-screen bg-background p-2 sm:p-4">
@@ -165,6 +196,18 @@ const MinUke = () => {
               {person && ` - ${getPersonDisplayName(person.fornavn, person.etternavn)}`}
             </p>
           </div>
+
+          {missingPersonRecord && (
+            <Card className="bg-amber-50 border-amber-200">
+              <CardContent className="p-4 text-sm text-amber-900">
+                <p className="font-medium">Ingen ansattprofil funnet</p>
+                <p className="mt-1">
+                  Vi fant ingen registrert ansatt med e-postadressen {user?.email}. Be administratoren knytte Tripletex-ansatte til brukere,
+                  eller legg inn e-post på riktig person i bemanningssystemet.
+                </p>
+              </CardContent>
+            </Card>
+          )}
           
           {/* Mobile Action Buttons */}
           <div className="flex flex-col sm:hidden space-y-2">

@@ -56,11 +56,11 @@ const OnboardingDialog = ({ onComplete }: OnboardingDialogProps) => {
       });
 
       onComplete();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Setup error:', error);
       toast({
         title: 'Feil ved oppsett',
-        description: error.message,
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
         variant: 'destructive',
       });
     } finally {
