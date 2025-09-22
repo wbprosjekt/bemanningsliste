@@ -187,7 +187,7 @@ const AdminBrukere = () => {
       console.log('🧪 Testing manual profile creation...');
       
       const testProfile = {
-        user_id: 'test-user-id-12345', // Different user ID
+        user_id: '12345678-1234-1234-1234-123456789012', // Valid UUID format
         org_id: profile?.org_id,
         display_name: 'Test User',
         role: 'user'
