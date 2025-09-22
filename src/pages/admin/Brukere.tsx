@@ -223,20 +223,23 @@ const AdminBrukere = () => {
     }
   };
 
-  // Test function to check if user exists in Supabase Auth
-  const testCheckUser = async () => {
+  // Test function to create a test user manually
+  const testCreateTestUser = async () => {
     try {
-      console.log('🧪 Testing user lookup for sugg@sugg.no...');
+      console.log('🧪 Creating test user manually...');
       
-      // Test with a different employee that might not exist in Auth
+      // Create a test user with a unique email
+      const testEmail = `test-${Date.now()}@example.com`;
+      
       const { data, error } = await supabase.functions.invoke('tripletex-create-profile', {
         body: {
           orgId: profile?.org_id,
-          employeeId: '6964373e-4c22-4946-a75f-28fb9c55d51a' // Kenneth Suggesen (sugg@sugg.no)
+          employeeId: 'ed8af632-58e1-46a0-a1a9-dd7e26898614', // Use abc@abc.no employee but with test email
+          testEmail: testEmail // Pass test email to edge function
         }
       });
 
-      console.log('🧪 Edge function test result:', { data, error });
+      console.log('🧪 Test user creation result:', { data, error });
       console.log('🧪 Detailed response:', JSON.stringify(data, null, 2));
       
       if (error) {
@@ -425,6 +428,9 @@ const AdminBrukere = () => {
             </Button>
             <Button onClick={testCheckUser} variant="outline" size="sm">
               🔍 Test Edge
+            </Button>
+            <Button onClick={testCreateTestUser} variant="outline" size="sm">
+              🧪 Test User
             </Button>
             <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
               <DialogTrigger asChild>
