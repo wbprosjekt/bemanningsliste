@@ -304,7 +304,22 @@ const MinUke = () => {
         </div>
 
         {/* Week View */}
-        {showFullWeek ? (
+        {!person ? (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <div className="text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg font-medium mb-2">Ingen ansatt-profil funnet</h3>
+                <p className="text-sm mb-4">
+                  Din brukerkonto er ikke koblet til en ansatt-profil i systemet.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Kontakt administrator for å få tilgang til timeføring.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : showFullWeek ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2 sm:gap-4">
             {weekDays.map((date, index) => (
               <div key={index} className={isToday(date) ? 'ring-2 ring-primary rounded-lg' : ''}>

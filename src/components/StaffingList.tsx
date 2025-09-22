@@ -504,9 +504,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       if (error) throw error;
       
-      const calendarMap: Record<string, CalendarDay> = {};
+      const calendarMap: Record<string, { isWeekend: boolean; isHoliday: boolean }> = {};
       data?.forEach((day: CalendarDay) => {
-        calendarMap[day.dato] = day;
+        calendarMap[day.dato] = {
+          isWeekend: Boolean(day.is_weekend),
+          isHoliday: Boolean(day.is_holiday)
+        };
       });
       
       setCalendarDays(calendarMap);

@@ -30,6 +30,10 @@ interface Profile {
   org_id: string;
   user_id: string;
   created_at: string;
+  org?: {
+    id: string;
+    name: string;
+  };
 }
 
 interface Underleverandor {
@@ -62,6 +66,9 @@ const AdminUnderleverandorer = () => {
     epost: '',
     telefon: '',
     adresse: '',
+    organisasjonsnummer: '',
+    timepris: '',
+    notater: '',
     org_id: ''
   });
 

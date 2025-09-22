@@ -17,6 +17,11 @@ interface ProjectSearchDialogProps {
   onProjectAssigned: () => void;
 }
 
+interface ProjectColor {
+  tripletex_project_id: number;
+  hex: string;
+}
+
 interface Project {
   id: string;
   project_name: string;

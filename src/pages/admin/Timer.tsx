@@ -26,6 +26,17 @@ import {
 } from 'lucide-react';
 import { getPersonDisplayName, formatTimeValue } from '@/lib/displayNames';
 
+interface Profile {
+  id: string;
+  org_id: string;
+  user_id: string;
+  created_at: string;
+  org?: {
+    id: string;
+    name: string;
+  };
+}
+
 interface TimerEntry {
   id: string;
   timer: number;
@@ -60,7 +71,9 @@ const AdminTimer = () => {
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState({
     dateFrom: '',
-    dateTo: ''
+    dateTo: '',
+    status: 'all',
+    search: ''
   });
   const [dryRunMode, setDryRunMode] = useState(false);
   const [periodLockBanner, setPeriodLockBanner] = useState<string | null>(null);

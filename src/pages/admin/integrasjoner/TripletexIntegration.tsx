@@ -115,7 +115,7 @@ const TripletexIntegration = () => {
   }, [profile?.org_id]);
 
   const testAPISession = async () => {
-    setLoading({ ...loading, testSession: true });
+    setLoading(prev => ({ ...prev, testSession: true }));
     try {
       const result = await callTripletexAPI('test-session');
       
@@ -166,7 +166,7 @@ const TripletexIntegration = () => {
         variant: "destructive"
       });
     } finally {
-      setLoading({ ...loading, testSession: false });
+      setLoading(prev => ({ ...prev, testSession: false }));
     }
   };
 
@@ -183,7 +183,7 @@ const TripletexIntegration = () => {
       activities: 'aktiviteter'
     };
 
-    setLoading({ ...loading, [type]: true });
+    setLoading(prev => ({ ...prev, [type]: true }));
     try {
       const result = await callTripletexAPI(actionMap[type]);
       
@@ -206,7 +206,7 @@ const TripletexIntegration = () => {
         variant: "destructive"
       });
     } finally {
-      setLoading({ ...loading, [type]: false });
+      setLoading(prev => ({ ...prev, [type]: false }));
     }
   };
 
@@ -289,7 +289,7 @@ const TripletexIntegration = () => {
       return;
     }
 
-    setLoading({ ...loading, saveTokens: true });
+    setLoading(prev => ({ ...prev, saveTokens: true }));
     try {
       const settings = {
         ...(integrationSettings?.settings || {}),
@@ -328,7 +328,7 @@ const TripletexIntegration = () => {
         variant: "destructive"
       });
     } finally {
-      setLoading({ ...loading, saveTokens: false });
+      setLoading(prev => ({ ...prev, saveTokens: false }));
     }
   };
 

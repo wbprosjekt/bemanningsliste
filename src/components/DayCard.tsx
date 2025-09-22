@@ -70,15 +70,17 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   } | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadDayData();
-    loadProjectColors();
-  }, [date, orgId, personId, loadDayData, loadProjectColors]);
 
   const loadDayData = useCallback(async () => {
+    if (!personId) {
+      setVakter([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      let query = supabase
+      const query = supabase
         .from('vakt')
         .select(`
           id,
@@ -107,11 +109,8 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
           )
         `)
         .eq('org_id', orgId)
-        .eq('dato', date.toISOString().split('T')[0]);
-
-      if (personId) {
-        query = query.eq('person_id', personId);
-      }
+        .eq('dato', date.toISOString().split('T')[0])
+        .eq('person_id', personId);
 
       const { data, error } = await query;
 
@@ -142,6 +141,11 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
       console.error('Error loading project colors:', error);
     }
   }, [orgId]);
+
+  useEffect(() => {
+    loadDayData();
+    loadProjectColors();
+  }, [loadDayData, loadProjectColors]);
 
   const getProjectColor = (tripletexProjectId?: number) => {
     if (!tripletexProjectId) return '#6b7280'; // default gray
@@ -366,6 +370,19 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     );
   }
 
+  if (!personId) {
+    return (
+      <Card className="h-full">
+        <CardContent className="p-4">
+          <div className="text-center text-muted-foreground">
+            <p className="text-sm">Ingen ansatt valgt</p>
+            <p className="text-xs mt-1">Velg en ansatt for å se dagdata</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="h-full">
       <CardHeader className="pb-2 sm:pb-3">
@@ -507,7 +524,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
           </div>
         )}
 
-        {vakter.length === 0 && (
+        {vakter.length === 0 && personId && (
           <div className="space-y-2">
             <div className="text-xs sm:text-sm text-muted-foreground text-center py-2 sm:py-4">
               Ingen arbeidsoppdrag planlagt
@@ -515,7 +532,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
             <ProjectRequestDialog
               date={date}
               orgId={orgId}
-              personId={personId || ''}
+              personId={personId}
               onRequestSent={loadDayData}
             />
           </div>
