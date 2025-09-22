@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     console.log('tripletex-create-profile called with:', { orgId, employeeId });
 
     if (!orgId || !employeeId) {
-      console.log('Missing required parameters:', { orgId, employeeId });
+      console.log('❌ RETURN 400: Missing required parameters:', { orgId, employeeId });
       return new Response(
         JSON.stringify({ success: false, error: 'orgId og employeeId er påkrevd.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     });
 
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error('Missing Supabase configuration:', { supabaseUrl, serviceRoleKey });
+      console.error('❌ RETURN 500: Missing Supabase configuration:', { supabaseUrl, serviceRoleKey });
       return new Response(
         JSON.stringify({ success: false, error: 'Supabase-konfigurasjon mangler.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     console.log('User auth check:', { user: user?.id, error: userError?.message });
 
     if (userError || !user) {
-      console.log('Authentication failed:', userError);
+      console.log('❌ RETURN 401: Authentication failed:', userError);
       return new Response(
         JSON.stringify({ success: false, error: 'Kunne ikke identifisere innlogget bruker.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     console.log('Profile lookup:', { profile, error: profileError?.message });
 
     if (profileError) {
-      console.error('Feil ved henting av profil for bruker', user.id, profileError);
+      console.error('❌ RETURN 500: Feil ved henting av profil for bruker', user.id, profileError);
       return new Response(
         JSON.stringify({ success: false, error: 'Kunne ikke hente profil for innlogget bruker.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
     }
 
     if (!profile || profile.org_id !== orgId) {
-      console.log('Access denied - profile check:', { 
+      console.log('❌ RETURN 403: Access denied - profile check:', { 
         hasProfile: !!profile, 
         profileOrgId: profile?.org_id, 
         requestedOrgId: orgId 
@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
     }
 
     if (!['admin', 'manager'].includes(profile.role)) {
-      console.log('Access denied - role check:', { role: profile.role });
+      console.log('❌ RETURN 403: Access denied - role check:', { role: profile.role });
       return new Response(
         JSON.stringify({ success: false, error: 'Du må være admin eller manager for å opprette brukere.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     });
 
     if (employeeError) {
-      console.error('Database error during employee lookup:', employeeError);
+      console.error('❌ RETURN 500: Database error during employee lookup:', employeeError);
       return new Response(
         JSON.stringify({ success: false, error: 'Database-feil ved oppslag av ansatt.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
     }
 
     if (!employee) {
-      console.log('Employee not found:', { employeeId, orgId });
+      console.log('❌ RETURN 404: Employee not found:', { employeeId, orgId });
       return new Response(
         JSON.stringify({ success: false, error: 'Fant ikke Tripletex-ansatt.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
     }
 
     if (!employee.epost) {
-      console.log('Employee missing email:', { employeeId, epost: employee.epost });
+      console.log('❌ RETURN 400: Employee missing email:', { employeeId, epost: employee.epost });
       return new Response(
         JSON.stringify({ success: false, error: 'Ansatt mangler e-postadresse i Tripletex.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
     }
 
     if (!employee.tripletex_employee_id) {
-      console.log('Employee missing tripletex_employee_id:', { employeeId, tripletex_employee_id: employee.tripletex_employee_id });
+      console.log('❌ RETURN 400: Employee missing tripletex_employee_id:', { employeeId, tripletex_employee_id: employee.tripletex_employee_id });
       return new Response(
         JSON.stringify({ success: false, error: 'Ansatt mangler Tripletex ID.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (personLookupError) {
-      console.error('Feil ved oppslag av person', personLookupError);
+      console.error('❌ RETURN 500: Feil ved oppslag av person', personLookupError);
       return new Response(
         JSON.stringify({ success: false, error: 'Kunne ikke verifisere ansatt i personregisteret.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -203,7 +203,7 @@ Deno.serve(async (req) => {
     });
 
     if (personUpsertError) {
-      console.error('Feil ved oppdatering/opprettelse av person', personUpsertError);
+      console.error('❌ RETURN 500: Feil ved oppdatering/opprettelse av person', personUpsertError);
       return new Response(
         JSON.stringify({ success: false, error: 'Kunne ikke opprette eller oppdatere person i organisasjonen.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
       console.log('Invitation result:', { invitedUserId: invitedUser?.user?.id, error: inviteError?.message });
 
       if (inviteError) {
-        console.error('Feil ved utsendelse av invitasjon', inviteError);
+        console.error('❌ RETURN 500: Feil ved utsendelse av invitasjon', inviteError);
         return new Response(
           JSON.stringify({ success: false, error: 'Kunne ikke sende invitasjon til brukeren.' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -244,6 +244,7 @@ Deno.serve(async (req) => {
     }
 
     if (!authUserId) {
+      console.log('❌ RETURN 500: Kunne ikke identifisere eller opprette Supabase-bruker');
       return new Response(
         JSON.stringify({ success: false, error: 'Kunne ikke identifisere eller opprette Supabase-bruker.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -257,7 +258,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existingProfileError) {
-      console.error('Feil ved kontroll av eksisterende profil', existingProfileError);
+      console.error('❌ RETURN 500: Feil ved kontroll av eksisterende profil', existingProfileError);
       return new Response(
         JSON.stringify({ success: false, error: 'Kunne ikke kontrollere eksisterende profil for brukeren.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -265,6 +266,10 @@ Deno.serve(async (req) => {
     }
 
     if (existingProfileForUser && existingProfileForUser.org_id !== orgId) {
+      console.log('❌ RETURN 409: Brukeren er allerede tilknyttet en annen organisasjon:', {
+        existingOrgId: existingProfileForUser.org_id,
+        requestedOrgId: orgId
+      });
       return new Response(
         JSON.stringify({ success: false, error: 'Brukeren er allerede tilknyttet en annen organisasjon.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
@@ -290,14 +295,14 @@ Deno.serve(async (req) => {
     });
 
     if (upsertProfileError) {
-      console.error('Feil ved opprettelse av profil', upsertProfileError);
+      console.error('❌ RETURN 500: Feil ved opprettelse av profil', upsertProfileError);
       return new Response(
         JSON.stringify({ success: false, error: 'Kunne ikke opprette profil for brukeren.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    console.log('Success - user created/updated:', { 
+    console.log('✅ RETURN 200: Success - user created/updated:', { 
       invitationSent, 
       personId: upsertedPerson.id, 
       userId: authUserId,
@@ -314,7 +319,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error) {
-    console.error('Uventet feil i tripletex-create-profile', error);
+    console.error('❌ RETURN 500: Uventet feil i tripletex-create-profile', error);
     return new Response(
       JSON.stringify({ success: false, error: 'Uventet feil under opprettelse av bruker.' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

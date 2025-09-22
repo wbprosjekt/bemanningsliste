@@ -115,7 +115,9 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
 
       if (!data?.success) {
         console.error('Function returned error:', data?.error);
-        throw new Error(data?.error || 'Kunne ikke opprette bruker.');
+        // Use the specific error message from the function
+        const errorMessage = data?.error || 'Kunne ikke opprette bruker.';
+        throw new Error(errorMessage);
       }
 
       toast({
