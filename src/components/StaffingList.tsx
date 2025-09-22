@@ -271,6 +271,226 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   }, [user]);
 
+  const loadStaffingData = useCallback(async (silent: boolean = false) => {
+    if (!profile?.org_id) return;
+
+    if (!silent) setLoading(true);
+    try {
+      const dateStrings = allDates.map(toDateKey).filter(Boolean);
+      if (dateStrings.length === 0) {
+        console.warn('No valid dates generated for staffing query');
+        setStaffingData([]);
+        return;
+      }
+      
+      // Get all employees first 
+      const { data: allEmployees, error: employeeError } = await supabase
+        .from('person')
+        .select('*')
+        .eq('org_id', profile.org_id)
+        .eq('aktiv', true)
+        .order('fornavn');
+
+      if (employeeError) throw employeeError;
+
+      // Get existing vakt data
+      const { data: vaktData, error } = await supabase
+        .from('vakt')
+        .select(`
+          id,
+          dato,
+          person_id,
+          person:person_id (
+            id,
+            fornavn,
+            etternavn,
+            forventet_dagstimer,
+            tripletex_employee_id
+          ),
+          ttx_project_cache:project_id (
+            id,
+            tripletex_project_id,
+            project_name,
+            project_number
+          ),
+          vakt_timer (
+            id,
+            timer,
+            status,
+            lonnstype,
+            notat,
+            is_overtime,
+            aktivitet_id,
+            ttx_activity_cache:aktivitet_id (
+              id,
+              navn
+            )
+          )
+        `)
+        .in('dato', dateStrings)
+        .eq('org_id', profile.org_id);
+
+      if (error) throw error;
+
+      // Create a map of existing vakt data
+      const vaktMap = new Map<string, any>();
+      vaktData?.forEach((vakt: any) => {
+        const key = `${vakt.dato}-${vakt.person_id}`;
+        vaktMap.set(key, vakt);
+      });
+
+      // Generate staffing entries for all employees and dates
+      const entries: StaffingEntry[] = [];
+      
+      allEmployees?.forEach((employee: any) => {
+        allDates.forEach((date) => {
+          const dateKey = toDateKey(date);
+          if (!dateKey) return;
+          
+          const vaktKey = `${dateKey}-${employee.id}`;
+          const existingVakt = vaktMap.get(vaktKey);
+          
+          if (existingVakt) {
+            // Use existing vakt data
+            entries.push({
+              id: existingVakt.id,
+              date: dateKey,
+              personId: employee.id,
+              person: existingVakt.person,
+              projectId: existingVakt.project_id,
+              project: existingVakt.ttx_project_cache,
+              vaktTimer: existingVakt.vakt_timer || [],
+              isNew: false
+            });
+          } else {
+            // Create new entry
+            entries.push({
+              id: `new-${employee.id}-${dateKey}`,
+              date: dateKey,
+              personId: employee.id,
+              person: employee,
+              projectId: null,
+              project: null,
+              vaktTimer: [],
+              isNew: true
+            });
+          }
+        });
+      });
+
+      setStaffingData(entries);
+    } catch (error) {
+      console.error('Error loading staffing data:', error);
+      toast({
+        title: "Feil ved lasting av bemanningsdata",
+        description: "Kunne ikke laste bemanningsliste.",
+        variant: "destructive"
+      });
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [profile?.org_id, allDates, toDateKey, projectColors, toast]);
+
+  const loadProjects = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('ttx_project_cache')
+        .select('*')
+        .eq('org_id', profile.org_id)
+        .order('project_name');
+
+      if (error) throw error;
+      setProjects(data || []);
+    } catch (error) {
+      console.error('Error loading projects:', error);
+    }
+  }, [profile?.org_id]);
+
+  const loadActivities = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('ttx_activity_cache')
+        .select('*')
+        .eq('org_id', profile.org_id)
+        .order('navn');
+
+      if (error) throw error;
+      setActivities(data || []);
+    } catch (error) {
+      console.error('Error loading activities:', error);
+    }
+  }, [profile?.org_id]);
+
+  const loadEmployees = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('person')
+        .select('*')
+        .eq('org_id', profile.org_id)
+        .eq('aktiv', true)
+        .order('fornavn');
+
+      if (error) throw error;
+      setEmployees(data || []);
+    } catch (error) {
+      console.error('Error loading employees:', error);
+    }
+  }, [profile?.org_id]);
+
+  const loadProjectColors = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('project_colors')
+        .select('*')
+        .eq('org_id', profile.org_id);
+
+      if (error) throw error;
+      
+      const colorMap: Record<number, string> = {};
+      data?.forEach((color: any) => {
+        colorMap[color.tripletex_project_id] = color.hex;
+      });
+      
+      setProjectColors(colorMap);
+    } catch (error) {
+      console.error('Error loading project colors:', error);
+    }
+  }, [profile?.org_id]);
+
+  const loadCalendarDays = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      const dateStrings = allDates.map(toDateKey).filter(Boolean);
+      if (dateStrings.length === 0) return;
+
+      const { data, error } = await supabase
+        .from('kalender_dag')
+        .select('*')
+        .in('dato', dateStrings)
+        .eq('org_id', profile.org_id);
+
+      if (error) throw error;
+      
+      const calendarMap: Record<string, CalendarDay> = {};
+      data?.forEach((day: any) => {
+        calendarMap[day.dato] = day;
+      });
+      
+      setCalendarDays(calendarMap);
+    } catch (error) {
+      console.error('Error loading calendar days:', error);
+    }
+  }, [allDates, toDateKey]);
+
   useEffect(() => {
     if (user) {
       loadUserProfile();
