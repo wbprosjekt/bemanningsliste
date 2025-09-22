@@ -223,6 +223,43 @@ const AdminBrukere = () => {
     }
   };
 
+  // Test function to check edge function with Kenneth Suggesen
+  const testCheckUser = async () => {
+    try {
+      console.log('🧪 Testing user lookup for sugg@sugg.no...');
+      
+      const { data, error } = await supabase.functions.invoke('tripletex-create-profile', {
+        body: {
+          orgId: profile?.org_id,
+          employeeId: '6964373e-4c22-4946-a75f-28fb9c55d51a' // Kenneth Suggesen (sugg@sugg.no)
+        }
+      });
+
+      console.log('🧪 Edge function test result:', { data, error });
+      console.log('🧪 Detailed response:', JSON.stringify(data, null, 2));
+      
+      if (error) {
+        toast({
+          title: "Test feilet",
+          description: error.message || 'Ukjent feil',
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Test vellykket",
+          description: `Resultat: ${data?.success ? 'Success' : 'Failed'}`,
+        });
+      }
+    } catch (error) {
+      console.error('❌ Test error:', error);
+      toast({
+        title: "Test feilet",
+        description: "En uventet feil oppstod",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Test function to create a test user manually
   const testCreateTestUser = async () => {
     try {
@@ -426,7 +463,7 @@ const AdminBrukere = () => {
             <Button onClick={testCreateProfile} variant="outline" size="sm">
               🧪 Test Profil
             </Button>
-            <Button onClick={testCheckUser} variant="outline" size="sm">
+            <Button onClick={testCreateTestUser} variant="outline" size="sm">
               🔍 Test Edge
             </Button>
             <Button onClick={testCreateTestUser} variant="outline" size="sm">
