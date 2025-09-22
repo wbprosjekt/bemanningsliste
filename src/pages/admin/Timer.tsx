@@ -65,6 +65,68 @@ const AdminTimer = () => {
   const [dryRunMode, setDryRunMode] = useState(false);
   const [periodLockBanner, setPeriodLockBanner] = useState<string | null>(null);
 
+  const loadUserProfile = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*, org:org_id (id, name)')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) throw error;
+      setProfile(data);
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  }, [user]);
+
+  const loadTimerEntries = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('vakt_timer')
+        .select(`
+          *,
+          vakt:vakt_id (
+            id,
+            dato,
+            person:person_id (
+              id,
+              fornavn,
+              etternavn,
+              tripletex_employee_id
+            ),
+            ttx_project_cache:project_id (
+              id,
+              tripletex_project_id,
+              project_name,
+              project_number
+            )
+          )
+        `)
+        .eq('org_id', profile.org_id)
+        .gte('vakt.dato', filters.dateFrom || '1900-01-01')
+        .lte('vakt.dato', filters.dateTo || '2100-12-31')
+        .order('vakt.dato', { ascending: false });
+
+      if (error) throw error;
+      setTimerEntries(data || []);
+    } catch (error) {
+      console.error('Error loading timer entries:', error);
+      toast({
+        title: "Feil ved lasting av timer",
+        description: error instanceof Error ? error.message : "Kunne ikke laste timeoppføringer.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [profile?.org_id, filters, toast]);
+
   useEffect(() => {
     if (user) {
       loadUserProfile();
@@ -76,23 +138,6 @@ const AdminTimer = () => {
       loadTimerEntries();
     }
   }, [profile, filters, loadTimerEntries]);
-
-  const loadUserProfile = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*, org:org_id (id, name)')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      setProfile(data);
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    }
-  }, [user]);
 
   const loadTimerEntries = useCallback(async () => {
     if (!profile?.org_id) return;

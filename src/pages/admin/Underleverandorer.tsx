@@ -58,12 +58,6 @@ const AdminUnderleverandorer = () => {
     org_id: ''
   });
 
-  useEffect(() => {
-    if (profile) {
-      loadUnderleverandorer();
-    }
-  }, [profile, loadUnderleverandorer]);
-
   const loadUserProfile = useCallback(async () => {
     if (!user) return;
 

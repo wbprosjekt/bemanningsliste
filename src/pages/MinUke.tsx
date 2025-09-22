@@ -145,6 +145,9 @@ const MinUke = () => {
     return date.toDateString() === today.toDateString();
   };
 
+  // Memoize weekDays to prevent infinite loops. Must be declared before any early return.
+  const weekDays = useMemo(() => getWeekDays(), [currentYear, currentWeek]);
+
   if (showOnboarding) {
     return <OnboardingDialog onComplete={handleOnboardingComplete} />;
   }
@@ -178,9 +181,6 @@ const MinUke = () => {
       </div>
     );
   }
-
-  // Memoize weekDays to prevent infinite loops
-  const weekDays = useMemo(() => getWeekDays(), [currentYear, currentWeek]);
   const missingPersonRecord = !person;
 
   return (
