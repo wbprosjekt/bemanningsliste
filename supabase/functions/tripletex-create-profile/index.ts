@@ -276,28 +276,36 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('id, org_id, role')
       .eq('user_id', authUserId)
+      .eq('org_id', orgId)
       .maybeSingle();
 
-    if (existingProfileError) {
-      console.error('❌ RETURN 500: Feil ved kontroll av eksisterende profil', existingProfileError);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Kunne ikke kontrollere eksisterende profil for brukeren.' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
+    console.log('Checking for existing profile:', { 
+      authUserId, 
+      orgId, 
+      existingProfile: existingProfileForUser 
+    });
 
-    if (existingProfileForUser && existingProfileForUser.org_id !== orgId) {
-      console.log('❌ RETURN 409: Brukeren er allerede tilknyttet en annen organisasjon:', {
-        existingOrgId: existingProfileForUser.org_id,
-        requestedOrgId: orgId
+    // If user already has a profile in this org, skip further processing
+    if (existingProfileForUser) {
+      console.log('✅ RETURN 200: User already exists in this organization:', {
+        userId: authUserId,
+        email: normalizedEmail,
+        existingRole: existingProfileForUser.role,
+        personId: upsertedPerson.id
       });
+
       return new Response(
-        JSON.stringify({ success: false, error: 'Brukeren er allerede tilknyttet en annen organisasjon.' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
+        JSON.stringify({
+          success: true,
+          alreadyExists: true,
+          personId: upsertedPerson.id,
+          userId: authUserId
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
-    // For Tripletex-ansatte, always create new profile with 'user' role
+    // For new Tripletex-ansatte, create new profile with 'user' role
     // Admin can later change the role in user management
     const profilePayload = {
       user_id: authUserId,
@@ -306,48 +314,28 @@ Deno.serve(async (req) => {
       role: 'user' // Always start with 'user' role for new Tripletex employees
     } satisfies Record<string, Json>;
 
+    console.log('Creating new profile for user:', authUserId);
     console.log('Profile payload:', profilePayload);
 
-    // If user already has a profile in this org, update it; otherwise create new
-    if (existingProfileForUser) {
-      console.log('Updating existing profile for user:', authUserId);
-      const { error: updateProfileError } = await supabaseAdmin
-        .from('profiles')
-        .update({
-          display_name: `${employee.fornavn} ${employee.etternavn}`,
-          role: 'user' // Reset to user role for Tripletex employees
-        })
-        .eq('user_id', authUserId);
+    const { error: insertProfileError } = await supabaseAdmin
+      .from('profiles')
+      .insert(profilePayload);
 
-      if (updateProfileError) {
-        console.error('❌ RETURN 500: Feil ved oppdatering av eksisterende profil', updateProfileError);
-        return new Response(
-          JSON.stringify({ success: false, error: 'Kunne ikke oppdatere profil for brukeren.' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
-      }
-    } else {
-      console.log('Creating new profile for user:', authUserId);
-      const { error: insertProfileError } = await supabaseAdmin
-        .from('profiles')
-        .insert(profilePayload);
-
-      if (insertProfileError) {
-        console.error('❌ RETURN 500: Feil ved opprettelse av ny profil', insertProfileError);
-        return new Response(
-          JSON.stringify({ success: false, error: 'Kunne ikke opprette profil for brukeren.' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
-      }
+    if (insertProfileError) {
+      console.error('❌ RETURN 500: Feil ved opprettelse av ny profil', insertProfileError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Kunne ikke opprette profil for brukeren.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
-    console.log('✅ RETURN 200: Success - user created/updated:', { 
+    console.log('✅ RETURN 200: Success - new user created:', { 
       invitationSent, 
       personId: upsertedPerson.id, 
       userId: authUserId,
       email: normalizedEmail,
       wasExistingUser: !!existingUser,
-      profileAction: existingProfileForUser ? 'updated' : 'created'
+      profileAction: 'created'
     });
 
     return new Response(

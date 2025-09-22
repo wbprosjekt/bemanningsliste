@@ -107,12 +107,14 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
       });
 
       console.log('tripletex-create-profile response:', { data, error });
-
-      if (error) {
-        console.error('Supabase function error:', error);
-        throw error;
+      console.log('Response data details:', JSON.stringify(data, null, 2));
+      
+      // Check if the response indicates success
+      if (data?.success === false) {
+        console.error('Function returned success: false', data);
+        throw new Error(data?.error || 'Funksjonen returnerte success: false');
       }
-
+      
       if (!data?.success) {
         console.error('Function returned error:', data?.error);
         // Use the specific error message from the function
@@ -120,15 +122,39 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
         throw new Error(errorMessage);
       }
 
+      // Handle case where user already exists
+      if (data?.alreadyExists) {
+        toast({
+          title: "Allerede synkronisert",
+          description: `${employee.fornavn} ${employee.etternavn} er allerede synkronisert i systemet.`,
+        });
+        
+        // Still refresh the data and close dialog
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('Refreshing data after user already exists...');
+        await loadTripletexEmployees();
+        console.log('Calling onUsersUpdated to refresh user list...');
+        onUsersUpdated();
+        setShowTripletexDialog(false);
+        return;
+      }
+
       toast({
-        title: data.invitationSent ? "Invitasjon sendt" : "Bruker opprettet/oppdatert",
+        title: data.invitationSent ? "Invitasjon sendt" : "Ny bruker opprettet",
         description: data.invitationSent
           ? `En invitasjon er sendt til ${employee.epost}. Brukeren har fått 'bruker'-rolle og kan logge inn.`
-          : `${employee.fornavn} ${employee.etternavn} er opprettet/oppdatert med 'bruker'-rolle.`
+          : `${employee.fornavn} ${employee.etternavn} er opprettet som ny bruker med 'bruker'-rolle.`
       });
 
+      // Add a small delay to ensure database consistency
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log('Refreshing data after user creation...');
       await loadTripletexEmployees();
+      
+      console.log('Calling onUsersUpdated to refresh user list...');
       onUsersUpdated();
+      
       setShowTripletexDialog(false);
     } catch (error: unknown) {
       console.error('Error creating user:', error);

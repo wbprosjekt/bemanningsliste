@@ -101,6 +101,7 @@ const AdminBrukere = () => {
   const loadUsers = useCallback(async () => {
     if (!profile?.org_id) return;
 
+    console.log('Loading users for org:', profile.org_id);
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -115,6 +116,8 @@ const AdminBrukere = () => {
         .eq('org_id', profile.org_id)
         .order('created_at', { ascending: false });
 
+      console.log('Profiles query result:', { data, error });
+
       if (error) throw error;
 
       // For now, we'll use the profile user_id to get email from auth, but that requires service role
@@ -125,6 +128,7 @@ const AdminBrukere = () => {
         person: null // We'll handle person linking separately if needed
       }));
 
+      console.log('Processed users:', usersWithEmails);
       setUsers(usersWithEmails);
     } catch (error) {
       console.error('Error loading users:', error);
