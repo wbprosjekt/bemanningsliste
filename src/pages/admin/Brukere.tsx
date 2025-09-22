@@ -226,7 +226,7 @@ const AdminBrukere = () => {
   // Test function to check if user exists in Supabase Auth
   const testCheckUser = async () => {
     try {
-      console.log('🧪 Testing user lookup for abc@abc.no...');
+      console.log('🧪 Testing user lookup for sugg@sugg.no...');
       
       // Test with a different employee that might not exist in Auth
       const { data, error } = await supabase.functions.invoke('tripletex-create-profile', {
