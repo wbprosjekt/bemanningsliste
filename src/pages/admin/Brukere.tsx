@@ -187,7 +187,7 @@ const AdminBrukere = () => {
       console.log('🧪 Testing manual profile creation...');
       
       const testProfile = {
-        user_id: 'cf05c311-2229-4894-a1c8-dfc003506a8f', // Your user ID
+        user_id: 'test-user-id-12345', // Different user ID
         org_id: profile?.org_id,
         display_name: 'Test User',
         role: 'user'
