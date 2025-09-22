@@ -389,7 +389,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [profile?.org_id, allDates, toDateKey, projectColors, toast]);
+  }, [profile?.org_id, allDates, toDateKey, toast]);
 
   const loadProjects = useCallback(async () => {
     if (!profile?.org_id) return;
@@ -488,7 +488,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     } catch (error) {
       console.error('Error loading calendar days:', error);
     }
-  }, [allDates, toDateKey]);
+  }, [profile?.org_id, allDates, toDateKey]);
 
   useEffect(() => {
     if (user) {
