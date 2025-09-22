@@ -139,12 +139,20 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
       // Show specific error messages for common issues
       if (errorMessage.includes('mangler e-postadresse')) {
         errorMessage = 'Ansatt mangler e-postadresse i Tripletex';
+      } else if (errorMessage.includes('mangler Tripletex ID')) {
+        errorMessage = 'Ansatt mangler Tripletex ID';
+      } else if (errorMessage.includes('Database-feil')) {
+        errorMessage = 'Database-feil ved oppslag av ansatt';
       } else if (errorMessage.includes('allerede tilknyttet')) {
         errorMessage = 'Brukeren er allerede tilknyttet en annen organisasjon';
       } else if (errorMessage.includes('admin eller manager')) {
         errorMessage = 'Du må være admin eller manager for å opprette brukere';
       } else if (errorMessage.includes('tilgang til valgt organisasjon')) {
         errorMessage = 'Du har ikke tilgang til denne organisasjonen';
+      } else if (errorMessage.includes('Supabase-konfigurasjon mangler')) {
+        errorMessage = 'Server-konfigurasjon mangler';
+      } else if (errorMessage.includes('orgId og employeeId er påkrevd')) {
+        errorMessage = 'Manglende parametere';
       }
 
       toast({

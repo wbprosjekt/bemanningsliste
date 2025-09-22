@@ -34,7 +34,15 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
+    console.log('Environment check:', { 
+      hasSupabaseUrl: !!supabaseUrl, 
+      hasServiceRoleKey: !!serviceRoleKey,
+      supabaseUrlLength: supabaseUrl.length,
+      serviceRoleKeyLength: serviceRoleKey.length
+    });
+
     if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Missing Supabase configuration:', { supabaseUrl, serviceRoleKey });
       return new Response(
         JSON.stringify({ success: false, error: 'Supabase-konfigurasjon mangler.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -108,10 +116,30 @@ Deno.serve(async (req) => {
       .eq('org_id', orgId)
       .maybeSingle();
 
-    console.log('Employee lookup:', { employee: employee?.id, error: employeeError?.message });
+    console.log('Employee lookup:', { 
+      employeeId, 
+      orgId, 
+      employee: employee ? {
+        id: employee.id,
+        fornavn: employee.fornavn,
+        etternavn: employee.etternavn,
+        epost: employee.epost,
+        tripletex_employee_id: employee.tripletex_employee_id,
+        aktiv: employee.aktiv
+      } : null,
+      error: employeeError?.message 
+    });
 
-    if (employeeError || !employee) {
-      console.log('Employee not found:', { employeeId, orgId, error: employeeError });
+    if (employeeError) {
+      console.error('Database error during employee lookup:', employeeError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Database-feil ved oppslag av ansatt.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    if (!employee) {
+      console.log('Employee not found:', { employeeId, orgId });
       return new Response(
         JSON.stringify({ success: false, error: 'Fant ikke Tripletex-ansatt.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
@@ -122,6 +150,14 @@ Deno.serve(async (req) => {
       console.log('Employee missing email:', { employeeId, epost: employee.epost });
       return new Response(
         JSON.stringify({ success: false, error: 'Ansatt mangler e-postadresse i Tripletex.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    if (!employee.tripletex_employee_id) {
+      console.log('Employee missing tripletex_employee_id:', { employeeId, tripletex_employee_id: employee.tripletex_employee_id });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Ansatt mangler Tripletex ID.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
@@ -152,11 +188,19 @@ Deno.serve(async (req) => {
       tripletex_employee_id: employee.tripletex_employee_id,
     } satisfies Record<string, Json>;
 
+    console.log('Person payload:', personPayload);
+
     const { data: upsertedPerson, error: personUpsertError } = await supabaseAdmin
       .from('person')
       .upsert(personPayload, { onConflict: 'org_id,tripletex_employee_id' })
       .select('id')
       .single();
+
+    console.log('Person upsert result:', { 
+      upsertedPerson, 
+      error: personUpsertError?.message,
+      errorDetails: personUpsertError 
+    });
 
     if (personUpsertError) {
       console.error('Feil ved oppdatering/opprettelse av person', personUpsertError);
@@ -234,9 +278,16 @@ Deno.serve(async (req) => {
       role: existingProfileForUser?.role ?? 'user'
     } satisfies Record<string, Json>;
 
+    console.log('Profile payload:', profilePayload);
+
     const { error: upsertProfileError } = await supabaseAdmin
       .from('profiles')
       .upsert(profilePayload, { onConflict: 'user_id' });
+
+    console.log('Profile upsert result:', { 
+      error: upsertProfileError?.message,
+      errorDetails: upsertProfileError 
+    });
 
     if (upsertProfileError) {
       console.error('Feil ved opprettelse av profil', upsertProfileError);
