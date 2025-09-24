@@ -463,7 +463,7 @@ const AdminBrukere = () => {
             <Button onClick={testCreateProfile} variant="outline" size="sm">
               🧪 Test Profil
             </Button>
-            <Button onClick={testCreateTestUser} variant="outline" size="sm">
+            <Button onClick={testCheckUser} variant="outline" size="sm">
               🔍 Test Edge
             </Button>
             <Button onClick={testCreateTestUser} variant="outline" size="sm">
