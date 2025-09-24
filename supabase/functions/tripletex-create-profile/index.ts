@@ -213,14 +213,14 @@ Deno.serve(async (req) => {
     // Check if user already exists using listUsers
     const { data: usersList, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers({
       page: 1,
-      perPage: 100, // Get more users to search through
+      perPage: 50, // Get users to search through
     });
 
     console.log('Existing user check:', { 
       email: normalizedEmail, 
       usersFound: usersList?.users?.length || 0,
       error: listUsersError?.message,
-      users: usersList?.users
+      hasUsers: !!usersList?.users
     });
 
     if (listUsersError) {
