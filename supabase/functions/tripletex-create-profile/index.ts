@@ -210,18 +210,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user already exists using listUsers
+    // Check if user already exists using listUsers (get more users to search through)
     const { data: usersList, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers({
       page: 1,
-      perPage: 1,
-      email: normalizedEmail
+      perPage: 50, // Get more users to search through
     });
 
     console.log('Existing user check:', { 
       email: normalizedEmail, 
       usersFound: usersList?.users?.length || 0,
       error: listUsersError?.message,
-      hasUsers: !!usersList?.users
+      hasUsers: !!usersList?.users,
+      allUserEmails: usersList?.users?.map(u => u.email) || []
     });
 
     if (listUsersError) {
@@ -232,7 +232,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    const existingUser = usersList?.users?.[0];
+    // Find user by email manually since listUsers email filter doesn't work
+    const existingUser = usersList?.users?.find(user => 
+      user.email?.toLowerCase() === normalizedEmail.toLowerCase()
+    );
 
     console.log('User lookup result:', { 
       searchedEmail: normalizedEmail,
