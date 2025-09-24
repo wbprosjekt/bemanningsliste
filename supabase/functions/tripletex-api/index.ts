@@ -891,7 +891,17 @@ Deno.serve(async (req) => {
         }
 
         result = await exponentialBackoff(async () => {
-          console.log('Preflight IDs', { employeeId: employee_id, projectId: project_id, activityId: activity_id });
+          console.log('📋 Timesheet entry details:', {
+            vaktTimerId: vakt_timer_id,
+            employeeId: employee_id,
+            projectId: project_id,
+            activityId: activity_id,
+            hours: hoursNumber,
+            date: entryDate,
+            isOvertime: is_overtime,
+            description: description,
+            orgId: orgId
+          });
 
           // 1) Finnes entiteter?
           const employeeCheck = await callTripletexAPI(`/employee/${employee_id}`, 'GET', undefined, orgId);
@@ -962,6 +972,8 @@ Deno.serve(async (req) => {
 
           const createdId = response?.data?.value?.id;
           if (response.success && createdId) {
+            console.log('✅ Timesheet entry created successfully:', { tripletexId: createdId });
+            
             const { error: updateError } = await supabase
               .from('vakt_timer')
               .update({
@@ -977,12 +989,25 @@ Deno.serve(async (req) => {
               return { success: true, data: response.data, warning: 'Tripletex ok, men lokal status ikke oppdatert' };
             }
 
+            console.log('✅ Local vakt_timer updated successfully');
             return { success: true, data: { tripletex_id: createdId, message: 'Timesheet entry created' } };
           }
 
+          // Handle failed response
+          console.error('❌ Timesheet entry creation failed:', {
+            success: response.success,
+            error: response.error,
+            status: response.status,
+            data: response.data
+          });
+
           await supabase
             .from('vakt_timer')
-            .update({ sync_error: response.error || 'Unknown error', tripletex_synced_at: null })
+            .update({ 
+              sync_error: response.error || 'Unknown error', 
+              tripletex_synced_at: null,
+              status: 'utkast' // Reset to draft on failure
+            })
             .eq('id', vakt_timer_id);
 
           return response;
