@@ -205,7 +205,10 @@ Deno.serve(async (req) => {
     if (personUpsertError) {
       console.error('❌ RETURN 500: Feil ved oppdatering/opprettelse av person', personUpsertError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Kunne ikke opprette eller oppdatere person i organisasjonen.' }),
+        JSON.stringify({ 
+          success: false, 
+          error: `Kunne ikke opprette eller oppdatere person i organisasjonen (${personUpsertError.message}).`
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
@@ -219,7 +222,7 @@ Deno.serve(async (req) => {
     if (getUserError && !userNotFound) {
       console.error('❌ RETURN 500: Feil ved oppslag av eksisterende bruker', getUserError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Kunne ikke sjekke om bruker allerede eksisterer.' }),
+        JSON.stringify({ success: false, error: `Kunne ikke sjekke om bruker allerede eksisterer (${getUserError.message}).` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
@@ -254,7 +257,7 @@ Deno.serve(async (req) => {
       if (inviteError) {
         console.error('❌ RETURN 500: Feil ved utsendelse av invitasjon', inviteError);
         return new Response(
-          JSON.stringify({ success: false, error: 'Kunne ikke sende invitasjon til brukeren.' }),
+          JSON.stringify({ success: false, error: `Kunne ikke sende invitasjon til brukeren (${inviteError.message}).` }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
         );
       }
@@ -281,7 +284,7 @@ Deno.serve(async (req) => {
     if (profileAnyOrgError) {
       console.error('❌ RETURN 500: Feil ved oppslag av eksisterende profil (alle org)', profileAnyOrgError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Kunne ikke verifisere eksisterende brukerprofil.' }),
+        JSON.stringify({ success: false, error: `Kunne ikke verifisere eksisterende brukerprofil (${profileAnyOrgError.message}).` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
@@ -310,6 +313,14 @@ Deno.serve(async (req) => {
       orgId, 
       existingProfile: existingProfileForUser 
     });
+
+    if (existingProfileError && existingProfileError.code !== 'PGRST116') {
+      console.error('❌ RETURN 500: Feil ved oppslag av eksisterende profil for org', existingProfileError);
+      return new Response(
+        JSON.stringify({ success: false, error: `Kunne ikke hente eksisterende profil (${existingProfileError.message}).` }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
 
     // If user already has a profile in this org, skip further processing
     if (existingProfileForUser) {
@@ -350,7 +361,7 @@ Deno.serve(async (req) => {
     if (insertProfileError) {
       console.error('❌ RETURN 500: Feil ved opprettelse av ny profil', insertProfileError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Kunne ikke opprette profil for brukeren.' }),
+        JSON.stringify({ success: false, error: `Kunne ikke opprette profil for brukeren (${insertProfileError.message}).` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
