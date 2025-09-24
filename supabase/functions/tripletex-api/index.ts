@@ -17,6 +17,25 @@ interface TripletexResponse {
   error?: string;
 }
 
+interface TripletexEmployeeRecord {
+  id: number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  isActive?: boolean;
+}
+
+interface TripletexListMeta {
+  isLastPage?: boolean;
+  nextPage?: number | null;
+  page?: number;
+  totalPages?: number;
+  numberOfPages?: number;
+  totalCount?: number;
+  countTotal?: number;
+  totalMatches?: number;
+}
+
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -289,6 +308,96 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
   }
 }
 
+async function fetchAllTripletexEmployees(orgId: string) {
+  const pageSize = 100;
+  let currentPage = 0;
+  const employees: TripletexEmployeeRecord[] = [];
+  const visitedPages = new Set<number>();
+  let totalFromMeta: number | undefined;
+  let pagesFetched = 0;
+
+  while (pagesFetched < 100) { // safety guard to avoid infinite loops
+    if (visitedPages.has(currentPage)) {
+      console.warn('Pagination loop detected while fetching Tripletex employees', { orgId, currentPage });
+      break;
+    }
+
+    visitedPages.add(currentPage);
+    pagesFetched += 1;
+
+    const response = await callTripletexAPI(`/employee?count=${pageSize}&page=${currentPage}`, 'GET', undefined, orgId);
+    if (!response.success) {
+      return {
+        success: false,
+        error: response.error,
+        meta: { pagesFetched, totalFromMeta }
+      } as const;
+    }
+
+    const pageEmployees = Array.isArray(response.data?.values)
+      ? (response.data.values as TripletexEmployeeRecord[])
+      : [];
+
+    employees.push(...pageEmployees);
+
+    const meta = response.data?.meta as TripletexListMeta | undefined;
+    const links = (response.data?.links || response.data?._links) as { next?: string | null } | undefined;
+    if (typeof meta?.totalCount === 'number') {
+      totalFromMeta = meta.totalCount;
+    } else if (typeof meta?.countTotal === 'number') {
+      totalFromMeta = meta.countTotal;
+    } else if (typeof meta?.totalMatches === 'number') {
+      totalFromMeta = meta.totalMatches;
+    }
+
+    const expectedTotal = totalFromMeta;
+    const collectedCount = employees.length;
+
+    const isLastPage = meta?.isLastPage === true
+      || pageEmployees.length < pageSize
+      || (typeof expectedTotal === 'number' && collectedCount >= expectedTotal)
+      || (typeof meta?.totalPages === 'number' && (meta.page ?? currentPage) >= meta.totalPages - 1)
+      || (typeof meta?.numberOfPages === 'number' && (meta.page ?? currentPage) >= meta.numberOfPages - 1)
+      || meta?.nextPage === null;
+
+    if (isLastPage) {
+      break;
+    }
+
+    if (typeof meta?.nextPage === 'number') {
+      currentPage = meta.nextPage;
+    } else {
+      let nextFromLink: number | undefined;
+      const linkCandidate = links?.next;
+      if (typeof linkCandidate === 'string') {
+        try {
+          const parsed = new URL(linkCandidate, 'https://dummy.tripletex.local');
+          const pageParam = parsed.searchParams.get('page');
+          if (pageParam !== null) {
+            const parsedPage = Number(pageParam);
+            if (!Number.isNaN(parsedPage)) {
+              nextFromLink = parsedPage;
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to parse Tripletex pagination link', { error, linkCandidate });
+        }
+      }
+
+      currentPage = typeof nextFromLink === 'number' ? nextFromLink : currentPage + 1;
+    }
+  }
+
+  return {
+    success: true,
+    employees,
+    meta: {
+      pagesFetched,
+      totalFromMeta
+    }
+  } as const;
+}
+
 // === helpers: participant & activity checks ===
 async function getProjectParticipantIds(orgId: string, projectId: number) {
   const res = await callTripletexAPI(`/project/${projectId}`, 'GET', undefined, orgId);
@@ -428,51 +537,57 @@ Deno.serve(async (req) => {
 
       case 'sync-employees': {
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/employee?count=100', 'GET', undefined, orgId);
-          if (response.success && response.data?.values) {
-            console.log(`Syncing ${response.data.values.length} employees for org ${orgId}`);
-            
-            // Cache employees in database
-            const employees = response.data.values.map((emp: unknown) => {
-              const employee = emp as { id: number; firstName?: string; lastName?: string; email?: string; isActive?: boolean };
-              return {
-                org_id: orgId,
-                tripletex_employee_id: employee.id,
-                fornavn: employee.firstName || '',
-                etternavn: employee.lastName || '',
-                epost: employee.email,
-                aktiv: employee.isActive !== false, // Default to true if undefined
-                last_synced: new Date().toISOString()
-              };
+          const employeeFetch = await fetchAllTripletexEmployees(orgId);
+          if (!employeeFetch.success) {
+            return { success: false, error: employeeFetch.error };
+          }
+
+          const rawEmployees = employeeFetch.employees ?? [];
+
+          if (rawEmployees.length === 0) {
+            console.log(`Syncing 0 employees for org ${orgId}`);
+          } else {
+            console.log(`Syncing ${rawEmployees.length} employees for org ${orgId}`, {
+              pagesFetched: employeeFetch.meta?.pagesFetched,
+              totalFromMeta: employeeFetch.meta?.totalFromMeta
+            });
+          }
+
+          // Cache employees in database
+          const employees = rawEmployees.map((emp: TripletexEmployeeRecord) => ({
+            org_id: orgId,
+            tripletex_employee_id: emp.id,
+            fornavn: emp.firstName || '',
+            etternavn: emp.lastName || '',
+            epost: emp.email,
+            aktiv: emp.isActive !== false, // Default to true if undefined
+            last_synced: new Date().toISOString()
+          }));
+
+          const { error: upsertError } = await supabase
+            .from('ttx_employee_cache')
+            .upsert(employees, { 
+              onConflict: 'org_id,tripletex_employee_id',
+              ignoreDuplicates: false 
             });
 
-            // Upsert employees with proper conflict resolution
-            const { error: upsertError } = await supabase
-              .from('ttx_employee_cache')
-              .upsert(employees, { 
-                onConflict: 'org_id,tripletex_employee_id',
-                ignoreDuplicates: false 
-              });
+          if (upsertError) {
+            console.error('Error upserting employees:', upsertError);
+            return { success: false, error: `Database error: ${upsertError.message}` };
+          }
 
-            if (upsertError) {
-              console.error('Error upserting employees:', upsertError);
-              return { success: false, error: `Database error: ${upsertError.message}` };
-            }
+          // Create person records for each employee
+          const persons = employees.map((emp) => ({
+            org_id: orgId,
+            fornavn: emp.fornavn,
+            etternavn: emp.etternavn,
+            epost: emp.epost,
+            tripletex_employee_id: emp.tripletex_employee_id,
+            aktiv: emp.aktiv,
+            person_type: 'ansatt'
+          }));
 
-            // Create person records for each employee
-            const persons = employees.map((emp: unknown) => {
-              const employee = emp as { fornavn: string; etternavn: string; epost?: string; tripletex_employee_id: number; aktiv: boolean };
-              return {
-                org_id: orgId,
-                fornavn: employee.fornavn,
-                etternavn: employee.etternavn,
-                epost: employee.epost,
-                tripletex_employee_id: employee.tripletex_employee_id,
-                aktiv: employee.aktiv,
-                person_type: 'ansatt'
-              };
-            });
-
+          if (persons.length > 0) {
             const { error: personError } = await supabase
               .from('person')
               .upsert(persons, {
@@ -484,60 +599,59 @@ Deno.serve(async (req) => {
               console.error('Error upserting persons:', personError);
               return { success: false, error: `Person creation error: ${personError.message}` };
             }
-
-            // Auto-create profiles for employees with valid email addresses
-            let profilesCreated = 0;
-            const validEmployees = employees.filter(emp => 
-              emp.epost && 
-              emp.epost.includes('@') && 
-              emp.aktiv
-            );
-
-            for (const emp of validEmployees) {
-              try {
-                // Check if profile already exists for this email
-                const { data: existingProfiles } = await supabase
-                  .from('profiles')
-                  .select('id')
-                  .eq('org_id', orgId)
-                  .eq('display_name', `${emp.fornavn} ${emp.etternavn}`)
-                  .single();
-
-                if (!existingProfiles) {
-                  // Create a placeholder profile that will be claimed when user signs up
-                  const profileId = crypto.randomUUID();
-                  
-                  const { error: profileError } = await supabase
-                    .from('profiles')
-                    .insert({
-                      id: profileId,
-                      user_id: profileId, // Temporary - will be updated when user actually signs up
-                      org_id: orgId,
-                      display_name: `${emp.fornavn} ${emp.etternavn}`,
-                      role: 'user'
-                    });
-
-                  if (!profileError) {
-                    profilesCreated++;
-                    console.log(`Created profile for ${emp.fornavn} ${emp.etternavn}`);
-                  }
-                }
-              } catch (profileErr) {
-                console.error(`Failed to create profile for ${emp.fornavn} ${emp.etternavn}:`, profileErr);
-              }
-            }
-
-            console.log(`Successfully synced ${employees.length} employees and created ${profilesCreated} profiles`);
-            return { 
-              success: true, 
-              data: { 
-                employees: employees.length,
-                profilesCreated: profilesCreated,
-                validEmails: validEmployees.length
-              } 
-            };
           }
-          return response;
+
+          // Auto-create profiles for employees with valid email addresses
+          let profilesCreated = 0;
+          const validEmployees = employees.filter(emp => 
+            emp.epost && 
+            emp.epost.includes('@') && 
+            emp.aktiv
+          );
+
+          for (const emp of validEmployees) {
+            try {
+              // Check if profile already exists for this email
+              const { data: existingProfiles } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('org_id', orgId)
+                .eq('display_name', `${emp.fornavn} ${emp.etternavn}`)
+                .single();
+
+              if (!existingProfiles) {
+                // Create a placeholder profile that will be claimed when user signs up
+                const profileId = crypto.randomUUID();
+                
+                const { error: profileError } = await supabase
+                  .from('profiles')
+                  .insert({
+                    id: profileId,
+                    user_id: profileId, // Temporary - will be updated when user actually signs up
+                    org_id: orgId,
+                    display_name: `${emp.fornavn} ${emp.etternavn}`,
+                    role: 'user'
+                  });
+
+                if (!profileError) {
+                  profilesCreated++;
+                  console.log(`Created profile for ${emp.fornavn} ${emp.etternavn}`);
+                }
+              }
+            } catch (profileErr) {
+              console.error(`Failed to create profile for ${emp.fornavn} ${emp.etternavn}:`, profileErr);
+            }
+          }
+
+          console.log(`Successfully synced ${employees.length} employees and created ${profilesCreated} profiles`);
+          return { 
+            success: true, 
+            data: { 
+              employees: employees.length,
+              profilesCreated: profilesCreated,
+              validEmails: validEmployees.length
+            } 
+          };
         });
         break;
       }
