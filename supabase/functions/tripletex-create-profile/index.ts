@@ -244,8 +244,7 @@ Deno.serve(async (req) => {
 
     console.log('User ID from listUsers:', { existingUserId: authUserId });
 
-    // If we didn't find the user or if we found the wrong user (not the one we're looking for)
-    if (!authUserId || existingUser?.email?.toLowerCase() !== normalizedEmail.toLowerCase()) {
+    if (!authUserId) {
       console.log('Creating new user invitation for:', normalizedEmail);
       const { data: invitedUser, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
         normalizedEmail,
