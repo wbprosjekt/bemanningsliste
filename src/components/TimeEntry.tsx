@@ -325,7 +325,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
           notat: notat || null,
           status: nextStatus,
           is_overtime: true,
-          overtime_type: '100'
+          lonnstype: 'overtid'
         };
 
         const overtime100Result = await supabase
@@ -345,7 +345,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
           notat: notat || null,
           status: nextStatus,
           is_overtime: true,
-          overtime_type: '50'
+          lonnstype: 'overtid'
         };
 
         const overtime50Result = await supabase
