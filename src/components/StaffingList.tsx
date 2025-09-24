@@ -328,7 +328,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             aktivitet_id,
             ttx_activity_cache:aktivitet_id (
               id,
-              navn
+              navn,
+              ttx_id
             )
           )
         `)
@@ -371,7 +372,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
               tripletex_entry_id: timer.tripletex_entry_id,
               sync_error: timer.sync_error,
               aktivitet_id: timer.aktivitet_id,
-              ttx_activity_id: timer.ttx_activity_cache?.id
+              ttx_activity_id: timer.ttx_activity_cache?.ttx_id ?? undefined
             }));
             
             // Calculate total hours from activities
