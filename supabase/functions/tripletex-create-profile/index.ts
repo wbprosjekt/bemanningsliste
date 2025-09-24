@@ -271,6 +271,33 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Ensure user is not already tied to another organization
+    const { data: existingProfileAnyOrg, error: profileAnyOrgError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, org_id')
+      .eq('user_id', authUserId)
+      .maybeSingle();
+
+    if (profileAnyOrgError) {
+      console.error('❌ RETURN 500: Feil ved oppslag av eksisterende profil (alle org)', profileAnyOrgError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Kunne ikke verifisere eksisterende brukerprofil.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    if (existingProfileAnyOrg && existingProfileAnyOrg.org_id !== orgId) {
+      console.log('❌ RETURN 409: User already attached to another organization', {
+        authUserId,
+        existingOrg: existingProfileAnyOrg.org_id,
+        requestedOrg: orgId
+      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Bruker er allerede tilknyttet en annen organisasjon.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
+      );
+    }
+
     const { data: existingProfileForUser, error: existingProfileError } = await supabaseAdmin
       .from('profiles')
       .select('id, org_id, role')
