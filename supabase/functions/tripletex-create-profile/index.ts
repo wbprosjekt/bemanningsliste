@@ -213,26 +213,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user already exists using getUserByEmail to avoid pulling unrelated accounts
-    const { data: existingUserData, error: getUserError } = await supabaseAdmin.auth.admin.getUserByEmail(normalizedEmail);
+    // Check if user already exists using listUsers and match on normalized email
+    const { data: usersList, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 200,
+      email: normalizedEmail
+    });
 
-    const userNotFound = getUserError && typeof getUserError.message === 'string' 
-      && getUserError.message.toLowerCase() === 'user not found';
-
-    if (getUserError && !userNotFound) {
-      console.error('❌ RETURN 500: Feil ved oppslag av eksisterende bruker', getUserError);
+    if (listUsersError) {
+      console.error('❌ RETURN 500: Feil ved oppslag av eksisterende bruker', listUsersError);
       return new Response(
-        JSON.stringify({ success: false, error: `Kunne ikke sjekke om bruker allerede eksisterer (${getUserError.message}).` }),
+        JSON.stringify({ success: false, error: `Kunne ikke sjekke om bruker allerede eksisterer (${listUsersError.message}).` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    const existingUser = userNotFound ? null : existingUserData?.user ?? null;
+    const existingUser = usersList?.users?.find(user => user.email?.toLowerCase() === normalizedEmail) ?? null;
 
     console.log('User lookup result:', { 
       searchedEmail: normalizedEmail,
       foundUser: existingUser ? { id: existingUser.id, email: existingUser.email } : null,
-      lookupError: getUserError?.message
+      usersReturned: usersList?.users?.length || 0
     });
 
     let authUserId: string | undefined = existingUser?.id;
