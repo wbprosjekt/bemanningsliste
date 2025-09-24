@@ -907,6 +907,57 @@ Deno.serve(async (req) => {
             orgId: orgId
           });
 
+          // Handle overtime by finding or creating overtime activities
+          let finalActivityId = activity_id;
+          if (is_overtime) {
+            console.log('🕐 Processing overtime hours - looking for overtime activities');
+            
+            // Look for existing overtime activities for this project
+            const overtimeActivities = await callTripletexAPI(`/project/${project_id}/activities?count=100`, 'GET', undefined, orgId);
+            
+            if (overtimeActivities.success && overtimeActivities.data?.values) {
+              // Look for activities with "overtid" or "overtime" in the name
+              const activities = overtimeActivities.data.values as Array<{ id: number; name?: string; isActive?: boolean }>;
+              const overtimeActivity = activities.find(act => 
+                act.isActive !== false && 
+                act.name && 
+                (act.name.toLowerCase().includes('overtid') || 
+                 act.name.toLowerCase().includes('overtime') ||
+                 act.name.toLowerCase().includes('100%'))
+              );
+              
+              if (overtimeActivity) {
+                finalActivityId = overtimeActivity.id;
+                console.log('✅ Found existing overtime activity:', { 
+                  id: overtimeActivity.id, 
+                  name: overtimeActivity.name 
+                });
+              } else {
+                console.log('⚠️ No overtime activity found for project, attempting to create one');
+                
+                // Try to create an overtime activity for this project
+                const createActivityResponse = await callTripletexAPI('/activity', 'POST', {
+                  name: 'Overtid 100%',
+                  isActive: true,
+                  project: { id: Number(project_id) }
+                }, orgId);
+                
+                if (createActivityResponse.success && createActivityResponse.data?.value?.id) {
+                  finalActivityId = createActivityResponse.data.value.id;
+                  console.log('✅ Created new overtime activity:', { 
+                    id: finalActivityId, 
+                    name: 'Overtid 100%' 
+                  });
+                } else {
+                  console.log('⚠️ Could not create overtime activity, using regular activity');
+                  // Fall back to regular activity - overtime will be handled manually in Tripletex
+                }
+              }
+            } else {
+              console.log('⚠️ Could not fetch project activities, using regular activity');
+            }
+          }
+
           // 1) Finnes entiteter?
           const employeeCheck = await callTripletexAPI(`/employee/${employee_id}`, 'GET', undefined, orgId);
           if (!employeeCheck.success) {
@@ -930,10 +981,10 @@ Deno.serve(async (req) => {
           }
 
           // 3) Sjekk at aktiviteten hører til prosjektet (hvis satt)
-          if (activity_id) {
-            const actOk = await ensureActivityOnProject(orgId, Number(project_id), Number(activity_id));
+          if (finalActivityId) {
+            const actOk = await ensureActivityOnProject(orgId, Number(project_id), Number(finalActivityId));
             if (!actOk.ok) {
-              return { success: false, error: 'activity_not_on_project', projectId: project_id, activityId: activity_id, details: actOk.reason };
+              return { success: false, error: 'activity_not_on_project', projectId: project_id, activityId: finalActivityId, details: actOk.reason };
             }
           }
 
@@ -943,11 +994,9 @@ Deno.serve(async (req) => {
             date: entryDate,
             employee: { id: Number(employee_id) },
             project:  { id: Number(project_id) },
-            ...(activity_id ? { activity: { id: Number(activity_id) } } : {}),
+            ...(finalActivityId ? { activity: { id: Number(finalActivityId) } } : {}),
             hours: hoursNumber,
             comment: description || ''
-            // Note: Tripletex API doesn't support wageTypeCode parameter
-            // Overtime must be handled through specific activities or different approach
           };
 
           console.log('POST /timesheet/entry with payload:', { 
@@ -955,7 +1004,9 @@ Deno.serve(async (req) => {
             employee: '***', 
             project: '***',
             is_overtime: is_overtime,
-            note: 'Tripletex API does not support wageTypeCode - overtime must be handled differently'
+            originalActivityId: activity_id,
+            finalActivityId: finalActivityId,
+            note: is_overtime ? 'Overtime handled through separate activity' : 'Regular hours'
           });
 
           const response = await callTripletexAPI('/timesheet/entry', 'POST', entryPayload, orgId);
@@ -965,9 +1016,11 @@ Deno.serve(async (req) => {
             status: response.status,
             hasData: !!response.data,
             isOvertime: is_overtime,
+            originalActivityId: activity_id,
+            finalActivityId: finalActivityId,
             error: response.error,
             fullResponse: response,
-            note: 'Overtime handling requires different approach - possibly through separate activities or manual configuration'
+            note: is_overtime ? 'Overtime sent to separate activity for proper billing and payroll' : 'Regular hours processed'
           });
 
           const createdId = response?.data?.value?.id;
