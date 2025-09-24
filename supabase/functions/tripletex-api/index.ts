@@ -929,18 +929,49 @@ Deno.serve(async (req) => {
           const entryDate = new Date(date).toISOString().split('T')[0];
           const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
 
+          // For overtime entries, use the correct wageTypeCode
+          // 2007 = Overtid 50%, 2008 = Overtid 100%
+          let wageTypeCode = undefined;
+          
+          if (is_overtime) {
+            // For now, default to 100% overtime (2008)
+            // TODO: Determine overtime percentage based on system logic
+            wageTypeCode = '2008'; // Overtid 100%
+            console.log('Overtime entry detected - using wageTypeCode:', wageTypeCode);
+          }
+
           const entryPayload = {
             date: entryDate,
             employee: { id: Number(employee_id) },
             project:  { id: Number(project_id) },
             ...(activity_id ? { activity: { id: Number(activity_id) } } : {}),
             hours: hoursNumber,
-            comment: description || ''
+            comment: description || '',
+            // Add wageTypeCode for overtime entries using existing Tripletex wage types
+            ...(wageTypeCode ? { wageTypeCode: wageTypeCode } : {})
           };
 
-          console.log('POST /timesheet/entry with payload:', { ...entryPayload, employee: '***', project: '***' });
+          console.log('POST /timesheet/entry with payload:', { 
+            ...entryPayload, 
+            employee: '***', 
+            project: '***',
+            is_overtime: is_overtime,
+            wageTypeCode: wageTypeCode,
+            note: 'Using existing Tripletex wage types: 2007=50% overtime, 2008=100% overtime'
+          });
 
           const response = await callTripletexAPI('/timesheet/entry', 'POST', entryPayload, orgId);
+
+          console.log('Tripletex API response:', { 
+            success: response.success, 
+            status: response.status,
+            hasData: !!response.data,
+            isOvertime: is_overtime,
+            wageTypeCode: wageTypeCode,
+            error: response.error,
+            fullResponse: response,
+            note: 'Testing wageTypeCode parameter with existing Tripletex wage types'
+          });
 
           const createdId = response?.data?.value?.id;
           if (response.success && createdId) {
