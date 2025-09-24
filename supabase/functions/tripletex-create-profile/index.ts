@@ -210,39 +210,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user already exists using listUsers
-    const { data: usersList, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers({
-      page: 1,
-      perPage: 1,
-      email: normalizedEmail
-    });
+    // Check if user already exists using getUserByEmail to avoid pulling unrelated accounts
+    const { data: existingUserData, error: getUserError } = await supabaseAdmin.auth.admin.getUserByEmail(normalizedEmail);
 
-    console.log('Existing user check:', { 
-      email: normalizedEmail, 
-      usersFound: usersList?.users?.length || 0,
-      error: listUsersError?.message,
-      hasUsers: !!usersList?.users
-    });
+    const userNotFound = getUserError && typeof getUserError.message === 'string' 
+      && getUserError.message.toLowerCase() === 'user not found';
 
-    if (listUsersError) {
-      console.error('❌ RETURN 500: Feil ved oppslag av eksisterende bruker', listUsersError);
+    if (getUserError && !userNotFound) {
+      console.error('❌ RETURN 500: Feil ved oppslag av eksisterende bruker', getUserError);
       return new Response(
         JSON.stringify({ success: false, error: 'Kunne ikke sjekke om bruker allerede eksisterer.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    const existingUser = usersList?.users?.[0];
+    const existingUser = userNotFound ? null : existingUserData?.user ?? null;
 
     console.log('User lookup result:', { 
       searchedEmail: normalizedEmail,
-      foundUser: existingUser ? { id: existingUser.id, email: existingUser.email } : null
+      foundUser: existingUser ? { id: existingUser.id, email: existingUser.email } : null,
+      lookupError: getUserError?.message
     });
 
     let authUserId: string | undefined = existingUser?.id;
     let invitationSent = false;
 
-    console.log('User ID from listUsers:', { existingUserId: authUserId });
+    console.log('User ID from lookup:', { existingUserId: authUserId });
 
     if (!authUserId) {
       console.log('Creating new user invitation for:', normalizedEmail);
