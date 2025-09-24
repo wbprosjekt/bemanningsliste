@@ -891,6 +891,10 @@ Deno.serve(async (req) => {
         }
 
         result = await exponentialBackoff(async () => {
+          // 4) Bygg korrekt payload for /timesheet/entry (IKKE array, IKKE clientReference, IKKE count/description)
+          const entryDate = new Date(date).toISOString().split('T')[0];
+          const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
+
           console.log('📋 Timesheet entry details:', {
             vaktTimerId: vakt_timer_id,
             employeeId: employee_id,
@@ -934,10 +938,6 @@ Deno.serve(async (req) => {
           }
 
           console.log('All preflight checks passed - proceeding with timesheet submission');
-
-          // 4) Bygg korrekt payload for /timesheet/entry (IKKE array, IKKE clientReference, IKKE count/description)
-          const entryDate = new Date(date).toISOString().split('T')[0];
-          const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
 
           const entryPayload = {
             date: entryDate,
