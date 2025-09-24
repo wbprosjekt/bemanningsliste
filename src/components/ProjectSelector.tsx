@@ -55,7 +55,7 @@ const ProjectSelector = ({
           customer_name
         `)
         .eq('org_id', orgId)
-        .eq('aktiv', true)
+        .eq('is_active', true)
         .order('project_name');
 
       // If personId is provided, filter by projects the person is assigned to
