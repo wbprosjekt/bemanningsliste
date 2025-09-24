@@ -1,15 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { ChevronLeft, ChevronRight, Calendar, Eye, Users } from 'lucide-react';
 import { getDateFromWeek, getWeekNumber, getPersonDisplayName } from '@/lib/displayNames';
 import DayCard from '@/components/DayCard';
 
 import OnboardingDialog from '@/components/OnboardingDialog';
+
+type PersonRow = Database['public']['Tables']['person']['Row'];
 
 interface Profile {
   id: string;
@@ -20,25 +24,29 @@ interface Profile {
   };
 }
 
-interface Person {
-  id: string;
-  fornavn: string;
-  etternavn: string;
-  forventet_dagstimer: number;
-}
+type Person = Pick<
+  PersonRow,
+  'id' | 'fornavn' | 'etternavn' | 'forventet_dagstimer' | 'epost' | 'aktiv' | 'person_type'
+>;
 
 const MinUke = () => {
   const { year, week } = useParams<{ year: string; week: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
   const [showFullWeek, setShowFullWeek] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isSimulation, setIsSimulation] = useState(false);
+  const [simulatedPersonName, setSimulatedPersonName] = useState<string | null>(null);
 
   const currentYear = parseInt(year || new Date().getFullYear().toString());
   const currentWeek = parseInt(week || getWeekNumber(new Date()).toString());
+  const formattedWeek = currentWeek.toString().padStart(2, '0');
+  const simulatePersonId = searchParams.get('simulatePersonId');
 
   const getWeeksInYear = (targetYear: number) => {
     // Use ISO week calculation to get the correct number of weeks
@@ -50,6 +58,16 @@ const MinUke = () => {
     if (!user) return;
 
     try {
+      const toPerson = (data: PersonRow): Person => ({
+        id: data.id,
+        fornavn: data.fornavn,
+        etternavn: data.etternavn,
+        forventet_dagstimer: data.forventet_dagstimer ?? null,
+        epost: data.epost ?? null,
+        aktiv: data.aktiv ?? undefined,
+        person_type: data.person_type ?? null
+      });
+
       // Load user profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -70,6 +88,43 @@ const MinUke = () => {
 
       setProfile(profileData);
 
+      setIsSimulation(false);
+      setSimulatedPersonName(null);
+
+      if (simulatePersonId) {
+        if (!['admin', 'manager'].includes(profileData.role)) {
+          toast({
+            title: 'Manglende tilgang',
+            description: 'Bare administratorer eller ledere kan simulere andre personer.',
+            variant: 'destructive'
+          });
+        } else {
+          const { data: simulatedPerson, error: simulatedPersonError } = await supabase
+            .from('person')
+            .select('*')
+            .eq('id', simulatePersonId)
+            .eq('org_id', profileData.org_id)
+            .maybeSingle();
+
+          if (simulatedPersonError && simulatedPersonError.code !== 'PGRST116') {
+            console.warn('Error loading simulated person', simulatePersonId, simulatedPersonError);
+          } else if (!simulatedPerson) {
+            toast({
+              title: 'Fant ikke ansatt',
+              description: 'Kunne ikke finne personen du forsøker å simulere.',
+              variant: 'destructive'
+            });
+          } else {
+            setPerson(toPerson(simulatedPerson));
+            setIsSimulation(true);
+            setSimulatedPersonName(
+              getPersonDisplayName(simulatedPerson.fornavn, simulatedPerson.etternavn)
+            );
+            return;
+          }
+        }
+      }
+
       if (user.email) {
         const normalizedEmail = user.email.toLowerCase();
 
@@ -83,7 +138,7 @@ const MinUke = () => {
         if (personError && personError.code !== 'PGRST116') {
           console.warn('Error loading person for email', normalizedEmail, personError);
         } else {
-          setPerson(personData ?? null);
+          setPerson(personData ? toPerson(personData) : null);
         }
       } else {
         setPerson(null);
@@ -94,7 +149,7 @@ const MinUke = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, simulatePersonId, toast]);
 
   useEffect(() => {
     if (user) {
@@ -125,6 +180,10 @@ const MinUke = () => {
     }
 
     navigate(`/min/uke/${newYear}/${newWeek.toString().padStart(2, '0')}`);
+  };
+
+  const exitSimulation = () => {
+    navigate(`/min/uke/${currentYear}/${formattedWeek}`, { replace: true });
   };
 
   const getWeekDays = useCallback(() => {
@@ -197,6 +256,21 @@ const MinUke = () => {
               Uke {currentWeek}, {currentYear}
               {person && ` - ${getPersonDisplayName(person.fornavn, person.etternavn)}`}
             </p>
+            {isSimulation && simulatedPersonName && (
+              <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                <Badge className="w-fit bg-blue-100 text-blue-800" variant="secondary">
+                  Simulerer {simulatedPersonName}
+                </Badge>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 sm:mt-0"
+                  onClick={exitSimulation}
+                >
+                  Avslutt simulering
+                </Button>
+              </div>
+            )}
           </div>
 
           {missingPersonRecord && (
@@ -223,6 +297,16 @@ const MinUke = () => {
                 <Eye className="h-4 w-4 mr-1" />
                 {showFullWeek ? 'Kompakt' : 'Hele uka'}
               </Button>
+              {isSimulation && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={exitSimulation}
+                >
+                  Avslutt simulering
+                </Button>
+              )}
               <Button 
                 variant="outline" 
                 size="sm"
@@ -257,6 +341,15 @@ const MinUke = () => {
                 <Eye className="h-4 w-4 mr-1" />
                 {showFullWeek ? 'Kompakt visning' : 'Vis hele uka'}
               </Button>
+              {isSimulation && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={exitSimulation}
+                >
+                  Avslutt simulering
+                </Button>
+              )}
               <Button 
                 variant="outline" 
                 size="sm"

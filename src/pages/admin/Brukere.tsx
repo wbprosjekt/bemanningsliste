@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,9 +20,10 @@ import {
   Shield,
   RefreshCw,
   Eye,
-  EyeOff
+  EyeOff,
+  UserCheck
 } from 'lucide-react';
-import { getPersonDisplayName } from '@/lib/displayNames';
+import { getPersonDisplayName, getWeekNumber } from '@/lib/displayNames';
 import OnboardingDialog from '@/components/OnboardingDialog';
 import UserInviteSystem from '@/components/UserInviteSystem';
 
@@ -46,12 +48,24 @@ interface UserProfile {
     epost: string | null;
     aktiv: boolean;
     person_type: string;
+    forventet_dagstimer?: number | null;
   } | null;
+}
+
+interface PersonRecord {
+  id: string;
+  fornavn: string;
+  etternavn: string;
+  epost: string | null;
+  aktiv: boolean;
+  person_type: string | null;
+  forventet_dagstimer: number | null;
 }
 
 const AdminBrukere = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,57 +132,93 @@ const AdminBrukere = () => {
     console.log('🔄 loadUsers called for org:', profile.org_id);
     setLoading(true);
     try {
-      // First, let's check ALL profiles in the database (without org filter)
-      const { data: allProfiles, error: allError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          user_id,
-          display_name,
-          role,
-          org_id,
-          created_at
-        `)
-        .order('created_at', { ascending: false });
+      const [profilesResponse, personsResponse] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select(`
+            id,
+            user_id,
+            display_name,
+            role,
+            created_at
+          `)
+          .eq('org_id', profile.org_id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('person')
+          .select(`
+            id,
+            fornavn,
+            etternavn,
+            epost,
+            aktiv,
+            person_type,
+            forventet_dagstimer
+          `)
+          .eq('org_id', profile.org_id)
+      ]);
 
-      console.log('🌍 ALL profiles in database:', { 
-        count: allProfiles?.length || 0, 
-        error: allError?.message,
-        profiles: allProfiles 
-      });
-
-      // Now get profiles for current org
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          user_id,
-          display_name,
-          role,
-          created_at
-        `)
-        .eq('org_id', profile.org_id)
-        .order('created_at', { ascending: false });
-
-      console.log('📊 Profiles query result for org:', { 
-        orgId: profile.org_id,
-        data: data?.length || 0, 
-        error: error?.message,
-        rawData: data 
-      });
+      const { data, error } = profilesResponse;
+      const { data: personData, error: personError } = personsResponse;
 
       if (error) throw error;
+      if (personError) throw personError;
 
-      // For now, we'll use the profile user_id to get email from auth, but that requires service role
-      // In production, you'd either store email in profiles or use a different approach
-      const usersWithEmails = (data || []).map(userProfile => ({
-        ...userProfile,
-        user_email: 'Se auth-system',
-        person: null // We'll handle person linking separately if needed
-      }));
+      const persons = (personData || []) as PersonRecord[];
 
-      console.log('👥 Processed users:', usersWithEmails.length, 'users');
-      setUsers(usersWithEmails);
+      const normalizeName = (value: string | null | undefined) =>
+        (value || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/\p{Diacritic}/gu, '')
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      const personByEmail = new Map<string, PersonRecord>();
+      const personByName = new Map<string, PersonRecord>();
+
+      persons.forEach(person => {
+        if (person.epost) {
+          personByEmail.set(person.epost.toLowerCase(), person);
+        }
+        const nameKey = normalizeName(`${person.fornavn} ${person.etternavn}`);
+        if (nameKey) {
+          personByName.set(nameKey, person);
+        }
+      });
+
+      const usersWithDetails = (data || []).map(userProfile => {
+        let matchedPerson: PersonRecord | null = null;
+
+        if (userProfile.display_name) {
+          const displayNameKey = normalizeName(userProfile.display_name);
+          if (displayNameKey) {
+            matchedPerson = personByName.get(displayNameKey) ?? null;
+          }
+        }
+
+        const enhancedProfile: UserProfile = {
+          ...userProfile,
+          user_email: matchedPerson?.epost ?? 'Se auth-system',
+          person: matchedPerson
+            ? {
+                id: matchedPerson.id,
+                fornavn: matchedPerson.fornavn,
+                etternavn: matchedPerson.etternavn,
+                epost: matchedPerson.epost,
+                aktiv: matchedPerson.aktiv,
+                person_type: matchedPerson.person_type ?? 'ansatt',
+                forventet_dagstimer: matchedPerson.forventet_dagstimer
+              }
+            : null
+        };
+
+        return enhancedProfile;
+      });
+
+      console.log('👥 Processed users:', usersWithDetails.length, 'users');
+      setUsers(usersWithDetails);
     } catch (error) {
       console.error('❌ Error loading users:', error);
       toast({
@@ -293,11 +343,39 @@ const AdminBrukere = () => {
   };
 
   const getPersonTypeBadge = (userProfile: UserProfile) => {
-    // Since we don't have person data loaded, show based on role
+    if (userProfile.person?.person_type) {
+      const type = userProfile.person.person_type.toLowerCase();
+      if (type === 'konsulent') {
+        return <Badge className="bg-purple-500">🤝 Konsulent</Badge>;
+      }
+      if (type === 'underleverandor') {
+        return <Badge className="bg-orange-500">🏗️ Underleverandør</Badge>;
+      }
+      return <Badge variant="outline">👤 {userProfile.person.person_type}</Badge>;
+    }
+
     if (userProfile.role === 'admin') {
-      return <Badge className="bg-red-500">👨‍💼 Administrator</Badge>;
+      return <Badge className="bg-red-500">🛡️ Administrator</Badge>;
     }
     return <Badge variant="outline">👤 Bruker</Badge>;
+  };
+
+  const handleSimulateUser = (userProfile: UserProfile) => {
+    if (!userProfile.person) {
+      toast({
+        title: "Ingen ansattprofil funnet",
+        description: "Knytt brukeren til en person før du kan simulere deres uke.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const now = new Date();
+    const currentWeek = getWeekNumber(now);
+    const currentYear = now.getFullYear();
+    const formattedWeek = currentWeek.toString().padStart(2, '0');
+
+    navigate(`/min/uke/${currentYear}/${formattedWeek}?simulatePersonId=${userProfile.person.id}`);
   };
 
   const filteredUsers = users.filter(user =>
@@ -495,7 +573,7 @@ const AdminBrukere = () => {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Mail className="h-4 w-4 text-muted-foreground" />
-                          {userProfile.user_email}
+                          {userProfile.person?.epost || userProfile.user_email || 'Ikke tilgjengelig'}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -540,6 +618,15 @@ const AdminBrukere = () => {
                             ) : (
                               <Eye className="h-4 w-4" />
                             )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSimulateUser(userProfile)}
+                            disabled={!userProfile.person}
+                            title={userProfile.person ? 'Åpne "Min uke" som denne personen' : 'Ingen tilknyttet ansatt funnet'}
+                          >
+                            <UserCheck className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
