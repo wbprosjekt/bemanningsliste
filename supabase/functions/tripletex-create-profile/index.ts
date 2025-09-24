@@ -162,7 +162,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    const normalizedEmail = String(employee.epost).toLowerCase();
+    const normalizedEmail = String(employee.epost).trim().toLowerCase();
+
+    const isLikelyValidEmail = (email: string) => {
+      // Simple RFC5322-inspired validation to fail fast before calling Supabase
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    };
+
+    if (!isLikelyValidEmail(normalizedEmail)) {
+      console.log('❌ RETURN 400: Invalid email format from Tripletex', { employeeId, email: employee.epost });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Ansatt mangler gyldig e-postadresse.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
 
     const { error: personLookupError } = await supabaseAdmin
       .from('person')
@@ -257,9 +270,14 @@ Deno.serve(async (req) => {
 
       if (inviteError) {
         console.error('❌ RETURN 500: Feil ved utsendelse av invitasjon', inviteError);
+        const statusCode = inviteError.status === 400 ? 400 : 500;
+        const errorMessage = inviteError.code === 'email_address_invalid'
+          ? 'Supabase godtar ikke e-postadressen. Kontroller at den er gyldig og ikke inneholder spesialtegn.'
+          : `Kunne ikke sende invitasjon til brukeren (${inviteError.message}).`;
+
         return new Response(
-          JSON.stringify({ success: false, error: `Kunne ikke sende invitasjon til brukeren (${inviteError.message}).` }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+          JSON.stringify({ success: false, error: errorMessage }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: statusCode }
         );
       }
 
