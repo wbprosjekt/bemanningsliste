@@ -1846,21 +1846,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                       </tr>
                     );
                   })}
-                </tbody>
-                
-                {/* Free Lines for this week */}
-                {(() => {
-                  const weekFreeLines = freeLines.filter(line => 
-                    line.week_number === safeWeek.week && line.year === safeWeek.year
-                  );
-                  return weekFreeLines.length > 0 ? (
-                    <>
-                      {/* Separator line */}
-                      <tr>
-                        <td colSpan={weekData.dates?.length ? weekData.dates.length + 2 : 3} className="border-t-2 border-gray-400 bg-gray-100 p-2">
-                          <div className="text-xs font-medium text-gray-600 text-center">Frie linjer</div>
-                        </td>
-                      </tr>
+                  
+                  {/* Free Lines for this week */}
+                  {(() => {
+                    const weekFreeLines = freeLines.filter(line => 
+                      line.week_number === safeWeek.week && line.year === safeWeek.year
+                    );
+                    return weekFreeLines.length > 0 ? (
+                      <>
+                        {/* Separator line */}
+                        <tr>
+                          <td colSpan={weekData.dates?.length ? weekData.dates.length + 2 : 3} className="border-t-2 border-gray-400 bg-gray-100 p-2">
+                            <div className="text-xs font-medium text-gray-600 text-center">Frie linjer</div>
+                          </td>
+                        </tr>
                       
                       {weekFreeLines.map((line, lineIndex) => (
                         <tr key={line.id} className="h-10 bg-gray-50">
@@ -2041,6 +2040,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                     </tr>
                   );
                 })()}
+                </tbody>
               </table>
             </div>
           </div>
