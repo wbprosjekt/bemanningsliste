@@ -3,12 +3,13 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
-import { ChevronLeft, ChevronRight, Calendar, Eye, Users } from 'lucide-react';
-import { getDateFromWeek, getWeekNumber, getPersonDisplayName } from '@/lib/displayNames';
+import { ChevronLeft, ChevronRight, Calendar, Eye, Users, BarChart3, Clock, Target, CheckCircle, AlertCircle, Download, Send, Copy } from 'lucide-react';
+import { getDateFromWeek, getWeekNumber, getPersonDisplayName, formatTimeValue } from '@/lib/displayNames';
 import DayCard from '@/components/DayCard';
 
 import OnboardingDialog from '@/components/OnboardingDialog';
@@ -29,6 +30,23 @@ type Person = Pick<
   'id' | 'fornavn' | 'etternavn' | 'forventet_dagstimer' | 'epost' | 'aktiv' | 'person_type'
 >;
 
+interface WeeklySummary {
+  totalHours: number;
+  totalOvertime: number;
+  totalExpected: number;
+  completionPercentage: number;
+  daysCompleted: number;
+  daysWithEntries: number;
+  totalDays: number;
+  status: 'complete' | 'partial' | 'missing' | 'empty';
+  projects: Array<{
+    project_name: string;
+    project_number: number;
+    totalHours: number;
+    days: number;
+  }>;
+}
+
 const MinUke = () => {
   const { year, week } = useParams<{ year: string; week: string }>();
   const navigate = useNavigate();
@@ -42,6 +60,14 @@ const MinUke = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isSimulation, setIsSimulation] = useState(false);
   const [simulatedPersonName, setSimulatedPersonName] = useState<string | null>(null);
+  const [weeklySummary, setWeeklySummary] = useState<WeeklySummary | null>(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [calendarDays, setCalendarDays] = useState<Array<{
+    dato: string;
+    is_holiday: boolean;
+    is_weekend: boolean;
+    holiday_name: string | null;
+  }>>([]);
 
   const currentYear = parseInt(year || new Date().getFullYear().toString());
   const currentWeek = parseInt(week || getWeekNumber(new Date()).toString());
@@ -151,11 +177,187 @@ const MinUke = () => {
     }
   }, [user, simulatePersonId, toast]);
 
+  const loadWeeklySummary = useCallback(async () => {
+    if (!person?.id || !profile?.org_id) {
+      setWeeklySummary(null);
+      return;
+    }
+
+    setLoadingSummary(true);
+    try {
+      const startDate = getDateFromWeek(currentYear, currentWeek);
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+
+      // Load all vakt entries for the week
+      const { data: vakter, error } = await supabase
+        .from('vakt')
+        .select(`
+          id,
+          dato,
+          project_id,
+          ttx_project_cache:project_id (
+            project_name,
+            project_number,
+            tripletex_project_id
+          ),
+          vakt_timer (
+            id,
+            timer,
+            status,
+            is_overtime,
+            lonnstype
+          )
+        `)
+        .eq('org_id', profile.org_id)
+        .eq('person_id', person.id)
+        .gte('dato', startDate.toISOString().split('T')[0])
+        .lte('dato', endDate.toISOString().split('T')[0]);
+
+      if (error) throw error;
+
+      // Calculate summary
+      let totalHours = 0;
+      let totalOvertime = 0;
+      let totalExpected = 0;
+      let daysCompleted = 0;
+      let daysWithEntries = 0;
+      const projectMap = new Map<string, { project_name: string; project_number: number; totalHours: number; days: number }>();
+
+      const weekDays = getWeekDays();
+      const workingDays = weekDays.filter(day => {
+        const dayOfWeek = day.getDay();
+        return dayOfWeek >= 1 && dayOfWeek <= 5; // Monday to Friday
+      });
+
+      weekDays.forEach(day => {
+        const dayStr = day.toISOString().split('T')[0];
+        const dayVakter = vakter?.filter(v => v.dato === dayStr) || [];
+        
+        if (dayVakter.length > 0) {
+          daysWithEntries++;
+          
+          let dayHours = 0;
+          let dayOvertime = 0;
+          let dayExpected = person.forventet_dagstimer || 8.0;
+          
+          // Check if it's a weekend or holiday
+          const dayOfWeek = day.getDay();
+          if (dayOfWeek === 0 || dayOfWeek === 6) {
+            dayExpected = 0; // Weekend
+          }
+          
+          dayVakter.forEach(vakt => {
+            vakt.vakt_timer.forEach(timer => {
+              dayHours += timer.timer;
+              if (timer.is_overtime) {
+                dayOvertime += timer.timer;
+              }
+              
+              // Track project hours
+              if (vakt.ttx_project_cache) {
+                const projectKey = vakt.ttx_project_cache.tripletex_project_id.toString();
+                const existing = projectMap.get(projectKey) || {
+                  project_name: vakt.ttx_project_cache.project_name,
+                  project_number: vakt.ttx_project_cache.project_number,
+                  totalHours: 0,
+                  days: 0
+                };
+                existing.totalHours += timer.timer;
+                if (!projectMap.has(projectKey)) {
+                  existing.days = 1;
+                  projectMap.set(projectKey, existing);
+                }
+              }
+            });
+          });
+          
+          totalHours += dayHours;
+          totalOvertime += dayOvertime;
+          totalExpected += dayExpected;
+          
+          if (dayHours >= dayExpected && dayExpected > 0) {
+            daysCompleted++;
+          }
+        }
+      });
+
+      const completionPercentage = totalExpected > 0 ? Math.round((totalHours / totalExpected) * 100) : 0;
+      
+      let status: WeeklySummary['status'] = 'empty';
+      if (daysWithEntries === 0) {
+        status = 'empty';
+      } else if (completionPercentage >= 100) {
+        status = 'complete';
+      } else if (completionPercentage >= 50) {
+        status = 'partial';
+      } else {
+        status = 'missing';
+      }
+
+      setWeeklySummary({
+        totalHours,
+        totalOvertime,
+        totalExpected,
+        completionPercentage,
+        daysCompleted,
+        daysWithEntries,
+        totalDays: workingDays.length,
+        status,
+        projects: Array.from(projectMap.values()).sort((a, b) => b.totalHours - a.totalHours)
+      });
+    } catch (error) {
+      console.error('Error loading weekly summary:', error);
+      toast({
+        title: "Kunne ikke laste ukessammendrag",
+        description: "Det oppstod en feil ved lasting av ukestatistikk.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingSummary(false);
+    }
+  }, [person?.id, profile?.org_id, currentYear, currentWeek, getWeekDays, toast]);
+
+  const loadCalendarDays = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      const startDate = getDateFromWeek(currentYear, currentWeek);
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+
+      const { data, error } = await supabase
+        .from('kalender_dag')
+        .select('dato, is_holiday, is_weekend, holiday_name')
+        .eq('org_id', profile.org_id)
+        .gte('dato', startDate.toISOString().split('T')[0])
+        .lte('dato', endDate.toISOString().split('T')[0]);
+
+      if (error) throw error;
+      setCalendarDays(data || []);
+    } catch (error) {
+      console.error('Error loading calendar days:', error);
+      // Don't show error toast for calendar days as it's not critical
+    }
+  }, [profile?.org_id, currentYear, currentWeek]);
+
   useEffect(() => {
     if (user) {
       loadUserData();
     }
   }, [user, loadUserData]);
+
+  useEffect(() => {
+    if (person && profile) {
+      loadWeeklySummary();
+    }
+  }, [person, profile, loadWeeklySummary]);
+
+  useEffect(() => {
+    if (profile) {
+      loadCalendarDays();
+    }
+  }, [profile, loadCalendarDays]);
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
@@ -396,6 +598,109 @@ const MinUke = () => {
           </Button>
         </div>
 
+        {/* Weekly Summary */}
+        {person && weeklySummary && (
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <BarChart3 className="h-5 w-5" />
+                Ukessammendrag
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Progress Overview */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-primary">
+                    {formatTimeValue(weeklySummary.totalHours)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Timer ført</div>
+                  {weeklySummary.totalOvertime > 0 && (
+                    <div className="text-xs text-yellow-600 mt-1">
+                      +{formatTimeValue(weeklySummary.totalOvertime)} overtid
+                    </div>
+                  )}
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-muted-foreground">
+                    {formatTimeValue(weeklySummary.totalExpected)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Forventet</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold">
+                    {weeklySummary.completionPercentage}%
+                  </div>
+                  <div className="text-sm text-muted-foreground">Fullført</div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Ukesfremgang</span>
+                  <span>{weeklySummary.daysCompleted}/{weeklySummary.totalDays} dager</span>
+                </div>
+                <Progress 
+                  value={weeklySummary.completionPercentage} 
+                  className="h-2"
+                />
+              </div>
+
+              {/* Status Badge */}
+              <div className="flex justify-center">
+                {weeklySummary.status === 'complete' && (
+                  <Badge className="bg-green-500 text-white">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Uke fullført
+                  </Badge>
+                )}
+                {weeklySummary.status === 'partial' && (
+                  <Badge className="bg-yellow-500 text-white">
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Delvis fullført
+                  </Badge>
+                )}
+                {weeklySummary.status === 'missing' && (
+                  <Badge className="bg-red-500 text-white">
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Mangler timer
+                  </Badge>
+                )}
+                {weeklySummary.status === 'empty' && (
+                  <Badge variant="outline">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Ingen timer ført
+                  </Badge>
+                )}
+              </div>
+
+              {/* Project Breakdown */}
+              {weeklySummary.projects.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Prosjekter denne uken:</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {weeklySummary.projects.map((project, index) => (
+                      <div key={index} className="flex justify-between items-center p-2 bg-muted/50 rounded text-sm">
+                        <div>
+                          <div className="font-medium">{project.project_number}</div>
+                          <div className="text-muted-foreground text-xs truncate">
+                            {project.project_name}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">{formatTimeValue(project.totalHours)}</div>
+                          <div className="text-muted-foreground text-xs">{project.days} dager</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Week View */}
         {!person ? (
           <Card>
@@ -421,6 +726,7 @@ const MinUke = () => {
                   orgId={profile.org_id}
                   personId={person?.id}
                   forventetTimer={person?.forventet_dagstimer || 8.0}
+                  calendarDays={calendarDays}
                 />
               </div>
             ))}
@@ -441,6 +747,7 @@ const MinUke = () => {
                     orgId={profile.org_id}
                     personId={person?.id}
                     forventetTimer={person?.forventet_dagstimer || 8.0}
+                    calendarDays={calendarDays}
                   />
                 </div>
               ))}
@@ -454,17 +761,63 @@ const MinUke = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-              <Button variant="outline" size="sm" className="text-xs sm:text-sm">
-                📊 Ukeoversikt
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs sm:text-sm"
+                onClick={() => {
+                  if (weeklySummary) {
+                    toast({
+                      title: "Ukessammendrag",
+                      description: `Du har ført ${formatTimeValue(weeklySummary.totalHours)} timer denne uken (${weeklySummary.completionPercentage}% fullført)`,
+                    });
+                  }
+                }}
+              >
+                <BarChart3 className="h-3 w-3 mr-1" />
+                Ukeoversikt
               </Button>
-              <Button variant="outline" size="sm" className="text-xs sm:text-sm">
-                📋 Kopier uka
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs sm:text-sm"
+                onClick={() => {
+                  toast({
+                    title: "Kopier uke",
+                    description: "Funksjonen kommer snart!",
+                  });
+                }}
+              >
+                <Copy className="h-3 w-3 mr-1" />
+                Kopier uka
               </Button>
-              <Button variant="outline" size="sm" className="text-xs sm:text-sm">
-                📤 Send til godkjenning
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs sm:text-sm"
+                onClick={() => {
+                  toast({
+                    title: "Send til godkjenning",
+                    description: "Funksjonen kommer snart!",
+                  });
+                }}
+              >
+                <Send className="h-3 w-3 mr-1" />
+                Send til godkjenning
               </Button>
-              <Button variant="outline" size="sm" className="text-xs sm:text-sm">
-                📄 Eksporter
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs sm:text-sm"
+                onClick={() => {
+                  toast({
+                    title: "Eksporter",
+                    description: "Funksjonen kommer snart!",
+                  });
+                }}
+              >
+                <Download className="h-3 w-3 mr-1" />
+                Eksporter
               </Button>
             </div>
           </CardContent>
