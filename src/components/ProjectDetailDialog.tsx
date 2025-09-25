@@ -90,7 +90,7 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="w-full max-w-md mx-4 sm:mx-0 sm:w-auto sm:max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -108,8 +108,8 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  <span>{projectDetails.displayName}</span>
-                  <Badge variant={projectDetails.isClosed ? "secondary" : "default"}>
+                  <span className="break-words hyphens-auto leading-tight">{projectDetails.displayName}</span>
+                  <Badge variant={projectDetails.isClosed ? "secondary" : "default"} className="ml-2 flex-shrink-0">
                     {projectDetails.isClosed ? "Avsluttet" : "Aktiv"}
                   </Badge>
                 </CardTitle>
@@ -129,7 +129,7 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
                 {projectDetails.description && (
                   <div>
                     <span className="font-medium text-sm">Beskrivelse:</span>
-                    <p className="text-sm text-muted-foreground mt-1">{projectDetails.description}</p>
+                    <p className="text-sm text-muted-foreground mt-1 break-words hyphens-auto leading-relaxed">{projectDetails.description}</p>
                   </div>
                 )}
 
@@ -171,15 +171,25 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
                 
                 {projectDetails.customer.email && (
                   <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
-                    <span>{projectDetails.customer.email}</span>
+                    <Mail className="h-4 w-4 flex-shrink-0" />
+                    <a 
+                      href={`mailto:${projectDetails.customer.email}`}
+                      className="text-blue-600 hover:text-blue-800 underline break-all"
+                    >
+                      {projectDetails.customer.email}
+                    </a>
                   </div>
                 )}
                 
                 {projectDetails.customer.phoneNumber && (
                   <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4" />
-                    <span>{projectDetails.customer.phoneNumber}</span>
+                    <Phone className="h-4 w-4 flex-shrink-0" />
+                    <a 
+                      href={`tel:${projectDetails.customer.phoneNumber}`}
+                      className="text-blue-600 hover:text-blue-800 underline"
+                    >
+                      {projectDetails.customer.phoneNumber}
+                    </a>
                   </div>
                 )}
               </CardContent>
@@ -202,15 +212,25 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
                   
                   {projectDetails.projectManager.email && (
                     <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      <span>{projectDetails.projectManager.email}</span>
+                      <Mail className="h-4 w-4 flex-shrink-0" />
+                      <a 
+                        href={`mailto:${projectDetails.projectManager.email}`}
+                        className="text-blue-600 hover:text-blue-800 underline break-all"
+                      >
+                        {projectDetails.projectManager.email}
+                      </a>
                     </div>
                   )}
                   
                   {projectDetails.projectManager.phoneNumber && (
                     <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      <span>{projectDetails.projectManager.phoneNumber}</span>
+                      <Phone className="h-4 w-4 flex-shrink-0" />
+                      <a 
+                        href={`tel:${projectDetails.projectManager.phoneNumber}`}
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        {projectDetails.projectManager.phoneNumber}
+                      </a>
                     </div>
                   )}
                 </CardContent>
