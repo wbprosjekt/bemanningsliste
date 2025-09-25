@@ -94,9 +94,6 @@ const MinUke = () => {
     return days;
   }, [currentYear, currentWeek]);
 
-  // Memoize weekDays to prevent infinite loops. Must be declared before any early return.
-  const weekDays = useMemo(() => getWeekDays(), [getWeekDays]);
-
   const loadUserData = useCallback(async () => {
     if (!user) return;
 
@@ -411,6 +408,9 @@ const MinUke = () => {
   const exitSimulation = () => {
     navigate(`/min/uke/${currentYear}/${formattedWeek}`, { replace: true });
   };
+
+  // Memoize weekDays to prevent infinite loops. Must be declared before any early return.
+  const weekDays = useMemo(() => getWeekDays(), [getWeekDays]);
 
   const isToday = (date: Date) => {
     const today = new Date();
