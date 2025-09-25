@@ -369,11 +369,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       if (error) throw error;
 
-      // Create a map of existing vakt data
-      const vaktMap = new Map<string, VaktTimer>();
+      // Create a map of existing vakt data - allow multiple entries per person per day
+      const vaktMap = new Map<string, VaktTimer[]>();
       vaktData?.forEach((vakt: VaktTimer) => {
         const key = `${vakt.dato}-${vakt.person_id}`;
-        vaktMap.set(key, vakt);
+        if (!vaktMap.has(key)) {
+          vaktMap.set(key, []);
+        }
+        vaktMap.get(key)!.push(vakt);
       });
 
       // Generate staffing entries for all employees and dates
@@ -385,11 +388,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           if (!dateKey) return;
           
           const vaktKey = `${dateKey}-${employee.id}`;
-          const existingVakt = vaktMap.get(vaktKey);
+          const existingVakts = vaktMap.get(vaktKey) || [];
           
-          if (existingVakt) {
-            // Use existing vakt data and transform vaktTimer to activities
-            const activities = (existingVakt.vakt_timer || []).map((timer: VaktTimer) => ({
+          if (existingVakts.length > 0) {
+            // Process each vakt entry separately to create multiple StaffingEntry entries
+            existingVakts.forEach((existingVakt) => {
+              // Use existing vakt data and transform vaktTimer to activities
+              const activities = (existingVakt.vakt_timer || []).map((timer: VaktTimer) => ({
               id: timer.id,
               timer: timer.timer ?? 0,
               status: timer.status,
@@ -409,16 +414,17 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             // Calculate total hours from activities
             const totalHours = activities.reduce((sum, activity) => sum + (activity.timer ?? 0), 0);
             
-            entries.push({
-              id: existingVakt.id,
-              date: dateKey,
-              person: existingVakt.person,
-              project: existingVakt.ttx_project_cache,
-              activities: activities,
-              totalHours: totalHours,
-              status: activities.length > 0 ? 
-                (activities.every(a => a.status === 'godkjent') ? 'approved' : 'draft') : 
-                'missing'
+              entries.push({
+                id: existingVakt.id,
+                date: dateKey,
+                person: existingVakt.person,
+                project: existingVakt.ttx_project_cache,
+                activities: activities,
+                totalHours: totalHours,
+                status: activities.length > 0 ? 
+                  (activities.every(a => a.status === 'godkjent') ? 'approved' : 'draft') : 
+                  'missing'
+              });
             });
           } else {
             // Create new entry
