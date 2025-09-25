@@ -417,9 +417,6 @@ const MinUke = () => {
     return date.toDateString() === today.toDateString();
   };
 
-  // Memoize weekDays to prevent infinite loops. Must be declared before any early return.
-  const weekDays = useMemo(() => getWeekDays(), [getWeekDays]);
-
   if (showOnboarding) {
     return <OnboardingDialog onComplete={handleOnboardingComplete} />;
   }
