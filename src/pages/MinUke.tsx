@@ -80,6 +80,19 @@ const MinUke = () => {
     return getWeekNumber(dec28);
   };
 
+  const getWeekDays = useCallback(() => {
+    const startDate = getDateFromWeek(currentYear, currentWeek);
+    const days = [];
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      days.push(date);
+    }
+    
+    return days;
+  }, [currentYear, currentWeek]);
+
   const loadUserData = useCallback(async () => {
     if (!user) return;
 
@@ -387,19 +400,6 @@ const MinUke = () => {
   const exitSimulation = () => {
     navigate(`/min/uke/${currentYear}/${formattedWeek}`, { replace: true });
   };
-
-  const getWeekDays = useCallback(() => {
-    const startDate = getDateFromWeek(currentYear, currentWeek);
-    const days = [];
-    
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      days.push(date);
-    }
-    
-    return days;
-  }, [currentYear, currentWeek]);
 
   const isToday = (date: Date) => {
     const today = new Date();
