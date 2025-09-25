@@ -409,8 +409,8 @@ const MinUke = () => {
     navigate(`/min/uke/${currentYear}/${formattedWeek}`, { replace: true });
   };
 
-  // Memoize weekDays to prevent infinite loops. Must be declared before any early return.
-  const weekDays = useMemo(() => getWeekDays(), [getWeekDays]);
+  // Get weekDays directly to avoid initialization issues
+  const weekDays = getWeekDays();
 
   const isToday = (date: Date) => {
     const today = new Date();
