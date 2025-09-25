@@ -329,7 +329,7 @@ const MinUke = () => {
     } finally {
       setLoadingSummary(false);
     }
-  }, [person?.id, profile?.org_id, currentYear, currentWeek, getWeekDays, toast]);
+  }, [person?.id, profile?.org_id, currentYear, currentWeek, toast]);
 
   const loadCalendarDays = useCallback(async () => {
     if (!profile?.org_id) return;
