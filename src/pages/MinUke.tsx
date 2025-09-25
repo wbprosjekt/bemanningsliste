@@ -238,7 +238,6 @@ const MinUke = () => {
       const projectMap = new Map<string, { project_name: string; project_number: number; totalHours: number; days: number }>();
 
       // Generate week days directly to avoid initialization issues
-      const startDate = getDateFromWeek(currentYear, currentWeek);
       const weekDays = [];
       for (let i = 0; i < 7; i++) {
         const date = new Date(startDate);
