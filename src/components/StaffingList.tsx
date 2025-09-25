@@ -1155,7 +1155,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   }, [profile?.org_id, loadFreeLines, toast]);
 
-  const copyFreeBubble = useCallback(async (bubbleId: string, targetDate: string) => {
+  const copyFreeBubble = useCallback(async (bubbleId: string, targetDate: string, targetLineId: string) => {
     if (!profile?.org_id) return;
 
     try {
@@ -1168,46 +1168,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       if (fetchError) throw fetchError;
 
-      // Find the line for the target date - if none exists, find any line for the same week
-      let targetLine = freeLines.find(line => 
-        line.frie_bobler?.some(bubble => bubble.date === targetDate)
-      );
+      // Find the specific target line directly
+      const targetLine = freeLines.find(line => line.id === targetLineId);
 
-      // If no line exists for this date, find the first line for the same week
       if (!targetLine) {
-        // Extract week and year from targetDate
-        const targetDateObj = new Date(targetDate);
-        const targetWeek = getWeekNumber(targetDateObj);
-        const targetYear = targetDateObj.getFullYear();
-        
-        targetLine = freeLines.find(line => 
-          line.week_number === targetWeek && line.year === targetYear
-        );
-      }
-
-      // If still no line exists, create a new one for this week
-      if (!targetLine) {
-        const targetDateObj = new Date(targetDate);
-        const targetWeek = getWeekNumber(targetDateObj);
-        const targetYear = targetDateObj.getFullYear();
-        
-        const { data: newLine, error: lineError } = await supabase
-          .from('frie_linjer')
-          .insert({
-            org_id: profile.org_id,
-            week_number: targetWeek,
-            year: targetYear,
-            display_order: 1
-          })
-          .select()
-          .single();
-
-        if (lineError) throw lineError;
-        targetLine = newLine;
+        throw new Error(`Target line with ID ${targetLineId} not found`);
       }
 
       // Create a copy
-      const { error: insertError } = await supabase
+      const { data: newBubble, error: insertError } = await supabase
         .from('frie_bobler')
         .insert({
           frie_linje_id: targetLine.id,
@@ -1215,7 +1184,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           text: originalBubble.text,
           color: originalBubble.color,
           display_order: (targetLine.frie_bobler?.length || 0) + 1
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) throw insertError;
       
@@ -1636,6 +1607,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                          weekData.dates?.some(d => toDateKey(d) === e.date)
                        );
                        
+                       // Calculate max projects per day for this employee to ensure consistent row height
+                       const maxProjectsPerDay = Math.max(1, ...weekData.dates?.map(date => {
+                         const dateStr = toDateKey(date);
+                         return employeeEntries.filter(e => e.date === dateStr && e.project).length;
+                       }) || [1]);
+                       
                        const isEvenRow = employeeIndex % 2 === 0;
                        
                        return (
@@ -1671,7 +1648,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                  key={dateStr || `${employee.id}-${safeWeek.week}-${idx}`}
                                className={`border border-gray-300 p-1 min-w-[140px] relative group ${isEvenRow ? 'bg-white' : 'bg-gray-25'}`}
                                style={{
-                                 minHeight: `${Math.max(120, dayEntries.length * 70 + 40)}px`
+                                 minHeight: `${Math.max(120, maxProjectsPerDay * 70 + 40)}px`,
+                                 verticalAlign: 'top'
                                }}
                               data-employee-id={employee.id}
                               data-date={dateStr}
@@ -1719,13 +1697,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                               {isFreeDay && (
                                 <div className="absolute inset-0 bg-red-500/10 pointer-events-none rounded-sm" />
                               )}
-                              <div className="flex flex-col gap-1 items-start justify-start">
-                                {/* Debug info */}
-                                {dayEntries.length > 1 && (
-                                  <div className="text-xs text-red-500 bg-yellow-100 p-1 rounded">
-                                    Debug: {dayEntries.length} prosjekter på denne dagen
-                                  </div>
-                                )}
+                              <div className="flex flex-col gap-1 items-start h-full">
                                 {dayEntries
                                   .sort((a, b) => {
                                     const aNum = a.project?.project_number || 999999;
@@ -1864,10 +1836,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   
                   {/* Free Lines for this week */}
                   {(() => {
-                    const weekFreeLines = freeLines.filter(line => 
-                      line.week_number === safeWeek.week && line.year === safeWeek.year
-                    );
-                    return weekFreeLines.length > 0 ? (
+                  const weekFreeLines = freeLines.filter(line => 
+                    line.week_number === safeWeek.week && line.year === safeWeek.year
+                  );
+                  
+                  return weekFreeLines.length > 0 ? (
                       <>
                         {/* Separator line */}
                         <tr>
@@ -1876,7 +1849,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                           </td>
                         </tr>
                       
-                      {weekFreeLines.map((line, lineIndex) => (
+                      {weekFreeLines.map((line, lineIndex) => {
+                        return (
                         <tr key={line.id} className="h-10 bg-gray-50">
               {/* Line label */}
               <td className="border border-gray-300 p-1 text-xs text-muted-foreground text-center w-40 bg-slate-200">
@@ -1969,11 +1943,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                       const sourceDate = e.dataTransfer.getData('application/x-source-date');
                                       const sourceLineId = e.dataTransfer.getData('application/x-source-line');
                                       
-                                      if (isFreeBubble && bubbleId && sourceDate !== dateKey) {
+                                      if (isFreeBubble && bubbleId && (sourceDate !== dateKey || sourceLineId !== line.id)) {
                                         const intendsCopy = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.dataTransfer.dropEffect === 'copy';
                                         
                                         if (intendsCopy) {
-                                          copyFreeBubble(bubbleId, dateKey);
+                                          copyFreeBubble(bubbleId, dateKey, line.id);
                                         } else {
                                           moveFreeBubble(bubbleId, sourceLineId, dateKey);
                                         }
@@ -2013,7 +1987,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             </Button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                       
                       {/* Add new line button */}
                       <tr className="h-10 bg-gray-50">
