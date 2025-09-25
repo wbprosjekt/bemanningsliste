@@ -237,7 +237,15 @@ const MinUke = () => {
       let daysWithEntries = 0;
       const projectMap = new Map<string, { project_name: string; project_number: number; totalHours: number; days: number }>();
 
-      const weekDays = getWeekDays();
+      // Generate week days directly to avoid initialization issues
+      const startDate = getDateFromWeek(currentYear, currentWeek);
+      const weekDays = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
+        weekDays.push(date);
+      }
+      
       const workingDays = weekDays.filter(day => {
         const dayOfWeek = day.getDay();
         return dayOfWeek >= 1 && dayOfWeek <= 5; // Monday to Friday
