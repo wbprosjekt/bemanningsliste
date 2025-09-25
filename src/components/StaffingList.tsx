@@ -1663,7 +1663,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             return (
                                <td 
                                  key={dateStr || `${employee.id}-${safeWeek.week}-${idx}`}
-                               className={`border border-gray-300 p-1 min-h-[120px] min-w-[140px] relative group ${isEvenRow ? 'bg-white' : 'bg-gray-25'}`}
+                               className={`border border-gray-300 p-1 min-w-[140px] relative group ${isEvenRow ? 'bg-white' : 'bg-gray-25'}`}
+                               style={{
+                                 minHeight: `${Math.max(120, dayEntries.length * 70 + 40)}px`
+                               }}
                               data-employee-id={employee.id}
                               data-date={dateStr}
                               onDragOver={(e) => {
@@ -1710,7 +1713,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                               {isFreeDay && (
                                 <div className="absolute inset-0 bg-red-500/10 pointer-events-none rounded-sm" />
                               )}
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 items-start justify-start">
                                 {dayEntries
                                   .sort((a, b) => {
                                     const aNum = a.project?.project_number || 999999;
@@ -1720,7 +1723,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   .map((entry) => (
                                   <div
                                     key={entry.id}
-                                    className="w-full h-12 p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group/project truncate"
+                                    className="w-full h-14 p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group/project truncate"
                                     style={{ 
                                       backgroundColor: getProjectColor(entry.project?.tripletex_project_id),
                                       color: getContrastColor(getProjectColor(entry.project?.tripletex_project_id))
