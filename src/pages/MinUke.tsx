@@ -80,6 +80,7 @@ const MinUke = () => {
     return getWeekNumber(dec28);
   };
 
+  // Define getWeekDays early to avoid initialization issues
   const getWeekDays = useCallback(() => {
     const startDate = getDateFromWeek(currentYear, currentWeek);
     const days = [];
@@ -92,6 +93,9 @@ const MinUke = () => {
     
     return days;
   }, [currentYear, currentWeek]);
+
+  // Memoize weekDays to prevent infinite loops. Must be declared before any early return.
+  const weekDays = useMemo(() => getWeekDays(), [getWeekDays]);
 
   const loadUserData = useCallback(async () => {
     if (!user) return;
