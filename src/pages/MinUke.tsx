@@ -409,9 +409,6 @@ const MinUke = () => {
     navigate(`/min/uke/${currentYear}/${formattedWeek}`, { replace: true });
   };
 
-  // Get weekDays directly to avoid initialization issues
-  const weekDays = getWeekDays();
-
   const isToday = (date: Date) => {
     const today = new Date();
     return date.toDateString() === today.toDateString();
@@ -727,7 +724,7 @@ const MinUke = () => {
           </Card>
         ) : showFullWeek ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2 sm:gap-4">
-            {weekDays.map((date, index) => (
+            {getWeekDays().map((date, index) => (
               <div key={index} className={isToday(date) ? 'ring-2 ring-primary rounded-lg' : ''}>
                 <DayCard
                   date={date}
@@ -741,7 +738,7 @@ const MinUke = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
-            {weekDays
+            {getWeekDays()
               .filter(date => {
                 // Show today and upcoming days, plus previous 2 days
                 const today = new Date();
