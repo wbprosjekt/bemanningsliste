@@ -58,21 +58,10 @@ const ProjectSelector = ({
         .eq('is_active', true)
         .order('project_name');
 
-      // If personId is provided, filter by projects the person is assigned to
+      // If personId is provided, show all active projects (not just assigned ones)
+      // This allows assigning new projects to people
       if (personId) {
-        // Get projects where the person has vakts (work assignments)
-        const { data: vaktData, error: vaktError } = await supabase
-          .from('vakt')
-          .select('project_id')
-          .eq('person_id', personId)
-          .not('project_id', 'is', null);
-
-        if (vaktError) {
-          console.warn('Error loading person projects:', vaktError);
-        } else if (vaktData && vaktData.length > 0) {
-          const projectIds = [...new Set(vaktData.map(v => v.project_id))];
-          query = query.in('id', projectIds);
-        }
+        console.log('Loading all active projects for person assignment');
       }
 
       const { data, error } = await query;
@@ -86,13 +75,11 @@ const ProjectSelector = ({
       setProjects(data || []);
       
       if (!data || data.length === 0) {
-        if (personId) {
-          toast({
-            title: "Ingen prosjekter tilgjengelige",
-            description: "Du er ikke tilknyttet noen prosjekter. Kontakt administrator.",
-            variant: "destructive"
-          });
-        }
+        toast({
+          title: "Ingen aktive prosjekter funnet",
+          description: "Det finnes ingen aktive prosjekter i systemet.",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error('Error loading projects:', error);

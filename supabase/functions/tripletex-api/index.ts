@@ -883,10 +883,68 @@ Deno.serve(async (req) => {
       }
 
       case 'send_timesheet_entry': {
-        const { vakt_timer_id, employee_id, project_id, activity_id, hours, date, is_overtime, description } = payload;
+        const { vakt_timer_id, employee_id, project_id, activity_id, overtime_activity_id, hours, date, is_overtime, description } = payload;
         
         if (!vakt_timer_id || !employee_id || !project_id || !hours || !date) {
           result = { success: false, error: 'Missing required fields for timesheet entry' };
+          break;
+        }
+
+        // Check if this timer entry is already synced to Tripletex
+        const { data: existingTimer, error: timerError } = await supabase
+          .from('vakt_timer')
+          .select('tripletex_entry_id, tripletex_synced_at, status, lonnstype')
+          .eq('id', vakt_timer_id)
+          .single();
+
+        if (timerError) {
+          console.error('Error checking existing timer:', timerError);
+          result = { success: false, error: 'Could not check existing timer status' };
+          break;
+        }
+
+        if (existingTimer?.tripletex_entry_id) {
+          console.log('⚠️ Timer already synced to Tripletex:', { 
+            tripletexId: existingTimer.tripletex_entry_id,
+            syncedAt: existingTimer.tripletex_synced_at,
+            status: existingTimer.status
+          });
+          result = { 
+            success: false, 
+            error: 'Timer er allerede sendt til Tripletex. Bruk "Hent tilbake" for å oppdatere.',
+            alreadySynced: true,
+            tripletexId: existingTimer.tripletex_entry_id
+          };
+          break;
+        }
+
+        // Store original values before sending to Tripletex
+        const { data: originalTimer, error: originalError } = await supabase
+          .from('vakt_timer')
+          .select('timer, aktivitet_id, notat, status')
+          .eq('id', vakt_timer_id)
+          .single();
+
+        if (originalError) {
+          console.error('Error fetching original timer values:', originalError);
+          result = { success: false, error: 'Could not fetch original timer values' };
+          break;
+        }
+
+        // Update with original values before sending
+        const { error: storeOriginalError } = await supabase
+          .from('vakt_timer')
+          .update({
+            original_timer: originalTimer?.timer,
+            original_aktivitet_id: originalTimer?.aktivitet_id,
+            original_notat: originalTimer?.notat,
+            original_status: originalTimer?.status
+          })
+          .eq('id', vakt_timer_id);
+
+        if (storeOriginalError) {
+          console.error('Error storing original values:', storeOriginalError);
+          result = { success: false, error: 'Could not store original values' };
           break;
         }
 
@@ -907,23 +965,84 @@ Deno.serve(async (req) => {
             orgId: orgId
           });
 
-          // Handle overtime by finding or creating overtime activities
+          // Handle overtime by using separate activity field
           let finalActivityId = activity_id;
-          if (is_overtime) {
-            console.log('🕐 Processing overtime hours - looking for overtime activities');
+          let is50Percent = false; // Default to 100% overtime
+          
+          if (is_overtime && overtime_activity_id) {
+            console.log('✅ Using specific overtime activity from frontend:', { 
+              originalActivity: activity_id, 
+              overtimeActivity: overtime_activity_id 
+            });
+            finalActivityId = overtime_activity_id;
+            
+            // Determine overtime type based on lonnstype field
+            const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
+            const lonnstype = existingTimer?.lonnstype || '';
+            
+            if (lonnstype === 'overtid_50') {
+              is50Percent = true;
+            } else if (lonnstype === 'overtid_100') {
+              is50Percent = false;
+            } else {
+              // Fallback to hours-based logic if lonnstype is not set
+              is50Percent = hoursNumber <= 4;
+            }
+            
+          } else if (is_overtime && !overtime_activity_id) {
+            console.log('⚠️ Overtime hours but no overtime activity specified - looking for overtime activities');
+            
+            // Determine overtime type based on lonnstype field
+            const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
+            const lonnstype = existingTimer?.lonnstype || '';
+            
+            if (lonnstype === 'overtid_50') {
+              is50Percent = true;
+            } else if (lonnstype === 'overtid_100') {
+              is50Percent = false;
+            } else {
+              // Fallback to hours-based logic if lonnstype is not set
+              is50Percent = hoursNumber <= 4;
+            }
+            
+            const overtimeType = is50Percent ? '50%' : '100%';
+            const activityName = `Overtid ${overtimeType}`;
+            
+            console.log('🔍 Looking for overtime activity:', { 
+              overtimeType, 
+              activityName, 
+              hours: hoursNumber, 
+              lonnstype,
+              is50Percent 
+            });
             
             // Look for existing overtime activities for this project
-            const overtimeActivities = await callTripletexAPI(`/project/${project_id}/activities?count=100`, 'GET', undefined, orgId);
+            const overtimeActivities = await callTripletexAPI(`/activity?project.id=${project_id}&count=1000`, 'GET', undefined, orgId);
             
             if (overtimeActivities.success && overtimeActivities.data?.values) {
-              // Look for activities with "overtid" or "overtime" in the name
               const activities = overtimeActivities.data.values as Array<{ id: number; name?: string; isActive?: boolean }>;
+              
+              console.log('Available activities for project:', activities.map(a => ({ id: a.id, name: a.name, isActive: a.isActive })));
+              
+              // Look for existing overtime activity matching the specific type (50% or 100%)
               const overtimeActivity = activities.find(act => 
                 act.isActive !== false && 
                 act.name && 
                 (act.name.toLowerCase().includes('overtid') || 
-                 act.name.toLowerCase().includes('overtime') ||
-                 act.name.toLowerCase().includes('100%'))
+                 act.name.toLowerCase().includes('overtime')) &&
+                (
+                  (overtimeType === '50%' && (
+                    act.name.includes('50%') || 
+                    act.name.includes('50') || 
+                    act.name.toLowerCase().includes('halv')
+                  )) ||
+                  (overtimeType === '100%' && (
+                    act.name.includes('100%') || 
+                    act.name.includes('100') || 
+                    act.name.toLowerCase().includes('full') ||
+                    act.name.toLowerCase().includes('hel')
+                  ))
+                )
               );
               
               if (overtimeActivity) {
@@ -933,28 +1052,76 @@ Deno.serve(async (req) => {
                   name: overtimeActivity.name 
                 });
               } else {
-                console.log('⚠️ No overtime activity found for project, attempting to create one');
+                console.log('⚠️ No overtime activity found for this project');
+                console.log('Available activities:', activities.map(a => ({ id: a.id, name: a.name, active: a.isActive })));
                 
-                // Try to create an overtime activity for this project
-                const createActivityResponse = await callTripletexAPI('/activity', 'POST', {
-                  name: 'Overtid 100%',
-                  isActive: true,
-                  project: { id: Number(project_id) }
-                }, orgId);
+                // Try to find any overtime activity as fallback, then any activity
+                const anyOvertimeActivity = activities.find(act => 
+                  act.isActive !== false && 
+                  act.name && 
+                  (act.name.toLowerCase().includes('overtid') || 
+                   act.name.toLowerCase().includes('overtime'))
+                );
                 
-                if (createActivityResponse.success && createActivityResponse.data?.value?.id) {
-                  finalActivityId = createActivityResponse.data.value.id;
-                  console.log('✅ Created new overtime activity:', { 
-                    id: finalActivityId, 
-                    name: 'Overtid 100%' 
+                if (anyOvertimeActivity) {
+                  console.log('⚠️ Using any overtime activity as fallback:', { 
+                    id: anyOvertimeActivity.id, 
+                    name: anyOvertimeActivity.name 
                   });
+                  finalActivityId = anyOvertimeActivity.id;
                 } else {
-                  console.log('⚠️ Could not create overtime activity, using regular activity');
-                  // Fall back to regular activity - overtime will be handled manually in Tripletex
+                  console.log('⚠️ No overtime activities found - attempting to create one');
+                  
+                  // Try to create an overtime activity for this project
+                  const createActivityResponse = await callTripletexAPI('/activity', 'POST', {
+                    name: activityName,
+                    isActive: true,
+                    project: { id: Number(project_id) }
+                  }, orgId);
+                  
+                  if (createActivityResponse.success && createActivityResponse.data?.value?.id) {
+                    finalActivityId = createActivityResponse.data.value.id;
+                    console.log('✅ Created new overtime activity:', { 
+                      id: finalActivityId, 
+                      name: activityName 
+                    });
+                    
+                    // Cache the new activity in our database
+                    try {
+                      await supabase
+                        .from('ttx_activity_cache')
+                        .upsert({
+                          org_id: orgId,
+                          ttx_id: finalActivityId,
+                          navn: activityName,
+                          aktiv: true,
+                          last_synced: new Date().toISOString()
+                        }, {
+                          onConflict: 'org_id,ttx_id',
+                          ignoreDuplicates: false
+                        });
+                      console.log('✅ Cached new overtime activity in database');
+                    } catch (cacheError) {
+                      console.warn('⚠️ Failed to cache new activity:', cacheError);
+                      // Continue anyway - the activity was created in Tripletex
+                    }
+                  } else {
+                    console.log('❌ Could not create overtime activity');
+                    return { 
+                      success: false, 
+                      error: 'Kunne ikke opprette overtidsaktivitet. Overtidstimer kan ikke sendes til samme aktivitet som vanlige timer.',
+                      details: 'Failed to create overtime activity in Tripletex'
+                    };
+                  }
                 }
               }
             } else {
-              console.log('⚠️ Could not fetch project activities, using regular activity');
+              console.log('❌ Could not fetch project activities - this will cause duplicate error');
+              return { 
+                success: false, 
+                error: 'Kunne ikke hente prosjektaktiviteter. Overtidstimer kan ikke sendes uten separat aktivitet.',
+                details: 'Contact administrator to check project configuration'
+              };
             }
           }
 
@@ -988,13 +1155,54 @@ Deno.serve(async (req) => {
             }
           }
 
+          // Check if there are existing timesheet entries in Tripletex for this combination
+          console.log('🔍 Checking for existing timesheet entries in Tripletex...');
+          const existingEntriesResponse = await callTripletexAPI(
+            `/timesheet/entry?employee.id=${employee_id}&project.id=${project_id}&date=${entryDate}&count=100`, 
+            'GET', 
+            undefined, 
+            orgId
+          );
+
+          if (existingEntriesResponse.success && existingEntriesResponse.data?.values?.length > 0) {
+            const existingEntries = existingEntriesResponse.data.values as Array<{ id: number; activity?: { id: number } }>;
+            const conflictingEntry = existingEntries.find(entry => 
+              entry.activity?.id === Number(finalActivityId)
+            );
+
+            if (conflictingEntry) {
+              console.log('⚠️ Found existing timesheet entry in Tripletex:', { 
+                tripletexId: conflictingEntry.id,
+                activityId: conflictingEntry.activity?.id,
+                employeeId: employee_id,
+                projectId: project_id,
+                date: entryDate
+              });
+              return { 
+                success: false, 
+                error: 'Det finnes allerede timer for denne ansatte, prosjekt og aktivitet på denne dagen i Tripletex. Bruk "Hent tilbake" for å oppdatere eksisterende timer.',
+                existingTripletexId: conflictingEntry.id
+              };
+            }
+          }
+
           console.log('All preflight checks passed - proceeding with timesheet submission');
+
+          // Validate that we have a valid activity ID
+          if (!finalActivityId) {
+            console.log('❌ No valid activity ID found for timesheet entry');
+            return { 
+              success: false, 
+              error: 'Ingen gyldig aktivitet funnet for denne timeføringen.',
+              details: 'Contact administrator to add activities to this project'
+            };
+          }
 
           const entryPayload = {
             date: entryDate,
             employee: { id: Number(employee_id) },
             project:  { id: Number(project_id) },
-            ...(finalActivityId ? { activity: { id: Number(finalActivityId) } } : {}),
+            activity: { id: Number(finalActivityId) },
             hours: hoursNumber,
             comment: description || ''
           };
@@ -1156,26 +1364,44 @@ Deno.serve(async (req) => {
             deleteResponse = await callTripletexAPI(`/timesheet/entry/${tripletex_entry_id}`, 'DELETE', undefined, orgId);
           }
 
-          if (deleteResponse.success && deleteVaktTimerId) {
-            // Update local entry to mark as deleted/reset sync status
-            const { error: updateError } = await supabase
-              .from('vakt_timer')
-              .update({
-                tripletex_entry_id: null,
-                tripletex_synced_at: null,
-                sync_error: null,
-                status: 'utkast'
-              })
-              .eq('id', deleteVaktTimerId);
+        if (deleteResponse.success && deleteVaktTimerId) {
+          // Get original values before restoring
+          const { data: originalValues, error: fetchError } = await supabase
+            .from('vakt_timer')
+            .select('original_timer, original_aktivitet_id, original_notat, original_status')
+            .eq('id', deleteVaktTimerId)
+            .single();
 
-            if (updateError) {
-              console.error('Failed to update local entry after Tripletex deletion:', updateError);
-              return { 
-                success: true,
-                warning: 'Entry deleted from Tripletex but local status not updated'
-              };
-            }
+          if (fetchError) {
+            console.error('Failed to fetch original values:', fetchError);
+            return { 
+              success: true,
+              warning: 'Entry deleted from Tripletex but could not restore original values'
+            };
           }
+
+          // Update local entry to mark as deleted/reset sync status and restore original values
+          const { error: updateError } = await supabase
+            .from('vakt_timer')
+            .update({
+              tripletex_entry_id: null,
+              tripletex_synced_at: null,
+              sync_error: null,
+              status: originalValues?.original_status || 'utkast',
+              timer: originalValues?.original_timer || null,
+              aktivitet_id: originalValues?.original_aktivitet_id || null,
+              notat: originalValues?.original_notat || null
+            })
+            .eq('id', deleteVaktTimerId);
+
+          if (updateError) {
+            console.error('Failed to update local entry after Tripletex deletion:', updateError);
+            return { 
+              success: true,
+              warning: 'Entry deleted from Tripletex but local status not updated'
+            };
+          }
+        }
 
           return deleteResponse.success 
             ? { success: true, data: { message: 'Timesheet entry deleted successfully' } }

@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Copy, Plus, MessageSquare, Paperclip } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { formatTimeValue, getPersonDisplayName } from '@/lib/displayNames';
+import { formatTimeValue, getPersonDisplayName, generateProjectColor } from '@/lib/displayNames';
 import TimeEntry from './TimeEntry';
 import ProjectSearchDialog from './ProjectSearchDialog';
 import ProjectDetailDialog from './ProjectDetailDialog';
@@ -59,7 +59,7 @@ interface ProjectColor {
 
 const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: DayCardProps) => {
   const [vakter, setVakter] = useState<VaktWithTimer[]>([]);
-  const [projectColors, setProjectColors] = useState<ProjectColor[]>([]);
+  const [projectColors, setProjectColors] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [activeVaktId, setActiveVaktId] = useState<string | null>(null);
   const [selectedTimer, setSelectedTimer] = useState<VaktWithTimer['vakt_timer'][number] | null>(null);
@@ -137,7 +137,13 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
         .eq('org_id', orgId);
 
       if (error) throw error;
-      setProjectColors(data || []);
+      
+      const colorMap: Record<number, string> = {};
+      data?.forEach((color: ProjectColor) => {
+        colorMap[color.tripletex_project_id] = color.hex;
+      });
+      
+      setProjectColors(colorMap);
     } catch (error) {
       console.error('Error loading project colors:', error);
     }
@@ -149,16 +155,8 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   }, [loadDayData, loadProjectColors]);
 
   const getProjectColor = (tripletexProjectId?: number) => {
-    if (!tripletexProjectId) return '#6b7280'; // default gray
-    const colorConfig = projectColors.find(c => c.tripletex_project_id === tripletexProjectId);
-    if (colorConfig) return colorConfig.hex;
-    
-    // Generate a consistent color based on project ID if no color is configured
-    const colors = [
-      '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-      '#06b6d4', '#84cc16', '#f97316', '#ec4899', '#6366f1'
-    ];
-    return colors[tripletexProjectId % colors.length];
+    if (!tripletexProjectId) return '#94a3b8';
+    return projectColors[tripletexProjectId] || generateProjectColor(tripletexProjectId);
   };
 
   const copyFromPreviousDay = async () => {

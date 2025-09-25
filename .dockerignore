@@ -1,9 +1,0 @@
-node_modules
-npm-debug.log
-.git
-.gitignore
-dist
-.DS_Store
-supabase/.branches
-supabase/.temp
-bun.lockb

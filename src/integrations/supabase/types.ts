@@ -682,6 +682,11 @@ export type Database = {
           lonnstype: string | null
           notat: string | null
           org_id: string
+          original_aktivitet_id: string | null
+          original_notat: string | null
+          original_status: string | null
+          original_timer: number | null
+          overtime_aktivitet_id: string | null
           status: string | null
           sync_error: string | null
           timer: number
@@ -703,6 +708,11 @@ export type Database = {
           lonnstype?: string | null
           notat?: string | null
           org_id: string
+          original_aktivitet_id?: string | null
+          original_notat?: string | null
+          original_status?: string | null
+          original_timer?: number | null
+          overtime_aktivitet_id?: string | null
           status?: string | null
           sync_error?: string | null
           timer: number
@@ -724,6 +734,11 @@ export type Database = {
           lonnstype?: string | null
           notat?: string | null
           org_id?: string
+          original_aktivitet_id?: string | null
+          original_notat?: string | null
+          original_status?: string | null
+          original_timer?: number | null
+          overtime_aktivitet_id?: string | null
           status?: string | null
           sync_error?: string | null
           timer?: number
@@ -741,17 +756,111 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vakt_timer_overtime_aktivitet_id_fkey"
+            columns: ["overtime_aktivitet_id"]
+            isOneToOne: false
+            referencedRelation: "ttx_activity_cache"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "vakt_timer_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "org"
             referencedColumns: ["id"]
           },
+        ]
+      }
+  frie_linjer: {
+    Row: {
+      created_at: string
+      created_by: string | null
+      display_order: number
+      id: string
+      name: string | null
+      org_id: string
+      updated_at: string
+      updated_by: string | null
+      week_number: number
+      year: number
+    }
+    Insert: {
+      created_at?: string
+      created_by?: string | null
+      display_order?: number
+      id?: string
+      name?: string | null
+      org_id: string
+      updated_at?: string
+      updated_by?: string | null
+      week_number: number
+      year: number
+    }
+    Update: {
+      created_at?: string
+      created_by?: string | null
+      display_order?: number
+      id?: string
+      name?: string | null
+      org_id?: string
+      updated_at?: string
+      updated_by?: string | null
+      week_number?: number
+      year?: number
+    }
+        Relationships: [
           {
-            foreignKeyName: "vakt_timer_vakt_id_fkey"
-            columns: ["vakt_id"]
+            foreignKeyName: "frie_linjer_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
-            referencedRelation: "vakt"
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      frie_bobler: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string | null
+          date: string
+          display_order: number
+          frie_linje_id: string
+          id: string
+          text: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          date: string
+          display_order?: number
+          frie_linje_id: string
+          id?: string
+          text: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          display_order?: number
+          frie_linje_id?: string
+          id?: string
+          text?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "frie_bobler_frie_linje_id_fkey"
+            columns: ["frie_linje_id"]
+            isOneToOne: false
+            referencedRelation: "frie_linjer"
             referencedColumns: ["id"]
           },
         ]

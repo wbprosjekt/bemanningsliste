@@ -22,6 +22,10 @@ interface TimeEntryProps {
     aktivitet_id: string;
     notat: string;
     status: string;
+    original_timer?: number;
+    original_aktivitet_id?: string;
+    original_notat?: string;
+    original_status?: string;
   };
 }
 
@@ -52,58 +56,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const overtime100Timer = overtime100Hours + (overtime100Minutes / 60);
   const overtime50Timer = overtime50Hours + (overtime50Minutes / 60);
   const totalOvertimeTimer = overtime100Timer + overtime50Timer;
-
-  useEffect(() => {
-    // Only update state when existingEntry actually changes, not on every render
-    if (existingEntry) {
-      const baseTimer = existingEntry.timer ?? defaultTimer;
-      const baseHours = Math.floor(baseTimer);
-      const baseMinutes = Math.round((baseTimer % 1) * 60);
-
-      setHours(Math.max(0, Math.min(8, baseHours)));
-      setMinutes(Math.max(0, Math.min(45, Math.round(baseMinutes / 15) * 15)));
-      setAktivitetId(existingEntry.aktivitet_id || '');
-      setNotat(existingEntry.notat || '');
-      setStatus(existingEntry.status || 'utkast');
-    } else {
-      // For new entries, reset to default values
-      setHours(Math.floor(defaultTimer));
-      setMinutes(Math.round((defaultTimer % 1) * 60));
-      setAktivitetId('');
-      setNotat('');
-      setStatus('utkast');
-    }
-  }, [existingEntry?.id, defaultTimer, existingEntry]); // Include existingEntry for exhaustive deps
-
-
-  const loadExistingOvertime = useCallback(async () => {
-    try {
-      // Reset overtime state before loading to avoid stale values when switching entries
-      setOvertime100Hours(0);
-      setOvertime100Minutes(0);
-      setOvertime50Hours(0);
-      setOvertime50Minutes(0);
-      setShowOvertime(false);
-
-      // Load existing overtime entries for this vakt
-      const { data, error } = await supabase
-        .from('vakt_timer')
-        .select('timer, is_overtime')
-        .eq('vakt_id', vaktId)
-        .eq('is_overtime', true);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const totalOvertime = data.reduce((sum, entry) => sum + (entry.timer ?? 0), 0);
-        setOvertime100Hours(Math.floor(totalOvertime));
-        setOvertime100Minutes(Math.round((totalOvertime % 1) * 60));
-        setShowOvertime(true);
-      }
-    } catch (error) {
-      console.error('Error loading existing overtime:', error);
-    }
-  }, [vaktId]);
 
   const loadActivities = useCallback(async () => {
     try {
@@ -152,22 +104,39 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         
         if (!allActiveError && allActiveData && allActiveData.length > 0) {
           console.log('Found activities without aktiv filter, using them');
-          setActivities(allActiveData);
+          // Filter out overtime activities from the fallback data too
+          const filteredFallbackData = allActiveData.filter(activity => {
+            const navn = activity.navn?.toLowerCase() || '';
+            return !navn.includes('overtid') && 
+                   !navn.includes('overtime') && 
+                   !navn.includes('50%') && 
+                   !navn.includes('100%');
+          });
+          setActivities(filteredFallbackData);
           return;
         }
       }
       
-      setActivities(data || []);
+      // Filter out overtime activities from the main dropdown
+      const filteredData = (data || []).filter(activity => {
+        const navn = activity.navn?.toLowerCase() || '';
+        return !navn.includes('overtid') && 
+               !navn.includes('overtime') && 
+               !navn.includes('50%') && 
+               !navn.includes('100%');
+      });
       
-      if (!data || data.length === 0) {
-        console.log('No activities found for orgId:', orgId);
+      setActivities(filteredData);
+      
+      if (!filteredData || filteredData.length === 0) {
+        console.log('No non-overtime activities found for orgId:', orgId);
         toast({
           title: "Ingen aktiviteter funnet",
           description: "Det er ingen aktive aktiviteter konfigurert for denne organisasjonen.",
           variant: "destructive"
         });
       } else {
-        console.log(`Successfully loaded ${data.length} activities`);
+        console.log(`Successfully loaded ${filteredData.length} activities (overtime activities filtered out)`);
       }
     } catch (error) {
       console.error('Error loading activities:', error);
@@ -180,9 +149,111 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   }, [orgId, toast]);
 
   useEffect(() => {
+    // Load activities when component mounts
     loadActivities();
-    loadExistingOvertime();
-  }, [loadActivities, loadExistingOvertime]);
+  }, [loadActivities]);
+
+  useEffect(() => {
+    // Load all existing timer entries and update state when existingEntry changes
+    const loadData = async () => {
+      // Reset all state before loading
+      setOvertime100Hours(0);
+      setOvertime100Minutes(0);
+      setOvertime50Hours(0);
+      setOvertime50Minutes(0);
+      setShowOvertime(false);
+
+      // Load ALL existing timer entries for this vakt (both regular and overtime)
+      try {
+        const { data, error } = await supabase
+          .from('vakt_timer')
+          .select('timer, is_overtime, lonnstype, aktivitet_id, notat, status, original_timer, original_aktivitet_id, original_notat, original_status')
+          .eq('vakt_id', vaktId);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          // Separate regular time and overtime
+          let totalRegularTime = 0;
+          let totalOvertime50 = 0;
+          let totalOvertime100 = 0;
+          let firstEntry = data[0]; // Use first entry for activity, note, status
+          
+          data.forEach(entry => {
+            const timer = entry.timer ?? 0;
+            const lonnstype = entry.lonnstype || '';
+            
+            if (entry.is_overtime) {
+              // Use lonnstype to determine overtime type
+              if (lonnstype === 'overtid_50') {
+                totalOvertime50 += timer;
+              } else if (lonnstype === 'overtid_100') {
+                totalOvertime100 += timer;
+              } else {
+                // Fallback for old entries without specific overtime type
+                if (timer <= 4) {
+                  totalOvertime50 += timer;
+                } else {
+                  totalOvertime100 += timer;
+                }
+              }
+            } else {
+              totalRegularTime += timer;
+            }
+          });
+
+          // Set regular time
+          setHours(Math.max(0, Math.min(8, Math.floor(totalRegularTime))));
+          setMinutes(Math.max(0, Math.min(45, Math.round((totalRegularTime % 1) * 60 / 15) * 15)));
+
+          // Set 50% overtime
+          if (totalOvertime50 > 0) {
+            setOvertime50Hours(Math.floor(totalOvertime50));
+            setOvertime50Minutes(Math.max(0, Math.min(45, Math.round((totalOvertime50 % 1) * 60 / 15) * 15)));
+          }
+
+          // Set 100% overtime
+          if (totalOvertime100 > 0) {
+            setOvertime100Hours(Math.floor(totalOvertime100));
+            setOvertime100Minutes(Math.max(0, Math.min(45, Math.round((totalOvertime100 % 1) * 60 / 15) * 15)));
+          }
+
+          // Show overtime section if any overtime exists
+          if (totalOvertime50 > 0 || totalOvertime100 > 0) {
+            setShowOvertime(true);
+          }
+
+          // Set activity, note, and status from first entry (use original values if available)
+          setAktivitetId((firstEntry.original_aktivitet_id ?? firstEntry.aktivitet_id) || '');
+          setNotat((firstEntry.original_notat ?? firstEntry.notat) || '');
+          setStatus((firstEntry.original_status ?? firstEntry.status) || 'utkast');
+        } else {
+          // For new entries, reset to default values
+          setHours(Math.floor(defaultTimer));
+          setMinutes(Math.max(0, Math.min(45, Math.round((defaultTimer % 1) * 60 / 15) * 15)));
+          setAktivitetId('');
+          setNotat('');
+          setStatus('utkast');
+        }
+      } catch (error) {
+        console.error('Error loading existing timer entries:', error);
+        // Fallback to existingEntry if database load fails
+        if (existingEntry) {
+          const baseTimer = existingEntry.original_timer ?? existingEntry.timer ?? defaultTimer;
+          const baseHours = Math.floor(baseTimer);
+          const baseMinutes = Math.round((baseTimer % 1) * 60);
+
+          setHours(Math.max(0, Math.min(8, baseHours)));
+          setMinutes(Math.max(0, Math.min(45, Math.round(baseMinutes / 15) * 15)));
+          setAktivitetId((existingEntry.original_aktivitet_id ?? existingEntry.aktivitet_id) || '');
+          setNotat((existingEntry.original_notat ?? existingEntry.notat) || '');
+          setStatus((existingEntry.original_status ?? existingEntry.status) || 'utkast');
+        }
+      }
+    };
+
+    loadData();
+  }, [vaktId, existingEntry, defaultTimer]);
 
   const adjustHours = (delta: number) => {
     const newHours = Math.max(0, Math.min(8, hours + delta));
@@ -260,6 +331,67 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
 
     if (!validateTimeStep(timer)) {
       toast({
+        title: "Ugyldig timesteg",
+        description: "Timer må være i 0,25-steg (f.eks. 7,25, 7,50, 7,75, 8,00).",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Find specific overtime activities (50% and 100%)
+    let overtime50ActivityId = null;
+    let overtime100ActivityId = null;
+    
+    if (overtime100Timer > 0 || overtime50Timer > 0) {
+      try {
+        // Look for specific overtime activities
+        const { data: overtimeActivities, error: overtimeError } = await supabase
+          .from('ttx_activity_cache')
+          .select('id, navn, ttx_id')
+          .eq('org_id', orgId)
+          .eq('aktiv', true)
+          .ilike('navn', '%overtid%');
+
+        if (overtimeError) {
+          console.error('Error loading overtime activities:', overtimeError);
+        } else if (overtimeActivities && overtimeActivities.length > 0) {
+          console.log('Available overtime activities:', overtimeActivities.map(a => ({ id: a.id, navn: a.navn })));
+          
+          // Find specific overtime activities with more flexible search
+          const overtime50Activity = overtimeActivities.find(act => 
+            act.navn && (
+              act.navn.toLowerCase().includes('50%') ||
+              act.navn.toLowerCase().includes('50') ||
+              act.navn.toLowerCase().includes('halv')
+            )
+          );
+          const overtime100Activity = overtimeActivities.find(act => 
+            act.navn && (
+              act.navn.toLowerCase().includes('100%') ||
+              act.navn.toLowerCase().includes('100') ||
+              act.navn.toLowerCase().includes('full') ||
+              act.navn.toLowerCase().includes('hel')
+            )
+          );
+          
+          if (overtime50Activity) {
+            overtime50ActivityId = overtime50Activity.id;
+            console.log('Found 50% overtime activity:', overtime50Activity);
+          }
+          if (overtime100Activity) {
+            overtime100ActivityId = overtime100Activity.id;
+            console.log('Found 100% overtime activity:', overtime100Activity);
+          }
+        } else {
+          console.log('No overtime activities found in cache - edge function will create them automatically');
+        }
+      } catch (error) {
+        console.error('Error finding overtime activities:', error);
+      }
+    }
+
+    if (!validateTimeStep(timer)) {
+      toast({
         title: "Ugyldig tidsverdi",
         description: "Timer må være i 0,25-steg (f.eks. 7,25, 7,50, 7,75, 8,00).",
         variant: "destructive"
@@ -283,49 +415,41 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
     setStatus(nextStatus);
     setLoading(true);
     try {
+      // Delete all existing timer entries for this vakt to avoid duplicates
+      await supabase
+        .from('vakt_timer')
+        .delete()
+        .eq('vakt_id', vaktId);
+
       // Save normal time entry
       const normalTimeData = {
         vakt_id: vaktId,
         org_id: orgId,
         timer,
-        aktivitet_id: aktivitetId,
+        aktivitet_id: aktivitetId || null, // Convert empty string to null
         notat: notat || null,
         status: nextStatus,
         is_overtime: false
       };
 
-      let result;
-      if (existingEntry) {
-        result = await supabase
-          .from('vakt_timer')
-          .update(normalTimeData)
-          .eq('id', existingEntry.id);
-      } else {
-        result = await supabase
-          .from('vakt_timer')
-          .insert(normalTimeData);
-      }
+      const result = await supabase
+        .from('vakt_timer')
+        .insert(normalTimeData);
 
       if (result.error) throw result.error;
 
-      // Handle overtime entries - delete existing first
-      await supabase
-        .from('vakt_timer')
-        .delete()
-        .eq('vakt_id', vaktId)
-        .eq('is_overtime', true);
-
-      // Insert 100% overtime if exists
+      // Insert overtime entries if they exist
       if (overtime100Timer > 0) {
         const overtime100Data = {
           vakt_id: vaktId,
           org_id: orgId,
           timer: overtime100Timer,
-          aktivitet_id: aktivitetId,
+          aktivitet_id: aktivitetId || null, // Convert empty string to null
+          overtime_aktivitet_id: overtime100ActivityId || null, // Use specific 100% overtime activity
           notat: notat || null,
           status: nextStatus,
           is_overtime: true,
-          lonnstype: 'overtid'
+          lonnstype: 'overtid_100' // Mark as 100% overtime
         };
 
         const overtime100Result = await supabase
@@ -335,17 +459,17 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         if (overtime100Result.error) throw overtime100Result.error;
       }
 
-      // Insert 50% overtime if exists
       if (overtime50Timer > 0) {
         const overtime50Data = {
           vakt_id: vaktId,
           org_id: orgId,
           timer: overtime50Timer,
-          aktivitet_id: aktivitetId,
+          aktivitet_id: aktivitetId || null, // Convert empty string to null
+          overtime_aktivitet_id: overtime50ActivityId || null, // Use specific 50% overtime activity
           notat: notat || null,
           status: nextStatus,
           is_overtime: true,
-          lonnstype: 'overtid'
+          lonnstype: 'overtid_50' // Mark as 50% overtime
         };
 
         const overtime50Result = await supabase

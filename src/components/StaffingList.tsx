@@ -24,7 +24,8 @@ import {
   Download,
   Palette,
   X,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
 import ProjectSearchDialog from './ProjectSearchDialog';
@@ -147,6 +148,21 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   
   const [profile, setProfile] = useState<Profile | null>(null);
   const [staffingData, setStaffingData] = useState<StaffingEntry[]>([]);
+  const [freeLines, setFreeLines] = useState<Array<{
+    id: string;
+    org_id: string;
+    week_number: number;
+    year: number;
+    name?: string;
+    display_order: number;
+    frie_bobler?: Array<{
+      id: string;
+      date: string;
+      text: string;
+      color: string;
+      display_order: number;
+    }>;
+  }>>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [projectColors, setProjectColors] = useState<Record<number, string>>({});
@@ -164,6 +180,21 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const [calendarDays, setCalendarDays] = useState<Record<string, { isWeekend: boolean; isHoliday: boolean }>>({});
   const [sendingToTripletex, setSendingToTripletex] = useState<Set<string>>(new Set());
   const [editDialog, setEditDialog] = useState<{ vaktId: string; existingEntry?: TimeEntry } | null>(null);
+  const [freeBubbleEditDialog, setFreeBubbleEditDialog] = useState<{
+    bubbleId: string;
+    text: string;
+    color: string;
+    lineId: string;
+  } | null>(null);
+  const [deleteLineDialog, setDeleteLineDialog] = useState<{
+    lineId: string;
+    lineNumber: number;
+  } | null>(null);
+
+  const [editLineNameDialog, setEditLineNameDialog] = useState<{
+    lineId: string;
+    currentName: string;
+  } | null>(null);
   const [isProcessingUpdate, setIsProcessingUpdate] = useState(false);
 
   const toDateKey = useCallback((d: Date): string => {
@@ -417,6 +448,38 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   }, [profile?.org_id, allDates, toDateKey, toast]);
 
+  const loadFreeLines = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      // Load free lines for all weeks being displayed
+      const weekNumbers = multiWeekData.map(w => w.week);
+      const years = multiWeekData.map(w => w.year);
+
+      const { data, error } = await supabase
+        .from('frie_linjer')
+        .select(`
+          *,
+          frie_bobler (
+            id,
+            date,
+            text,
+            color,
+            display_order
+          )
+        `)
+        .eq('org_id', profile.org_id)
+        .in('week_number', weekNumbers)
+        .in('year', years)
+        .order('display_order');
+
+      if (error) throw error;
+      setFreeLines(data || []);
+    } catch (error) {
+      console.error('Error loading free lines:', error);
+    }
+  }, [profile?.org_id, multiWeekData]);
+
   const loadProjects = useCallback(async () => {
     if (!profile?.org_id) return;
 
@@ -533,8 +596,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       loadEmployees();
       loadProjectColors();
       loadCalendarDays();
+      loadFreeLines();
     }
-  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjects, loadActivities, loadEmployees, loadProjectColors, loadCalendarDays]);
+  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjects, loadActivities, loadEmployees, loadProjectColors, loadCalendarDays, loadFreeLines]);
 
 
   // Optimistic update helpers
@@ -890,6 +954,383 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  // Free lines CRUD functions
+  const addFreeLine = useCallback(async (weekNumber?: number, year?: number) => {
+    if (!profile?.org_id) return;
+
+    try {
+      // Use provided week/year or default to first week being displayed
+      const targetWeek = weekNumber || multiWeekData[0]?.week || startWeek;
+      const targetYear = year || multiWeekData[0]?.year || startYear;
+      
+      // Get the next display order for this specific week
+      const weekFreeLines = freeLines.filter(line => 
+        line.week_number === targetWeek && line.year === targetYear
+      );
+      const maxOrder = weekFreeLines.length > 0 ? Math.max(...weekFreeLines.map(line => line.display_order)) : 0;
+      
+      const { data, error } = await supabase
+        .from('frie_linjer')
+        .insert({
+          org_id: profile.org_id,
+          week_number: targetWeek,
+          year: targetYear,
+          display_order: maxOrder + 1
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Reload free lines
+      await loadFreeLines();
+      
+      toast({
+        title: "Frie linje lagt til",
+        description: "En ny frie linje er opprettet.",
+      });
+    } catch (error) {
+      console.error('Error adding free line:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til frie linje.",
+        variant: "destructive"
+      });
+    }
+  }, [profile?.org_id, multiWeekData, startWeek, startYear, freeLines, loadFreeLines, toast]);
+
+  const addFreeBubble = useCallback(async (lineId: string, date: string) => {
+    if (!profile?.org_id) return;
+
+    try {
+      // Get the next display order for this line
+      const line = freeLines.find(l => l.id === lineId);
+      const maxOrder = line?.frie_bobler?.length ? Math.max(...line.frie_bobler.map(bubble => bubble.display_order)) : 0;
+      
+      const { data, error } = await supabase
+        .from('frie_bobler')
+        .insert({
+          frie_linje_id: lineId,
+          date: date,
+          text: 'Ny boble',
+          color: '#94a3b8', // Default gray color
+          display_order: maxOrder + 1
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Reload free lines
+      await loadFreeLines();
+      
+      toast({
+        title: "Boble lagt til",
+        description: "En ny boble er opprettet.",
+      });
+    } catch (error) {
+      console.error('Error adding free bubble:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til boble.",
+        variant: "destructive"
+      });
+    }
+  }, [profile?.org_id, freeLines, loadFreeLines, toast]);
+
+  const editFreeBubble = useCallback(async (bubbleId: string, text: string, color: string) => {
+    if (!profile?.org_id) return;
+
+    try {
+      // First, update the specific bubble
+      const { error } = await supabase
+        .from('frie_bobler')
+        .update({
+          text: text,
+          color: color
+        })
+        .eq('id', bubbleId);
+
+      if (error) throw error;
+
+      // Then, update all other bubbles with the same text to have the same color
+      const { error: updateSameTextError } = await supabase
+        .from('frie_bobler')
+        .update({
+          color: color
+        })
+        .eq('text', text)
+        .neq('id', bubbleId); // Don't update the bubble we just updated
+
+      if (updateSameTextError) {
+        console.error('Error updating same text bubbles:', updateSameTextError);
+        // Don't throw error here, as the main update succeeded
+      }
+      
+      // Reload free lines
+      await loadFreeLines();
+      
+      toast({
+        title: "Boble oppdatert",
+        description: `Boblen er oppdatert. Alle bobler med navnet "${text}" har fått samme farge.`,
+      });
+    } catch (error) {
+      console.error('Error updating free bubble:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke oppdatere boble.",
+        variant: "destructive"
+      });
+    }
+  }, [profile?.org_id, loadFreeLines, toast]);
+
+  const deleteFreeBubble = useCallback(async (bubbleId: string) => {
+    if (!profile?.org_id) return;
+
+    try {
+      const { error } = await supabase
+        .from('frie_bobler')
+        .delete()
+        .eq('id', bubbleId);
+
+      if (error) throw error;
+      
+      // Reload free lines
+      await loadFreeLines();
+      
+      toast({
+        title: "Boble slettet",
+        description: "Boblen er slettet.",
+      });
+    } catch (error) {
+      console.error('Error deleting free bubble:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke slette boble.",
+        variant: "destructive"
+      });
+    }
+  }, [profile?.org_id, loadFreeLines, toast]);
+
+  const deleteFreeLine = useCallback(async (lineId: string) => {
+    if (!profile?.org_id) return;
+
+    try {
+      // Delete all bubbles in this line first
+      const { error: deleteBubblesError } = await supabase
+        .from('frie_bobler')
+        .delete()
+        .eq('frie_linje_id', lineId);
+
+      if (deleteBubblesError) throw deleteBubblesError;
+
+      // Delete the line
+      const { error: deleteLineError } = await supabase
+        .from('frie_linjer')
+        .delete()
+        .eq('id', lineId);
+
+      if (deleteLineError) throw deleteLineError;
+      
+      // Reload free lines
+      await loadFreeLines();
+      
+      toast({
+        title: "Linje slettet",
+        description: "Hele linjen er slettet.",
+      });
+    } catch (error) {
+      console.error('Error deleting free line:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke slette linje.",
+        variant: "destructive"
+      });
+    }
+  }, [profile?.org_id, loadFreeLines, toast]);
+
+  const copyFreeBubble = useCallback(async (bubbleId: string, targetDate: string) => {
+    if (!profile?.org_id) return;
+
+    try {
+      // Get the original bubble
+      const { data: originalBubble, error: fetchError } = await supabase
+        .from('frie_bobler')
+        .select('*')
+        .eq('id', bubbleId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Find the line for the target date - if none exists, find any line for the same week
+      let targetLine = freeLines.find(line => 
+        line.frie_bobler?.some(bubble => bubble.date === targetDate)
+      );
+
+      // If no line exists for this date, find the first line for the same week
+      if (!targetLine) {
+        // Extract week and year from targetDate
+        const targetDateObj = new Date(targetDate);
+        const targetWeek = getWeekNumber(targetDateObj);
+        const targetYear = targetDateObj.getFullYear();
+        
+        targetLine = freeLines.find(line => 
+          line.week_number === targetWeek && line.year === targetYear
+        );
+      }
+
+      // If still no line exists, create a new one for this week
+      if (!targetLine) {
+        const targetDateObj = new Date(targetDate);
+        const targetWeek = getWeekNumber(targetDateObj);
+        const targetYear = targetDateObj.getFullYear();
+        
+        const { data: newLine, error: lineError } = await supabase
+          .from('frie_linjer')
+          .insert({
+            org_id: profile.org_id,
+            week_number: targetWeek,
+            year: targetYear,
+            display_order: 1
+          })
+          .select()
+          .single();
+
+        if (lineError) throw lineError;
+        targetLine = newLine;
+      }
+
+      // Create a copy
+      const { error: insertError } = await supabase
+        .from('frie_bobler')
+        .insert({
+          frie_linje_id: targetLine.id,
+          date: targetDate,
+          text: originalBubble.text,
+          color: originalBubble.color,
+          display_order: (targetLine.frie_bobler?.length || 0) + 1
+        });
+
+      if (insertError) throw insertError;
+      
+      // Reload free lines
+      await loadFreeLines();
+      
+      toast({
+        title: "Boble kopiert",
+        description: "Boblen er kopiert til ny dato.",
+      });
+    } catch (error) {
+      console.error('Error copying free bubble:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke kopiere boble.",
+        variant: "destructive"
+      });
+    }
+  }, [profile?.org_id, freeLines, loadFreeLines, toast]);
+
+  const moveFreeBubble = useCallback(async (bubbleId: string, sourceLineId: string, targetDate: string) => {
+    if (!profile?.org_id) return;
+
+    try {
+      // Find the target line for the target date - if none exists, find any line for the same week
+      let targetLine = freeLines.find(line => 
+        line.frie_bobler?.some(bubble => bubble.date === targetDate)
+      );
+
+      // If no line exists for this date, find the first line for the same week
+      if (!targetLine) {
+        // Extract week and year from targetDate
+        const targetDateObj = new Date(targetDate);
+        const targetWeek = getWeekNumber(targetDateObj);
+        const targetYear = targetDateObj.getFullYear();
+        
+        targetLine = freeLines.find(line => 
+          line.week_number === targetWeek && line.year === targetYear
+        );
+      }
+
+      // If still no line exists, create a new one for this week
+      if (!targetLine) {
+        const targetDateObj = new Date(targetDate);
+        const targetWeek = getWeekNumber(targetDateObj);
+        const targetYear = targetDateObj.getFullYear();
+        
+        const { data: newLine, error: lineError } = await supabase
+          .from('frie_linjer')
+          .insert({
+            org_id: profile.org_id,
+            week_number: targetWeek,
+            year: targetYear,
+            display_order: 1
+          })
+          .select()
+          .single();
+
+        if (lineError) throw lineError;
+        targetLine = newLine;
+      }
+
+      // Update the bubble's date and line
+      const { error } = await supabase
+        .from('frie_bobler')
+        .update({
+          frie_linje_id: targetLine.id,
+          date: targetDate,
+          display_order: (targetLine.frie_bobler?.length || 0) + 1
+        })
+        .eq('id', bubbleId);
+
+      if (error) throw error;
+      
+      // Reload free lines
+      await loadFreeLines();
+      
+      toast({
+        title: "Boble flyttet",
+        description: "Boblen er flyttet til ny dato.",
+      });
+    } catch (error) {
+      console.error('Error moving free bubble:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke flytte boble.",
+        variant: "destructive"
+      });
+    }
+  }, [profile?.org_id, freeLines, loadFreeLines, toast]);
+
+  const updateLineName = useCallback(async (lineId: string, newName: string) => {
+    if (!profile?.org_id) return;
+
+    try {
+      const { error } = await supabase
+        .from('frie_linjer')
+        .update({
+          name: newName
+        })
+        .eq('id', lineId);
+
+      if (error) throw error;
+      
+      // Reload free lines
+      await loadFreeLines();
+      
+      toast({
+        title: "Linje-navn oppdatert",
+        description: `Linjen er nå kalt "${newName}".`,
+      });
+    } catch (error) {
+      console.error('Error updating line name:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke oppdatere linje-navn.",
+        variant: "destructive"
+      });
+    }
+  }, [profile?.org_id, loadFreeLines, toast]);
+
   const sendToTripletex = async (entry: StaffingEntry) => {
     if (!entry.project?.tripletex_project_id) {
       toast({
@@ -1222,7 +1663,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             return (
                                <td 
                                  key={dateStr || `${employee.id}-${safeWeek.week}-${idx}`}
-                               className={`border border-gray-300 p-1 min-h-[80px] min-w-[140px] relative group ${isEvenRow ? 'bg-white' : 'bg-gray-25'}`}
+                               className={`border border-gray-300 p-1 min-h-[120px] min-w-[140px] relative group ${isEvenRow ? 'bg-white' : 'bg-gray-25'}`}
                               data-employee-id={employee.id}
                               data-date={dateStr}
                               onDragOver={(e) => {
@@ -1279,7 +1720,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   .map((entry) => (
                                   <div
                                     key={entry.id}
-                                    className="w-full flex-1 p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group/project truncate"
+                                    className="w-full h-12 p-2 text-xs font-medium text-white cursor-move rounded shadow-sm relative hover:shadow-lg transition-shadow group/project truncate"
                                     style={{ 
                                       backgroundColor: getProjectColor(entry.project?.tripletex_project_id),
                                       color: getContrastColor(getProjectColor(entry.project?.tripletex_project_id))
@@ -1406,6 +1847,200 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                     );
                   })}
                 </tbody>
+                
+                {/* Free Lines for this week */}
+                {(() => {
+                  const weekFreeLines = freeLines.filter(line => 
+                    line.week_number === safeWeek.week && line.year === safeWeek.year
+                  );
+                  return weekFreeLines.length > 0 ? (
+                    <>
+                      {/* Separator line */}
+                      <tr>
+                        <td colSpan={weekData.dates?.length ? weekData.dates.length + 2 : 3} className="border-t-2 border-gray-400 bg-gray-100 p-2">
+                          <div className="text-xs font-medium text-gray-600 text-center">Frie linjer</div>
+                        </td>
+                      </tr>
+                      
+                      {weekFreeLines.map((line, lineIndex) => (
+                        <tr key={line.id} className="h-10 bg-gray-50">
+              {/* Line label */}
+              <td className="border border-gray-300 p-1 text-xs text-muted-foreground text-center w-40 bg-slate-200">
+                <button
+                  onClick={() => {
+                    setEditLineNameDialog({
+                      lineId: line.id,
+                      currentName: line.name || `Linje ${lineIndex + 1}`
+                    });
+                  }}
+                  className="hover:bg-gray-300 rounded px-2 py-1 transition-colors cursor-pointer w-full"
+                  title="Klikk for å redigere navn"
+                >
+                  {line.name || `Linje ${lineIndex + 1}`}
+                </button>
+              </td>
+                          
+                          {/* Bubbles for each date */}
+                          {weekData.dates?.map((date, idx) => {
+                            const dateKey = toDateKey(date);
+                            const bubble = line.frie_bobler?.find(bubble => bubble.date === dateKey);
+                            
+                            return (
+                              <td key={dateKey || `${safeWeek.year}-${safeWeek.week}-${idx}`} className="border border-gray-300 p-1 min-w-[140px] h-10">
+                                {bubble ? (
+                                  <div
+                                    className="h-10 rounded p-1 text-xs text-white flex items-center justify-center cursor-pointer hover:opacity-80 relative group"
+                                    style={{ backgroundColor: bubble.color }}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('text/plain', bubble.id);
+                                      e.dataTransfer.setData('application/x-free-bubble', 'true');
+                                      e.dataTransfer.setData('application/x-source-date', bubble.date);
+                                      e.dataTransfer.setData('application/x-source-line', line.id);
+                                      e.dataTransfer.effectAllowed = 'copyMove';
+                                      e.currentTarget.style.opacity = '0.5';
+                                    }}
+                                    onDragEnd={(e) => {
+                                      e.currentTarget.style.opacity = '1';
+                                    }}
+                                    onClick={() => {
+                                      setFreeBubbleEditDialog({
+                                        bubbleId: bubble.id,
+                                        text: bubble.text,
+                                        color: bubble.color,
+                                        lineId: line.id
+                                      });
+                                    }}
+                                    title={`${bubble.text}\nKlikk for å redigere\nDra for å flytte\nHold Shift/Option for å kopiere`}
+                                  >
+                                    {bubble.text}
+                                    {/* Delete bubble button */}
+                                    <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          deleteFreeBubble(bubble.id);
+                                        }}
+                                        className="h-4 w-4 p-0 bg-red-500/80 hover:bg-red-600 text-white"
+                                        title="Slett denne boblen"
+                                      >
+                                        <X className="h-2 w-2" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div 
+                                    className="h-10 border border-dashed border-muted-foreground/30 rounded flex items-center justify-center"
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      try {
+                                        const copyMod = e.shiftKey || e.altKey || e.metaKey || e.ctrlKey;
+                                        e.dataTransfer.dropEffect = copyMod ? 'copy' : 'move';
+                                      } catch (error) {
+                                        console.debug('DataTransfer error:', error);
+                                      }
+                                      e.currentTarget.classList.add('bg-blue-50', 'border-blue-300');
+                                    }}
+                                    onDragLeave={(e) => {
+                                      e.currentTarget.classList.remove('bg-blue-50', 'border-blue-300');
+                                    }}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      e.currentTarget.classList.remove('bg-blue-50', 'border-blue-300');
+                                      
+                                      const bubbleId = e.dataTransfer.getData('text/plain');
+                                      const isFreeBubble = e.dataTransfer.getData('application/x-free-bubble') === 'true';
+                                      const sourceDate = e.dataTransfer.getData('application/x-source-date');
+                                      const sourceLineId = e.dataTransfer.getData('application/x-source-line');
+                                      
+                                      if (isFreeBubble && bubbleId && sourceDate !== dateKey) {
+                                        const intendsCopy = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.dataTransfer.dropEffect === 'copy';
+                                        
+                                        if (intendsCopy) {
+                                          copyFreeBubble(bubbleId, dateKey);
+                                        } else {
+                                          moveFreeBubble(bubbleId, sourceLineId, dateKey);
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        addFreeBubble(line.id, dateKey);
+                                      }}
+                                      className="h-6 w-6 p-0 text-muted-foreground"
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                          
+                          {/* Delete line button */}
+                          <td className="border border-gray-300 p-1 w-10">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                setDeleteLineDialog({
+                                  lineId: line.id,
+                                  lineNumber: lineIndex + 1
+                                });
+                              }}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                      
+                      {/* Add new line button */}
+                      <tr className="h-10 bg-gray-50">
+                        <td className="border border-gray-300 p-1 w-40 bg-slate-200"></td>
+                        {weekData.dates?.map((date, idx) => (
+                          <td key={idx} className="border border-gray-300 p-1 min-w-[140px] h-10"></td>
+                        ))}
+                        <td className="border border-gray-300 p-1 w-10">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              addFreeLine(safeWeek.week, safeWeek.year);
+                            }}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    </>
+                  ) : (
+                    <tr>
+                      <td colSpan={weekData.dates?.length ? weekData.dates.length + 2 : 3} className="border-t-2 border-gray-400 bg-gray-100 p-2">
+                        <div className="flex justify-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              addFreeLine(safeWeek.week, safeWeek.year);
+                            }}
+                            className="h-8 px-3"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Legg til frie linje
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })()}
               </table>
             </div>
           </div>
@@ -1475,6 +2110,180 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Free Bubble Edit Dialog */}
+      <Dialog open={!!freeBubbleEditDialog} onOpenChange={() => setFreeBubbleEditDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rediger boble</DialogTitle>
+            <DialogDescription>
+              Rediger tekst og farge for denne boblen.
+            </DialogDescription>
+          </DialogHeader>
+          {freeBubbleEditDialog && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Tekst</label>
+                <Input
+                  value={freeBubbleEditDialog.text}
+                  onChange={(e) => setFreeBubbleEditDialog({
+                    ...freeBubbleEditDialog,
+                    text: e.target.value
+                  })}
+                  placeholder="Skriv tekst her..."
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Farge</label>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {[
+                    '#ef4444', // Red
+                    '#f97316', // Orange
+                    '#eab308', // Yellow
+                    '#22c55e', // Green
+                    '#06b6d4', // Cyan
+                    '#3b82f6', // Blue
+                    '#8b5cf6', // Purple
+                    '#ec4899', // Pink
+                    '#94a3b8', // Gray
+                    '#f59e0b', // Amber
+                    '#10b981', // Emerald
+                    '#14b8a6', // Teal
+                    '#0ea5e9', // Sky
+                    '#6366f1', // Indigo
+                    '#a855f7', // Violet
+                    '#f43f5e', // Rose
+                    '#6b7280', // Gray-500
+                    '#374151', // Gray-700
+                    '#1f2937', // Gray-800
+                    '#111827'  // Gray-900
+                  ].map(color => (
+                    <button
+                      key={color}
+                      className={`w-8 h-8 rounded border-2 ${
+                        freeBubbleEditDialog.color === color ? 'border-gray-900' : 'border-gray-300'
+                      }`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setFreeBubbleEditDialog({
+                        ...freeBubbleEditDialog,
+                        color: color
+                      })}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    deleteFreeBubble(freeBubbleEditDialog.bubbleId);
+                    setFreeBubbleEditDialog(null);
+                  }}
+                >
+                  Slett
+                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setFreeBubbleEditDialog(null)}
+                  >
+                    Avbryt
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      editFreeBubble(
+                        freeBubbleEditDialog.bubbleId,
+                        freeBubbleEditDialog.text,
+                        freeBubbleEditDialog.color
+                      );
+                      setFreeBubbleEditDialog(null);
+                    }}
+                  >
+                    Lagre
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      
+    {/* Delete Line Confirmation Dialog */}
+    <Dialog open={!!deleteLineDialog} onOpenChange={() => setDeleteLineDialog(null)}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Slett frie linje</DialogTitle>
+          <DialogDescription>
+            Er du sikker på at du vil slette hele linjen? Alle bobler i linjen vil også bli slettet.
+          </DialogDescription>
+        </DialogHeader>
+        {deleteLineDialog && (
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteLineDialog(null)}
+            >
+              Avbryt
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                deleteFreeLine(deleteLineDialog.lineId);
+                setDeleteLineDialog(null);
+              }}
+            >
+              Slett linje
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+
+    {/* Edit Line Name Dialog */}
+    <Dialog open={!!editLineNameDialog} onOpenChange={() => setEditLineNameDialog(null)}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Rediger linje-navn</DialogTitle>
+          <DialogDescription>
+            Endre navnet på denne linjen.
+          </DialogDescription>
+        </DialogHeader>
+        {editLineNameDialog && (
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Navn</label>
+              <Input
+                value={editLineNameDialog.currentName}
+                onChange={(e) => setEditLineNameDialog({
+                  ...editLineNameDialog,
+                  currentName: e.target.value
+                })}
+                placeholder="Skriv linje-navn her..."
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setEditLineNameDialog(null)}
+              >
+                Avbryt
+              </Button>
+              <Button
+                onClick={() => {
+                  updateLineName(
+                    editLineNameDialog.lineId,
+                    editLineNameDialog.currentName
+                  );
+                  setEditLineNameDialog(null);
+                }}
+              >
+                Lagre
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
     </div>
   );
 };

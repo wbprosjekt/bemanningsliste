@@ -151,7 +151,7 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
               placeholder="Søk og velg prosjekt..."
             />
             <p className="text-xs text-muted-foreground">
-              Kun prosjekter du er tilknyttet vil vises.
+              Alle aktive prosjekter vil vises.
             </p>
           </div>
 
