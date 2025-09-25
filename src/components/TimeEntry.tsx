@@ -631,7 +631,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
               variant="ghost"
               size="sm"
               onClick={() => setShowOvertime(!showOvertime)}
-              className="text-xs"
+              className="min-h-[44px] w-full sm:w-auto text-xs"
             >
               {showOvertime ? 'Skjul' : 'Vis'}
             </Button>
