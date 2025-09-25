@@ -1714,6 +1714,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 <div className="absolute inset-0 bg-red-500/10 pointer-events-none rounded-sm" />
                               )}
                               <div className="flex flex-col gap-1 items-start justify-start">
+                                {/* Debug info */}
+                                {dayEntries.length > 1 && (
+                                  <div className="text-xs text-red-500 bg-yellow-100 p-1 rounded">
+                                    Debug: {dayEntries.length} prosjekter på denne dagen
+                                  </div>
+                                )}
                                 {dayEntries
                                   .sort((a, b) => {
                                     const aNum = a.project?.project_number || 999999;
