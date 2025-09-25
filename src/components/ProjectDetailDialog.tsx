@@ -114,7 +114,7 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
                   </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-3 w-full overflow-hidden">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="font-medium">Prosjektnummer:</span>
@@ -127,9 +127,9 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
                 </div>
                 
                 {projectDetails.description && (
-                  <div>
+                  <div className="w-full">
                     <span className="font-medium text-sm">Beskrivelse:</span>
-                    <p className="text-sm text-muted-foreground mt-1 break-words hyphens-auto leading-relaxed">{projectDetails.description}</p>
+                    <p className="text-sm text-muted-foreground mt-1 break-all overflow-wrap-anywhere word-break-break-all leading-relaxed whitespace-pre-wrap">{projectDetails.description}</p>
                   </div>
                 )}
 
