@@ -112,10 +112,10 @@ const ProjectSelector = ({
           disabled={disabled}
         >
           {selectedProject ? (
-            <div className="flex items-center gap-2">
-              <span className="truncate">{selectedProject.project_name}</span>
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <span className="break-words hyphens-auto leading-tight text-left">{selectedProject.project_name}</span>
               {selectedProject.project_number && (
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-xs flex-shrink-0">
                   #{selectedProject.project_number}
                 </Badge>
               )}
