@@ -1937,12 +1937,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                          <span className="block max-w-[200px] truncate">
                                            {entry.project?.project_name}
                                          </span>
-                                         {entry.activities.some(a => a.tripletex_synced_at) && (
-                                           <span className="ml-1 text-xs">✓</span>
-                                         )}
-                                         {entry.activities.some(a => a.sync_error) && (
-                                           <span className="ml-1 text-xs text-red-300" title={entry.activities.find(a => a.sync_error)?.sync_error}>⚠</span>
-                                         )}
                                        </div>
                                        
                                        {/* Status indicator overlay */}
