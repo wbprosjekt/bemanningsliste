@@ -1430,6 +1430,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           });
 
           console.log('🔍 Verify result:', { data, error });
+          console.log('🔍 Data details:', JSON.stringify(data, null, 2));
 
           if (error) {
             console.error('Error verifying timesheet entry:', error);

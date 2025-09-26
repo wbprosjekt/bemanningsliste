@@ -875,8 +875,9 @@ Deno.serve(async (req) => {
         result = { 
           success: true, 
           data: { 
-            exists: verifyResult.success,
-            entry: verifyResult.data?.value || null 
+            exists: verifyResult.success && verifyResult.data?.value,
+            entry: verifyResult.data?.value || null,
+            error: verifyResult.error || null
           }
         };
         break;
