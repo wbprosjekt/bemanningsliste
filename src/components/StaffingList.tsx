@@ -1508,6 +1508,54 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  const approveAllEntries = async () => {
+    try {
+      // Find all draft entries that can be approved
+      const draftEntries = staffingData.filter(entry => 
+        entry.activities.some(activity => activity.status === 'draft' || activity.status === 'utkast')
+      );
+
+      if (draftEntries.length === 0) {
+        toast({
+          title: "Ingen timer å godkjenne",
+          description: "Alle timer er allerede godkjent eller sendt",
+        });
+        return;
+      }
+
+      const timerIds = draftEntries.flatMap(entry => 
+        entry.activities
+          .filter(activity => activity.status === 'draft' || activity.status === 'utkast')
+          .map(activity => activity.id)
+      );
+
+      const { error } = await supabase
+        .from('vakt_timer')
+        .update({ 
+          status: 'godkjent',
+          approved_at: new Date().toISOString(),
+          approved_by: user?.id
+        })
+        .in('id', timerIds);
+
+      if (error) throw error;
+
+      toast({
+        title: "Alle timer godkjent",
+        description: `${draftEntries.length} oppføringer godkjent og klar for sending til Tripletex`
+      });
+
+      setSelectedEntries(new Set());
+      revalidateInBackground();
+    } catch (error: unknown) {
+      toast({
+        title: "Godkjenning feilet",
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
+        variant: "destructive"
+      });
+    }
+  };
+
   const getStatusBadge = (status: StaffingEntry['status']) => {
     switch (status) {
       case 'approved':
@@ -1603,6 +1651,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           </Button>
           <Button onClick={unapproveSelectedEntries} disabled={selectedEntries.size === 0} variant="outline">
             Trekk tilbake godkjenning ({selectedEntries.size})
+          </Button>
+          <Button onClick={approveAllEntries} variant="default" className="bg-green-600 hover:bg-green-700">
+            <Check className="h-4 w-4 mr-1" />
+            Godkjenn alle timer
           </Button>
         </div>
         
