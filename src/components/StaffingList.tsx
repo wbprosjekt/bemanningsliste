@@ -1962,10 +1962,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                        )}
                                      </div>
                                     
-                                    {/* Status indicator */}
-                                    <div className="absolute -top-1 -left-1">
-                                      {getStatusBadge(entry.status)}
-                                    </div>
                                   </div>
                                 ))}
                                 
