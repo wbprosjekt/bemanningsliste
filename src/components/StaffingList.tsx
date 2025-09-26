@@ -1972,8 +1972,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   >
                                     {/* Action icons overlay */}
                                     <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover/project:opacity-100 transition-opacity">
-                                      {/* Only show delete button if not approved or sent to Tripletex */}
-                                      {!entry.activities.some(a => a.status === 'godkjent' || a.status === 'sendt' || a.tripletex_synced_at) && (
+                                      {/* Only show delete button if not approved or actually sent to Tripletex */}
+                                      {!entry.activities.some(a => a.status === 'godkjent' || a.tripletex_synced_at) && (
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();

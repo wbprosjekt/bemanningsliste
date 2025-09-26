@@ -835,6 +835,8 @@ Deno.serve(async (req) => {
                 .from('vakt_timer')
                 .update({
                   tripletex_entry_id: exportResult.data?.value?.id,
+                  tripletex_synced_at: new Date().toISOString(),
+                  sync_error: null,
                   status: 'sendt'
                 })
                 .eq('id', entry.id);
