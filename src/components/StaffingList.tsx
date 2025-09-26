@@ -626,7 +626,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   };
 
   const revalidateInBackground = () => {
-    setTimeout(() => loadStaffingData(true), 1000);
+    setTimeout(() => loadStaffingData(true), 100);
   };
 
   const rollbackUpdate = (previousData: StaffingEntry[], errorMessage: string) => {
