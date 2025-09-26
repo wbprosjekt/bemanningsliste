@@ -1482,6 +1482,24 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         }
       }
 
+      // Optimistically update UI immediately
+      updateStaffingDataOptimistically(prevData => 
+        prevData.map(e => 
+          e.id === entry.id 
+            ? {
+                ...e,
+                activities: e.activities.map(a => ({
+                  ...a,
+                  tripletex_synced_at: null,
+                  tripletex_entry_id: null,
+                  sync_error: null,
+                  status: 'utkast'
+                }))
+              }
+            : e
+        )
+      );
+
       toast({
         title: "Timer kalt tilbake fra Tripletex",
         description: `${entry.activities.length} timer er nå tilbake til utkast-status og kan redigeres`
