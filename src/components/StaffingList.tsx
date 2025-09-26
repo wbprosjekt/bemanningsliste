@@ -1945,6 +1945,18 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                          )}
                                        </div>
                                        
+                                       {/* Status indicator overlay */}
+                                       {entry.activities.some(a => a.status === 'godkjent') && !entry.activities.some(a => a.tripletex_synced_at) && (
+                                         <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs font-bold">
+                                           ✓
+                                         </div>
+                                       )}
+                                       {entry.activities.some(a => a.tripletex_synced_at) && (
+                                         <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs font-bold">
+                                           →
+                                         </div>
+                                       )}
+                                       
                                        {/* Hours only */}
                                        {entry.totalHours > 0 && (
                                          <div className="text-sm font-medium">
