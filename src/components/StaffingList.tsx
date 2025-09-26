@@ -1406,21 +1406,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       let verifiedCount = 0;
       let notFoundCount = 0;
 
-      console.log('🔍 Verifying Tripletex status for entry:', {
-        projectName: entry.project?.project_name,
-        date: entry.date,
-        personName: `${entry.person.fornavn} ${entry.person.etternavn}`,
-        activities: entry.activities.map(a => ({
-          id: a.id,
-          tripletex_entry_id: a.tripletex_entry_id,
-          tripletex_synced_at: a.tripletex_synced_at
-        }))
-      });
-
       for (const activity of entry.activities) {
         if (activity.tripletex_entry_id) {
-          console.log('🔍 Checking Tripletex entry ID:', activity.tripletex_entry_id);
-          
           const { data, error } = await supabase.functions.invoke('tripletex-api', {
             body: {
               action: 'verify-timesheet-entry',
@@ -1429,9 +1416,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             }
           });
 
-          console.log('🔍 Verify result:', { data, error });
-          console.log('🔍 Data details:', JSON.stringify(data, null, 2));
-
           if (error) {
             console.error('Error verifying timesheet entry:', error);
             continue;
@@ -1439,13 +1423,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
           if (data?.data?.exists) {
             verifiedCount++;
-            console.log('✅ Entry found in Tripletex');
           } else {
             notFoundCount++;
-            console.log('❌ Entry NOT found in Tripletex');
           }
-        } else {
-          console.log('⚠️ No tripletex_entry_id for activity:', activity.id);
         }
       }
 
