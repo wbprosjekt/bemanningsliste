@@ -1388,6 +1388,60 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  const verifyTripletexStatus = async (entry: StaffingEntry) => {
+    try {
+      let verifiedCount = 0;
+      let notFoundCount = 0;
+
+      for (const activity of entry.activities) {
+        if (activity.tripletex_entry_id) {
+          const { data, error } = await supabase.functions.invoke('tripletex-api', {
+            body: {
+              action: 'verify-timesheet-entry',
+              tripletexEntryId: activity.tripletex_entry_id,
+              orgId: profile?.org_id
+            }
+          });
+
+          if (error) {
+            console.error('Error verifying timesheet entry:', error);
+            continue;
+          }
+
+          if (data?.exists) {
+            verifiedCount++;
+          } else {
+            notFoundCount++;
+          }
+        }
+      }
+
+      if (verifiedCount > 0 && notFoundCount === 0) {
+        toast({
+          title: "Bekreftet i Tripletex",
+          description: `Alle ${verifiedCount} timer er synkronisert med Tripletex`
+        });
+      } else if (notFoundCount > 0) {
+        toast({
+          title: "Deler ikke funnet i Tripletex",
+          description: `${verifiedCount} bekreftet, ${notFoundCount} ikke funnet`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Ingen timer å sjekke",
+          description: "Ingen timer er sendt til Tripletex ennå"
+        });
+      }
+    } catch (error: unknown) {
+      toast({
+        title: "Sjekk feilet",
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
+        variant: "destructive"
+      });
+    }
+  };
+
   const recallFromTripletex = async (entry: StaffingEntry) => {
     try {
       for (const activity of entry.activities) {
@@ -1921,6 +1975,19 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                           title="Kall tilbake fra Tripletex"
                                         >
                                           <RefreshCw className="h-2 w-2" />
+                                        </button>
+                                      )}
+                                      {/* Show verify button if sent to Tripletex - always visible */}
+                                      {entry.activities.some(a => a.tripletex_synced_at) && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            verifyTripletexStatus(entry);
+                                          }}
+                                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20 opacity-100"
+                                          title="Sjekk Tripletex-status"
+                                        >
+                                          <Check className="h-2 w-2" />
                                         </button>
                                       )}
                                       <button
