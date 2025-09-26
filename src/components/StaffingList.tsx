@@ -170,7 +170,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [showProjectSearch, setShowProjectSearch] = useState<{date: string, personId: string} | null>(null);
   const [showColorPicker, setShowColorPicker] = useState<{
     projectName: string;
@@ -1524,11 +1523,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
-  // Filter employees based on search
-  const filteredEmployees = employees.filter(emp => 
-    searchTerm === '' || 
-    `${emp.fornavn} ${emp.etternavn}`.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   if (loading) {
     return (
@@ -1550,13 +1544,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         </div>
         
         <div className="flex items-center gap-2">
-          <Input
-            placeholder="Søk ansatte..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-64"
-          />
-          
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 w-9 p-0">
