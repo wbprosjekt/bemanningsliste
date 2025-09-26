@@ -1910,14 +1910,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                           <Send className="h-2 w-2" />
                                         </button>
                                       )}
-                                      {/* Show recall button if sent to Tripletex */}
+                                      {/* Show recall button if sent to Tripletex - always visible */}
                                       {entry.activities.some(a => a.tripletex_synced_at) && (
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             recallFromTripletex(entry);
                                           }}
-                                          className="bg-orange-500 hover:bg-orange-600 text-white rounded-full p-1 shadow-md border border-white/20"
+                                          className="bg-orange-500 hover:bg-orange-600 text-white rounded-full p-1 shadow-md border border-white/20 opacity-100"
                                           title="Kall tilbake fra Tripletex"
                                         >
                                           <RefreshCw className="h-2 w-2" />
