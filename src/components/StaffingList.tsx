@@ -357,6 +357,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             notat,
             is_overtime,
             aktivitet_id,
+            tripletex_synced_at,
+            tripletex_entry_id,
+            sync_error,
+            approved_at,
+            approved_by,
+            original_timer,
+            original_aktivitet_id,
+            original_notat,
+            original_status,
             ttx_activity_cache:aktivitet_id (
               id,
               navn,
@@ -408,7 +417,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
               tripletex_entry_id: timer.tripletex_entry_id,
               sync_error: timer.sync_error,
               aktivitet_id: timer.aktivitet_id,
-              ttx_activity_id: timer.ttx_activity_cache?.ttx_id ?? undefined
+              ttx_activity_id: timer.ttx_activity_cache?.ttx_id ?? undefined,
+              original_timer: timer.original_timer,
+              original_aktivitet_id: timer.original_aktivitet_id,
+              original_notat: timer.original_notat,
+              original_status: timer.original_status
             }));
             
             // Calculate total hours from activities
