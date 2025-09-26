@@ -1556,6 +1556,59 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  const unapproveAllEntries = async () => {
+    try {
+      // Find all approved entries that can be unapproved
+      const approvedEntries = staffingData.filter(entry => 
+        entry.activities.some(activity => activity.status === 'godkjent')
+      );
+
+      if (approvedEntries.length === 0) {
+        toast({
+          title: "Ingen godkjenninger å trekke tilbake",
+          description: "Alle timer er allerede i utkast-status eller sendt",
+        });
+        return;
+      }
+
+      const timerIds = approvedEntries.flatMap(entry => 
+        entry.activities
+          .filter(activity => activity.status === 'godkjent')
+          .map(activity => activity.id)
+      );
+
+      const { data, error } = await supabase.functions.invoke('tripletex-api', {
+        body: {
+          action: 'unapprove_timesheet_entries', 
+          entry_ids: timerIds,
+          orgId: profile?.org_id
+        }
+      });
+
+      if (error) {
+        throw new Error(error instanceof Error ? error.message : 'Failed to unapprove entries');
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to unapprove entries');
+      }
+
+      toast({
+        title: "Alle godkjenninger trukket tilbake",
+        description: `${approvedEntries.length} oppføringer satt tilbake til utkast`
+      });
+
+      setSelectedEntries(new Set());
+      revalidateInBackground();
+    } catch (error: unknown) {
+      toast({
+        title: "Tilbaketrekking feilet",
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
+        variant: "destructive"
+      });
+    }
+  };
+
   const getStatusBadge = (status: StaffingEntry['status']) => {
     switch (status) {
       case 'approved':
@@ -1655,6 +1708,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           <Button onClick={approveAllEntries} variant="default" className="bg-green-600 hover:bg-green-700">
             <Check className="h-4 w-4 mr-1" />
             Godkjenn alle timer
+          </Button>
+          <Button onClick={unapproveAllEntries} variant="outline" className="border-orange-500 text-orange-600 hover:bg-orange-50">
+            <X className="h-4 w-4 mr-1" />
+            Trekk tilbake alle godkjenninger
           </Button>
         </div>
         
