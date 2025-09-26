@@ -1593,6 +1593,19 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                     <li>• Bruk "Hent tilbake" for å redigere</li>
                   </ul>
                 </div>
+                <div>
+                  <h4 className="font-medium mb-2">Status-ikoner:</h4>
+                  <ul className="space-y-1 text-muted-foreground text-xs">
+                    <li>✓ Godkjent (grønn)</li>
+                    <li>→ Send til Tripletex (blå)</li>
+                    <li>🔄 Kall tilbake fra Tripletex (oransje)</li>
+                    <li>! Klar for godkjenning (oransje)</li>
+                    <li>✎ Utkast (grå)</li>
+                    <li>⚠ Feil ved synkronisering (rød)</li>
+                    <li>⚡ Overtid (gul)</li>
+                    <li>🗑️ Sletting blokkert for godkjente/sendte prosjekter</li>
+                  </ul>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -1606,9 +1619,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           </Button>
         </div>
         
-        <div className="text-xs text-muted-foreground px-3 py-2 bg-blue-50 rounded border border-blue-200">
-          📋 Status-ikoner: ✓ Godkjent (grønn) | → Send til Tripletex (blå) | 🔄 Kall tilbake fra Tripletex (oransje) | ! Klar for godkjenning (oransje) | ✎ Utkast (grå) | ⚠ Feil ved synkronisering (rød) | ⚡ Overtid (gul) | 🗑️ Sletting blokkert for godkjente/sendte prosjekter
-        </div>
       </div>
 
       {/* Multi-week Excel-like table */}
