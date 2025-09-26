@@ -25,7 +25,8 @@ import {
   Palette,
   X,
   RefreshCw,
-  Trash2
+  Trash2,
+  HelpCircle
 } from 'lucide-react';
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
 import ProjectSearchDialog from './ProjectSearchDialog';
@@ -1555,9 +1556,46 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-64"
           />
-       <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded">
-         💡 Tips: Dra prosjekter mellom ansatte. Prosjekter med timer kopieres (bevarer original), tomme prosjekter flyttes. Hold Shift/Option for å alltid kopiere. Prosjekter sorteres etter nummer. Klikk på prosjekt for å endre farge.
-       </div>
+          
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 w-9 p-0">
+                <HelpCircle className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Hjelp og tips</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <h4 className="font-medium mb-2">Drag & Drop:</h4>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li>• Dra prosjekter mellom ansatte</li>
+                    <li>• Prosjekter med timer kopieres (bevarer original)</li>
+                    <li>• Tomme prosjekter flyttes</li>
+                    <li>• Hold Shift/Option for å alltid kopiere</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Prosjektstyring:</h4>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li>• Prosjekter sorteres etter nummer</li>
+                    <li>• Klikk på prosjekt for å endre farge</li>
+                    <li>• Klikk på prosjekt for å redigere timer</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Godkjenning:</h4>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li>• Velg timer og klikk "Godkjenn"</li>
+                    <li>• Godkjente timer kan sendes til Tripletex</li>
+                    <li>• Bruk "Hent tilbake" for å redigere</li>
+                  </ul>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
        
           <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
             <Check className="h-4 w-4 mr-1" />
