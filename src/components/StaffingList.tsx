@@ -1403,8 +1403,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
   const verifyTripletexStatus = async (entry: StaffingEntry) => {
     try {
-      let verifiedCount = 0;
-      let notFoundCount = 0;
+      let verifiedActivities = 0;
+      let notFoundActivities = 0;
+      let verifiedHours = 0;
+      let notFoundHours = 0;
 
       for (const activity of entry.activities) {
         if (activity.tripletex_entry_id) {
@@ -1422,22 +1424,24 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           }
 
           if (data?.data?.exists) {
-            verifiedCount++;
+            verifiedActivities++;
+            verifiedHours += activity.timer || 0;
           } else {
-            notFoundCount++;
+            notFoundActivities++;
+            notFoundHours += activity.timer || 0;
           }
         }
       }
 
-      if (verifiedCount > 0 && notFoundCount === 0) {
+      if (verifiedActivities > 0 && notFoundActivities === 0) {
         toast({
           title: "Bekreftet i Tripletex",
-          description: `Alle ${verifiedCount} timer er synkronisert med Tripletex`
+          description: `${verifiedHours} timer (${verifiedActivities} aktiviteter) er synkronisert med Tripletex`
         });
-      } else if (notFoundCount > 0) {
+      } else if (notFoundActivities > 0) {
         toast({
           title: "Timer ikke funnet i Tripletex",
-          description: `${verifiedCount} bekreftet, ${notFoundCount} ikke funnet`,
+          description: `${verifiedHours} timer bekreftet, ${notFoundHours} timer ikke funnet`,
           variant: "destructive"
         });
       } else {
