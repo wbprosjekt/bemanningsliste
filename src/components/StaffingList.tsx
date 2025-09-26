@@ -1437,7 +1437,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             continue;
           }
 
-          if (data?.exists) {
+          if (data?.data?.exists) {
             verifiedCount++;
             console.log('✅ Entry found in Tripletex');
           } else {
