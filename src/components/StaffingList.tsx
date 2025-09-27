@@ -1597,17 +1597,31 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
-  const approveAllEntries = async () => {
+  const approveAllEntriesForWeek = async (weekNumber: number, year: number) => {
     try {
-      // Find all draft entries that can be approved
+      // Get dates for the specific week
+      const weekData = multiWeekData.find(w => w.week === weekNumber && w.year === year);
+      if (!weekData?.dates) {
+        toast({
+          title: "Uke ikke funnet",
+          description: `Kunne ikke finne data for uke ${weekNumber}, ${year}`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const weekDateKeys = weekData.dates.map(toDateKey).filter(Boolean);
+      
+      // Find all draft entries for this specific week
       const draftEntries = staffingData.filter(entry => 
+        weekDateKeys.includes(entry.date) &&
         entry.activities.some(activity => activity.status === 'draft' || activity.status === 'utkast')
       );
 
       if (draftEntries.length === 0) {
         toast({
           title: "Ingen timer å godkjenne",
-          description: "Alle timer er allerede godkjent eller sendt",
+          description: `Alle timer for uke ${weekNumber} er allerede godkjent eller sendt`,
         });
         return;
       }
@@ -1631,7 +1645,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       toast({
         title: "Alle timer godkjent",
-        description: `${draftEntries.length} oppføringer godkjent og klar for sending til Tripletex`
+        description: `${draftEntries.length} oppføringer for uke ${weekNumber} godkjent og klar for sending til Tripletex`
       });
 
       setSelectedEntries(new Set());
@@ -1645,17 +1659,31 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
-  const unapproveAllEntries = async () => {
+  const unapproveAllEntriesForWeek = async (weekNumber: number, year: number) => {
     try {
-      // Find all approved entries that can be unapproved
+      // Get dates for the specific week
+      const weekData = multiWeekData.find(w => w.week === weekNumber && w.year === year);
+      if (!weekData?.dates) {
+        toast({
+          title: "Uke ikke funnet",
+          description: `Kunne ikke finne data for uke ${weekNumber}, ${year}`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const weekDateKeys = weekData.dates.map(toDateKey).filter(Boolean);
+      
+      // Find all approved entries for this specific week
       const approvedEntries = staffingData.filter(entry => 
+        weekDateKeys.includes(entry.date) &&
         entry.activities.some(activity => activity.status === 'godkjent')
       );
 
       if (approvedEntries.length === 0) {
         toast({
           title: "Ingen godkjenninger å trekke tilbake",
-          description: "Alle timer er allerede i utkast-status eller sendt",
+          description: `Alle timer for uke ${weekNumber} er allerede i utkast-status eller sendt`,
         });
         return;
       }
@@ -1684,7 +1712,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       toast({
         title: "Alle godkjenninger trukket tilbake",
-        description: `${approvedEntries.length} oppføringer satt tilbake til utkast`
+        description: `${approvedEntries.length} oppføringer for uke ${weekNumber} satt tilbake til utkast`
       });
 
       setSelectedEntries(new Set());
@@ -1794,14 +1822,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           <Button onClick={unapproveSelectedEntries} disabled={selectedEntries.size === 0} variant="outline">
             Trekk tilbake godkjenning ({selectedEntries.size})
           </Button>
-          <Button onClick={approveAllEntries} variant="default" className="bg-green-600 hover:bg-green-700">
-            <Check className="h-4 w-4 mr-1" />
-            Godkjenn alle timer
-          </Button>
-          <Button onClick={unapproveAllEntries} variant="outline" className="border-orange-500 text-orange-600 hover:bg-orange-50">
-            <X className="h-4 w-4 mr-1" />
-            Trekk tilbake alle godkjenninger
-          </Button>
         </div>
         
       </div>
@@ -1817,7 +1837,29 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   <thead>
                     <tr className="bg-slate-100">
                       <th className="border border-gray-300 p-2 text-left font-bold w-40 bg-slate-200">
-                        UKE {safeWeek.week}
+                        <div className="flex flex-col gap-2">
+                          <div>UKE {safeWeek.week}</div>
+                          <div className="flex gap-1">
+                            <Button 
+                              size="sm" 
+                              variant="default" 
+                              className="bg-green-600 hover:bg-green-700 text-xs px-2 py-1 h-6"
+                              onClick={() => approveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
+                            >
+                              <Check className="h-3 w-3 mr-1" />
+                              Godkjenn
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="border-orange-500 text-orange-600 hover:bg-orange-50 text-xs px-2 py-1 h-6"
+                              onClick={() => unapproveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
+                            >
+                              <X className="h-3 w-3 mr-1" />
+                              Trekk tilbake
+                            </Button>
+                          </div>
+                        </div>
                       </th>
                       {weekData.dates?.map((date, idx) => (
                         <th key={toDateKey(date) || `${safeWeek.year}-${safeWeek.week}-${idx}`} className="border border-gray-300 p-2 text-center min-w-[140px] font-bold">
