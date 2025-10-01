@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useEmployees, useProjects, useUserProfile } from '@/hooks/useStaffingData';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Check, Send, Palette, X, RefreshCw, Trash2, HelpCircle } from 'lucide-react';
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
@@ -131,7 +132,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // React Query hooks for data fetching
+  const { data: profile, isLoading: profileLoading } = useUserProfile(user?.id);
+  const { data: employees = [], isLoading: employeesLoading } = useEmployees(profile?.org_id || '');
+  const { data: projects = [], isLoading: projectsLoading } = useProjects(profile?.org_id || '');
+  
+  // Keep local state for UI-only data
+  const [profileState, setProfileState] = useState<Profile | null>(null);
   const [staffingData, setStaffingData] = useState<StaffingEntry[]>([]);
   const [freeLines, setFreeLines] = useState<Array<{
     id: string;
@@ -149,7 +156,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }>;
   }>>([]);
   const [projectColors, setProjectColors] = useState<Record<number, string>>({});
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // MIGRATED TO REACT QUERY: const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
@@ -566,23 +573,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   }, [profile?.org_id, allDates, toDateKey]);
 
-  const loadEmployees = useCallback(async () => {
-    if (!profile?.org_id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('person')
-        .select('*')
-        .eq('org_id', profile.org_id)
-        .eq('aktiv', true)
-        .order('fornavn');
-
-      if (error) throw error;
-      setEmployees(data || []);
-    } catch (error) {
-      console.error('Error loading employees:', error);
-    }
-  }, [profile?.org_id]);
+  // MIGRATED TO REACT QUERY: useEmployees() hook now handles this
+  // Old loadEmployees function removed - now using:
+  // const { data: employees = [] } = useEmployees(profile?.org_id || '');
 
   useEffect(() => {
     if (user) {
@@ -596,7 +589,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       loadProjectColors();
       loadCalendarDays();
       loadFreeLines();
-      loadEmployees();
+      // MIGRATED: loadEmployees() - now handled by useEmployees() hook
       setInitialized(true);
     } else {
       setLoading(false);
