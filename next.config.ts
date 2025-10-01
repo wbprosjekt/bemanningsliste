@@ -6,6 +6,13 @@ const nextConfig: NextConfig = {
   compress: true, // Enable gzip compression
   generateEtags: true, // Enable ETags for caching
 
+  // Turbopack configuration
+  experimental: {
+    turbo: {
+      root: process.cwd(), // Explicitly set workspace root
+    },
+  },
+
   // Security headers
   async headers() {
     return [

@@ -522,6 +522,57 @@ Deno.serve(async (req) => {
   const requestOrigin = req.headers.get('origin') || undefined;
   const corsHeaders = getCorsHeaders(requestOrigin);
 
+  // Authentication check - verify JWT token
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return new Response(
+      JSON.stringify({ 
+        error: 'Unauthorized', 
+        message: 'Missing authorization header' 
+      }),
+      {
+        status: 401,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+  }
+
+  // Create Supabase client with auth header
+  const supabaseClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+    }
+  );
+
+  // Verify the user is authenticated
+  const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+  
+  if (authError || !user) {
+    console.error('Authentication failed:', authError?.message);
+    return new Response(
+      JSON.stringify({ 
+        error: 'Unauthorized', 
+        message: 'Invalid or expired token' 
+      }),
+      {
+        status: 401,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+  }
+
+  console.log('✅ Authenticated user:', user.email);
+
   try {
     const url = new URL(req.url);
     // Try to extract action and orgId from URL or request body (supports both styles)
