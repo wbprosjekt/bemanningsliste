@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -5,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Users, UserPlus, RefreshCw } from 'lucide-react';
 
@@ -19,7 +21,7 @@ interface TripletexEmployee {
   fornavn: string;
   etternavn: string;
   epost: string | null;
-  aktiv: boolean;
+  aktiv: boolean | null;
 }
 
 const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {

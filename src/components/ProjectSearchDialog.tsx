@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Calendar, User, Building } from 'lucide-react';
@@ -17,14 +16,6 @@ interface ProjectSearchDialogProps {
   onProjectAssigned: () => void;
 }
 
-interface Project {
-  id: string;
-  project_name: string;
-  project_number: number;
-  tripletex_project_id: number;
-  customer_name?: string;
-}
-
 interface Person {
   fornavn: string;
   etternavn: string;
@@ -34,6 +25,7 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
   const [person, setPerson] = useState<Person | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [existingProjectIds, setExistingProjectIds] = useState<string[]>([]);
   const { toast } = useToast();
 
   const loadPerson = useCallback(async () => {
@@ -53,12 +45,33 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
     }
   }, [personId]);
 
+  const loadExistingProjects = useCallback(async () => {
+    if (!personId || !date || !orgId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('vakt')
+        .select('project_id')
+        .eq('person_id', personId)
+        .eq('dato', date)
+        .eq('org_id', orgId);
+
+      if (error) throw error;
+      
+      const projectIds = (data || []).map(v => v.project_id).filter(Boolean);
+      setExistingProjectIds(projectIds);
+    } catch (error) {
+      console.error('Error loading existing projects:', error);
+    }
+  }, [personId, date, orgId]);
+
   useEffect(() => {
     if (open) {
       loadPerson();
+      loadExistingProjects();
       setSelectedProjectId('');
     }
-  }, [open, loadPerson]);
+  }, [open, loadPerson, loadExistingProjects]);
 
   const assignProject = async () => {
     if (!selectedProjectId) {
@@ -123,7 +136,7 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
             <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
               <User className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">
-                {getPersonDisplayName(person)}
+                {getPersonDisplayName(person.fornavn, person.etternavn)}
               </span>
             </div>
           )}
@@ -149,9 +162,13 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
               orgId={orgId}
               personId={personId}
               placeholder="Søk og velg prosjekt..."
+              excludeProjectIds={existingProjectIds}
             />
             <p className="text-xs text-muted-foreground">
-              Alle aktive prosjekter vil vises.
+              {existingProjectIds.length > 0 
+                ? `${existingProjectIds.length} prosjekt(er) allerede lagt til for denne dagen og vises ikke.`
+                : "Alle aktive prosjekter vil vises."
+              }
             </p>
           </div>
 

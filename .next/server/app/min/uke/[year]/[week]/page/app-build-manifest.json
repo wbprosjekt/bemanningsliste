@@ -1,0 +1,34 @@
+{
+  "pages": {
+    "/min/uke/[year]/[week]/page": [
+      "static/chunks/90781_next_dist_6e96aecc._.js",
+      "static/chunks/80b94_Cursor_Bemanningsliste_bemanningsliste_src_app_favicon_ico_mjs_5434ca40._.js",
+      "static/chunks/Documents_Cursor_Bemanningsliste_bemanningsliste_src_app_globals_51109d8f.css",
+      "static/chunks/90781_@supabase_node-fetch_browser_a2aaec38.js",
+      "static/chunks/Documents_Cursor_Bemanningsliste_bemanningsliste_src_fd0e8806._.js",
+      "static/chunks/90781_@tanstack_query-core_build_modern_4670b9f1._.js",
+      "static/chunks/90781_tailwind-merge_dist_bundle-mjs_mjs_2fdac88d._.js",
+      "static/chunks/90781_@supabase_auth-js_dist_module_161c6174._.js",
+      "static/chunks/90781_@radix-ui_b22589cf._.js",
+      "static/chunks/90781_@floating-ui_7a81567f._.js",
+      "static/chunks/90781_@supabase_5900a68d._.js",
+      "static/chunks/90781_850d4c26._.js",
+      "static/chunks/Documents_Cursor_Bemanningsliste_bemanningsliste_src_app_layout_tsx_91ae0d79._.js",
+      "static/chunks/90781_next_dist_d4363e48._.js",
+      "static/chunks/Documents_Cursor_Bemanningsliste_bemanningsliste_src_app_not-found_tsx_ab0d809d._.js",
+      "static/chunks/90781_next_dist_client_components_builtin_global-error_ab0d809d.js",
+      "static/chunks/Documents_Cursor_Bemanningsliste_bemanningsliste_src_25e304af._.js",
+      "static/chunks/90781_96956e98._.js",
+      "static/chunks/3807d_Bemanningsliste_bemanningsliste_src_app_min_uke_[year]_[week]_page_tsx_ab0d809d._.js",
+      "static/chunks/[turbopack]_browser_dev_hmr-client_hmr-client_ts_351d1509._.js",
+      "static/chunks/90781_next_dist_compiled_react-dom_0daa202b._.js",
+      "static/chunks/90781_next_dist_compiled_next-devtools_index_d153dbb5.js",
+      "static/chunks/90781_next_dist_compiled_cbd96ec3._.js",
+      "static/chunks/90781_next_dist_client_6f811781._.js",
+      "static/chunks/90781_next_dist_263cf530._.js",
+      "static/chunks/90781_@swc_helpers_cjs_85300661._.js",
+      "static/chunks/Documents_Cursor_Bemanningsliste_bemanningsliste_a0ff3932._.js",
+      "static/chunks/turbopack-Documents_Cursor_Bemanningsliste_bemanningsliste_8f4c1e33._.js"
+    ]
+  }
+}

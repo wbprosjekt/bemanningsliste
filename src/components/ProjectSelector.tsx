@@ -5,15 +5,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Check, ChevronsUpDown, Search } from 'lucide-react';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Project {
   id: string;
-  project_name: string;
-  project_number: number;
-  tripletex_project_id: number;
-  customer_name?: string;
+  project_name: string | null;
+  project_number: number | null;
+  tripletex_project_id: number | null;
+  customer_name?: string | null;
 }
 
 interface ProjectSelectorProps {
@@ -23,6 +23,7 @@ interface ProjectSelectorProps {
   personId?: string;
   placeholder?: string;
   disabled?: boolean;
+  excludeProjectIds?: string[]; // Projects to exclude from the list
 }
 
 const ProjectSelector = ({ 
@@ -31,7 +32,8 @@ const ProjectSelector = ({
   orgId, 
   personId, 
   placeholder = "Velg prosjekt...",
-  disabled = false 
+  disabled = false,
+  excludeProjectIds = []
 }: ProjectSelectorProps) => {
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -43,9 +45,7 @@ const ProjectSelector = ({
     
     setLoading(true);
     try {
-      console.log('Loading projects for orgId:', orgId, 'personId:', personId);
-      
-      let query = supabase
+      const query = supabase
         .from('ttx_project_cache')
         .select(`
           id,
@@ -60,19 +60,18 @@ const ProjectSelector = ({
 
       // If personId is provided, show all active projects (not just assigned ones)
       // This allows assigning new projects to people
-      if (personId) {
-        console.log('Loading all active projects for person assignment');
-      }
-
       const { data, error } = await query;
 
       if (error) {
-        console.error('Supabase error loading projects:', error);
         throw error;
       }
       
-      console.log('Loaded projects:', data);
-      setProjects(data || []);
+      // Filter out excluded projects
+      const filteredProjects = (data || []).filter(project => 
+        !excludeProjectIds.includes(project.id)
+      );
+      
+      setProjects(filteredProjects);
       
       if (!data || data.length === 0) {
         toast({
@@ -91,7 +90,7 @@ const ProjectSelector = ({
     } finally {
       setLoading(false);
     }
-  }, [orgId, personId, toast]);
+  }, [orgId, personId, toast, excludeProjectIds]);
 
   useEffect(() => {
     if (open) {

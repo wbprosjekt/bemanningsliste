@@ -2,25 +2,24 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jlndohflirfixbinqdwe.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpsbmRvaGZsaXJmaXhiaW5xZHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MzM2MDksImV4cCI6MjA3MzUwOTYwOX0.BWu2LjkwGTMEOVe5HQZyYEGPtsomVX7Vs7MzACzyxSU';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
-// Ensure required environment variables are present before instantiating the client
-if (!SUPABASE_URL) {
-  throw new Error('Missing Supabase environment variable VITE_SUPABASE_URL. Set it in your environment configuration.');
+const isBrowser = typeof window !== "undefined";
+
+// Validate environment variables at runtime (not build time)
+if (isBrowser && process.env.NEXT_PUBLIC_SUPABASE_URL === undefined) {
+  console.error("Missing Supabase environment variable NEXT_PUBLIC_SUPABASE_URL. Set it in your environment configuration.");
 }
 
-if (!SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error('Missing Supabase environment variable VITE_SUPABASE_ANON_KEY. Set it in your environment configuration.');
+if (isBrowser && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === undefined) {
+  console.error("Missing Supabase environment variable NEXT_PUBLIC_SUPABASE_ANON_KEY. Set it in your environment configuration.");
 }
-
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: isBrowser ? window.localStorage : undefined,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
 });

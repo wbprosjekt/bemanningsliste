@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Copy, Plus, MessageSquare, Paperclip } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, getPersonDisplayName, generateProjectColor } from '@/lib/displayNames';
+import { toLocalDateString } from '@/lib/utils';
 import TimeEntry from './TimeEntry';
 import ProjectSearchDialog from './ProjectSearchDialog';
 import ProjectDetailDialog from './ProjectDetailDialog';
@@ -31,23 +32,25 @@ interface VaktWithTimer {
   person: {
     fornavn: string;
     etternavn: string;
-    forventet_dagstimer: number;
+    forventet_dagstimer: number | null;
   };
   ttx_project_cache: {
-    project_name: string;
-    project_number: number;
-    tripletex_project_id: number;
+    project_name: string | null;
+    project_number: number | null;
+    tripletex_project_id: number | null;
   } | null;
   vakt_timer: Array<{
     id: string;
     timer: number;
-    status: string;
+    status: string | null;
     aktivitet_id?: string | null;
+    tripletex_synced_at?: string | null;
+    tripletex_entry_id?: number | null;
     ttx_activity_cache: {
       navn: string;
     } | null;
     notat: string | null;
-    lonnstype: string;
+    lonnstype: string | null;
     is_overtime: boolean | null;
   }>;
 }
@@ -64,9 +67,9 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   const [activeVaktId, setActiveVaktId] = useState<string | null>(null);
   const [selectedTimer, setSelectedTimer] = useState<VaktWithTimer['vakt_timer'][number] | null>(null);
   const [selectedProject, setSelectedProject] = useState<{
-    project_name: string;
-    project_number: number;
-    tripletex_project_id: number;
+    project_name: string | null;
+    project_number: number | null;
+    tripletex_project_id: number | null;
   } | null>(null);
   const [showProjectDialog, setShowProjectDialog] = useState(false);
   const { toast } = useToast();
@@ -104,13 +107,15 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
             lonnstype,
             is_overtime,
             aktivitet_id,
-            ttx_activity_cache:aktivitet_id (
+            tripletex_synced_at,
+            tripletex_entry_id,
+            ttx_activity_cache!aktivitet_id (
               navn
             )
           )
         `)
         .eq('org_id', orgId)
-        .eq('dato', date.toISOString().split('T')[0])
+        .eq('dato', toLocalDateString(date))
         .eq('person_id', personId);
 
       const { data, error } = await query;
@@ -119,15 +124,11 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
       setVakter(data || []);
     } catch (error) {
       console.error('Error loading day data:', error);
-      toast({
-        title: "Kunne ikke laste data",
-        description: "Det oppstod en feil ved lasting av dagens data.",
-        variant: "destructive"
-      });
+      // Toast will be handled by the component that calls this function
     } finally {
       setLoading(false);
     }
-  }, [date, orgId, personId, toast]);
+  }, [date, orgId, personId]);
 
   const loadProjectColors = useCallback(async () => {
     try {
@@ -172,8 +173,8 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     const previousDay = new Date(date);
     previousDay.setDate(previousDay.getDate() - 1);
 
-    const previousDateStr = previousDay.toISOString().split('T')[0];
-    const todayDateStr = date.toISOString().split('T')[0];
+      const previousDateStr = toLocalDateString(previousDay);
+      const todayDateStr = toLocalDateString(date);
 
     try {
       const { data: prevEntries, error } = await supabase
@@ -309,8 +310,8 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
     if (vakter.length === 0) return forventetTimer;
     
     // Check against kalender_dag table for holidays
-    const dateStr = date.toISOString().split('T')[0];
-    const calendarDay = calendarDays?.find(d => d.dato === dateStr);
+    const dateStr = toLocalDateString(date);
+      const calendarDay = calendarDays?.find(d => d.dato === dateStr);
     
     if (calendarDay?.is_holiday || calendarDay?.is_weekend) {
       // TODO: Get from admin settings - default_expected_hours_on_holidays
@@ -321,42 +322,13 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   };
 
   const getStatusChip = () => {
-    const totalHours = getTotalHours();
-    const expectedHours = getExpectedHours();
-    const hasEntries = vakter.some(v => v.vakt_timer.length > 0);
+    // Don't show status chips - employees can see actual hours per day
+    return null;
+  };
 
-    // Don't show "Mangler timer" for holidays/weekends with 0 expected hours
-    if (expectedHours === 0) {
-      if (!hasEntries) {
-        return <Badge variant="outline" className="text-xs px-1.5 py-0.5">🌙 Hellig/helg</Badge>;
-      }
-    }
-
-    if (!hasEntries && vakter.length > 0 && expectedHours > 0) {
-      return <Badge variant="secondary" className="text-xs px-1.5 py-0.5">🟡 Mangler</Badge>;
-    }
-
-    if (totalHours < expectedHours) {
-      return <Badge variant="secondary" className="text-xs px-1.5 py-0.5">🟡 Mangler</Badge>;
-    }
-
-    const allApproved = vakter.every(v => 
-      v.vakt_timer.every(t => t.status === 'godkjent')
-    );
-    
-    if (allApproved && hasEntries) {
-      return <Badge className="bg-green-500 text-xs px-1.5 py-0.5">🟢 OK</Badge>;
-    }
-
-    const allSent = vakter.every(v => 
-      v.vakt_timer.every(t => t.status === 'sendt')
-    );
-
-    if (allSent && hasEntries) {
-      return <Badge className="bg-blue-500 text-xs px-1.5 py-0.5">🔵 Sendt</Badge>;
-    }
-
-    return <Badge variant="outline" className="text-xs px-1.5 py-0.5">📝 Utkast</Badge>;
+  const isToday = () => {
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
   };
 
   if (loading) {
@@ -383,38 +355,42 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   }
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-2 sm:pb-3">
-        <CardTitle className="flex items-center justify-between text-sm">
-          <span className="text-xs sm:text-sm font-medium">
-            {date.toLocaleDateString('no-NO', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+    <Card 
+      className={`h-full ${isToday() ? 'ring-2 ring-primary bg-blue-50/50' : ''}`}
+      id={`day-${date.toISOString().split('T')[0]}`}
+    >
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center justify-between text-base">
+          <span className="text-base font-medium capitalize">
+            {date.toLocaleDateString('no-NO', { weekday: 'long', day: '2-digit', month: '2-digit' }).replace(/\.$/, '')}
+            {isToday() && (
+              <span className="ml-2 text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                I dag
+              </span>
+            )}
           </span>
           {getStatusChip()}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2 sm:space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm">
-          <div className="flex justify-between">
+      <CardContent className="space-y-2 text-sm">
+        <div className="text-center text-xs">
+          <div className="flex justify-center items-center gap-2">
             <span className="text-muted-foreground">Timer ført:</span>
-            <span className="font-medium">
+            <span className="font-medium text-lg">
               {formatTimeValue(getTotalHours())}
               {getOvertimeHours() > 0 && (
                 <span className="ml-1 text-yellow-600 font-bold" title={`${formatTimeValue(getOvertimeHours())} overtid`}>⚡</span>
               )}
             </span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Forventet:</span>
-            <span className="font-medium">{formatTimeValue(getExpectedHours())}</span>
-          </div>
         </div>
 
         {vakter.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-xs sm:text-sm font-medium">Dagens oppdrag:</h4>
+            <h4 className="text-xs font-medium">Dagens oppdrag:</h4>
             {vakter.map((vakt) => (
               <div key={vakt.id} className="space-y-1">
-                <div className="text-xs flex items-center gap-1 sm:gap-2">
+                <div className="text-xs flex items-center gap-1">
                   <span className="text-muted-foreground text-xs truncate">
                     {vakt.person && getPersonDisplayName(vakt.person.fornavn, vakt.person.etternavn)}
                   </span>
@@ -422,16 +398,107 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                 {vakt.ttx_project_cache ? (
                   <Button
                     variant="ghost"
-                    className="w-full h-auto p-2 sm:p-3 justify-start text-left"
-                    style={{ backgroundColor: getProjectColor(vakt.ttx_project_cache.tripletex_project_id) }}
+                    className="w-full h-auto p-3 justify-start text-left relative"
+                    style={{ backgroundColor: getProjectColor(vakt.ttx_project_cache.tripletex_project_id || 0) }}
                     onClick={() => setSelectedProject(vakt.ttx_project_cache)}
                   >
-                    <div className="text-white w-full">
-                      <div className="font-bold text-sm sm:text-lg">
-                        {vakt.ttx_project_cache.project_number}
-                      </div>
-                      <div className="text-xs sm:text-sm opacity-90 truncate">
-                        {vakt.ttx_project_cache.project_name}
+                    <div className="text-white w-full pr-6">
+                      {/* Main project info - smart project number handling with truncation and tooltip */}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="font-semibold text-base leading-tight truncate cursor-help">
+                              {(() => {
+                                const projectNumber = vakt.ttx_project_cache.project_number;
+                                const projectName = vakt.ttx_project_cache.project_name || `Prosjekt ${projectNumber}`;
+                                
+                                // Check if project name already starts with the project number
+                                if (projectName.startsWith(`${projectNumber} `)) {
+                                  // Project name already includes the number, just show the name
+                                  return projectName;
+                                } else {
+                                  // Project name doesn't include the number, add it
+                                  return `${projectNumber} ${projectName}`;
+                                }
+                              })()}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs">
+                              {(() => {
+                                const projectNumber = vakt.ttx_project_cache.project_number;
+                                const projectName = vakt.ttx_project_cache.project_name || `Prosjekt ${projectNumber}`;
+                                
+                                // Check if project name already starts with the project number
+                                if (projectName.startsWith(`${projectNumber} `)) {
+                                  return projectName;
+                                } else {
+                                  return `${projectNumber} ${projectName}`;
+                                }
+                              })()}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      {/* Compact time summary with status */}
+                      <div className="text-sm text-white opacity-95 mt-0.5 flex items-center justify-between">
+                        <span className="font-semibold">
+                          {(() => {
+                            // Smart time formatting function
+                            const formatTimeSmart = (hours: number): string => {
+                              if (hours === 0) return '0t';
+                              
+                              // Check if it's a whole number
+                              if (hours % 1 === 0) {
+                                return `${hours}t`;
+                              }
+                              
+                              // Check if it's .5 (half hour)
+                              if (hours % 1 === 0.5) {
+                                return `${Math.floor(hours)},5t`;
+                              }
+                              
+                              // For other decimals, show 2 decimal places but remove trailing zeros
+                              return `${hours.toFixed(2).replace(/\.?0+$/, '')}t`;
+                            };
+
+                            const regularHours = vakt.vakt_timer
+                              .filter(timer => !timer.is_overtime)
+                              .reduce((sum, timer) => sum + (timer.timer || 0), 0);
+                            const overtime100 = vakt.vakt_timer
+                              .filter(timer => timer.is_overtime && (timer.lonnstype === 'overtid_100' || timer.lonnstype === '100%'))
+                              .reduce((sum, timer) => sum + (timer.timer || 0), 0);
+                            const overtime50 = vakt.vakt_timer
+                              .filter(timer => timer.is_overtime && (timer.lonnstype === 'overtid_50' || timer.lonnstype === '50%'))
+                              .reduce((sum, timer) => sum + (timer.timer || 0), 0);
+
+                            // Build compact format with parentheses for overtime
+                            if (overtime100 === 0 && overtime50 === 0) {
+                              // Only regular hours
+                              return <span className="font-bold">{formatTimeSmart(regularHours)}</span>;
+                            } else {
+                              // Regular hours + overtime in parentheses
+                              const overtimeParts = [];
+                              if (overtime100 > 0) {
+                                overtimeParts.push(`${formatTimeSmart(overtime100)} 100%`);
+                              }
+                              if (overtime50 > 0) {
+                                overtimeParts.push(`${formatTimeSmart(overtime50)} 50%`);
+                              }
+                              return <span><span className="font-bold">{formatTimeSmart(regularHours)}</span> ({overtimeParts.join(', ')})</span>;
+                            }
+                          })()}
+                        </span>
+                        {/* Status indicator */}
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          vakt.vakt_timer.length > 0 && vakt.vakt_timer.every(timer => 
+                            timer.status === 'godkjent' || timer.tripletex_synced_at
+                          ) ? 'bg-green-500 text-white' : 'bg-yellow-500 text-black'
+                        }`}>
+                          {vakt.vakt_timer.length > 0 && vakt.vakt_timer.every(timer => 
+                            timer.status === 'godkjent' || timer.tripletex_synced_at
+                          ) ? '✅' : '🔄'}
+                        </span>
                       </div>
                     </div>
                   </Button>
@@ -440,28 +507,6 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                     Ikke tilordnet
                   </div>
                 )}
-                <div className="space-y-1">
-                  {vakt.vakt_timer.map((timer) => (
-                    <button
-                      key={timer.id}
-                      type="button"
-                      className="flex w-full items-center justify-between text-left text-xs bg-muted/50 p-1.5 sm:p-2 rounded hover:bg-muted"
-                      onClick={() => {
-                        setActiveVaktId(vakt.id);
-                        setSelectedTimer(timer);
-                      }}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate">{formatTimeValue(timer.timer)} t - {timer.ttx_activity_cache?.navn || 'Ingen aktivitet'}</div>
-                        <div className="text-muted-foreground text-xs">{timer.lonnstype}</div>
-                      </div>
-                      <div className="flex gap-1 flex-shrink-0">
-                        {timer.notat && <MessageSquare className="h-3 w-3" />}
-                        <Paperclip className="h-3 w-3" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
                 <Dialog
                   open={activeVaktId === vakt.id}
                   onOpenChange={(open) => {
@@ -475,14 +520,14 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full text-xs sm:text-sm"
+                      className="w-full text-xs"
                       onClick={() => {
                         setActiveVaktId(vakt.id);
                         setSelectedTimer(null);
                       }}
                     >
                       <Plus className="h-3 w-3 mr-1" />
-                      {vakt.vakt_timer.length > 0 ? 'Legg til / rediger' : 'Legg til timer'}
+                      {vakt.vakt_timer.length > 0 ? 'Legg til / Rediger timer' : 'Legg til timer'}
                     </Button>
                   </DialogTrigger>
                   <DialogContent
@@ -491,13 +536,13 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                       maxHeight: '95vh !important',
                       height: '95vh !important',
                       display: 'flex !important',
-                      flexDirection: 'column !important',
+                      flexDirection: 'column' as const,
                       padding: '0 !important'
                     }}
                   >
                     <div
                       className="flex-1 overflow-y-auto p-6"
-                      style={{ flex: '1 !important', overflowY: 'auto !important', padding: '1.5rem !important' }}
+                      style={{ flex: 1, overflowY: 'auto' as const, padding: '1.5rem' }}
                     >
                       <DialogHeader className="pb-4">
                         <DialogTitle className="text-base sm:text-lg">
@@ -517,7 +562,13 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                           setSelectedTimer(null);
                         }}
                         defaultTimer={vakt.person?.forventet_dagstimer || 8.0}
-                        existingEntry={selectedTimer || undefined}
+                        existingEntry={selectedTimer ? {
+                          id: selectedTimer.id,
+                          timer: selectedTimer.timer,
+                          aktivitet_id: selectedTimer.aktivitet_id || '',
+                          notat: selectedTimer.notat || '',
+                          status: selectedTimer.status || 'pending'
+                        } : undefined}
                       />
                     </div>
                   </DialogContent>
@@ -527,24 +578,26 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
           </div>
         )}
 
-        {vakter.length === 0 && personId && (
+        {personId && (
           <div className="space-y-2">
-            <div className="text-xs sm:text-sm text-muted-foreground text-center py-2 sm:py-4">
-              Ingen arbeidsoppdrag planlagt
-            </div>
+            {vakter.length === 0 && (
+              <div className="text-xs text-muted-foreground text-center py-2">
+                Ingen arbeidsoppdrag planlagt
+              </div>
+            )}
             <Button 
               variant="outline" 
               size="sm" 
-              className="w-full"
+              className="w-full text-xs"
               onClick={() => setShowProjectDialog(true)}
             >
               <Plus className="h-3 w-3 mr-1" />
-              Finn prosjekt
+              {vakter.length === 0 ? 'Finn prosjekt' : 'Legg til prosjekt'}
             </Button>
             <ProjectSearchDialog
               open={showProjectDialog}
               onClose={() => setShowProjectDialog(false)}
-              date={date.toISOString().split('T')[0]}
+              date={toLocalDateString(date)}
               orgId={orgId}
               personId={personId}
               onProjectAssigned={loadDayData}
@@ -555,7 +608,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
         <Button
           variant="outline"
           size="sm"
-          className="w-full text-xs sm:text-sm"
+          className="w-full text-[10px]"
           onClick={copyFromPreviousDay}
         >
           <Copy className="h-3 w-3 mr-1" />
@@ -577,3 +630,4 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
 };
 
 export default DayCard;
+

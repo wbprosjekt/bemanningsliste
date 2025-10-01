@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, MessageSquare, Paperclip, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { formatTimeValue, parseTimeValue, validateTimeStep } from '@/lib/displayNames';
+import { formatTimeValue, validateTimeStep } from '@/lib/displayNames';
 
 interface TimeEntryProps {
   vaktId: string;
@@ -39,7 +38,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const [minutes, setMinutes] = useState(Math.round(((existingEntry?.timer || defaultTimer) % 1) * 60));
   const [aktivitetId, setAktivitetId] = useState(existingEntry?.aktivitet_id || '');
   const [notat, setNotat] = useState(existingEntry?.notat || '');
-  const [status, setStatus] = useState(existingEntry?.status || 'utkast');
+  const [status, setStatus] = useState<'utkast' | 'sendt' | 'godkjent'>((existingEntry?.status as 'utkast' | 'sendt' | 'godkjent') || 'utkast');
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -177,7 +176,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
           let totalRegularTime = 0;
           let totalOvertime50 = 0;
           let totalOvertime100 = 0;
-          let firstEntry = data[0]; // Use first entry for activity, note, status
+          const firstEntry = data[0]; // Use first entry for activity, note, status
           
           data.forEach(entry => {
             const timer = entry.timer ?? 0;
@@ -226,7 +225,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
           // Set activity, note, and status from first entry (use original values if available)
           setAktivitetId((firstEntry.original_aktivitet_id ?? firstEntry.aktivitet_id) || '');
           setNotat((firstEntry.original_notat ?? firstEntry.notat) || '');
-          setStatus((firstEntry.original_status ?? firstEntry.status) || 'utkast');
+          setStatus(((firstEntry.original_status ?? firstEntry.status) || 'utkast') as 'utkast' | 'sendt' | 'godkjent');
         } else {
           // For new entries, reset to default values
           setHours(Math.floor(defaultTimer));
@@ -247,7 +246,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
           setMinutes(Math.max(0, Math.min(45, Math.round(baseMinutes / 15) * 15)));
           setAktivitetId((existingEntry.original_aktivitet_id ?? existingEntry.aktivitet_id) || '');
           setNotat((existingEntry.original_notat ?? existingEntry.notat) || '');
-          setStatus((existingEntry.original_status ?? existingEntry.status) || 'utkast');
+          setStatus(((existingEntry.original_status ?? existingEntry.status) || 'utkast') as 'utkast' | 'sendt' | 'godkjent');
         }
       }
     };
@@ -287,14 +286,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
     const newMinutes = Math.max(0, Math.min(45, overtime50Minutes + delta));
     const roundedMinutes = Math.round(newMinutes / 15) * 15;
     setOvertime50Minutes(roundedMinutes);
-  };
-
-  const handleTimeInputChange = (value: string) => {
-    const parsed = parseTimeValue(value);
-    const newHours = Math.floor(parsed);
-    const newMinutes = Math.round((parsed % 1) * 60);
-    setHours(Math.max(0, Math.min(8, newHours)));
-    setMinutes(Math.max(0, Math.min(45, Math.round(newMinutes / 15) * 15)));
   };
 
   const handleSave = async (nextStatus: 'utkast' | 'sendt' | 'godkjent' = status) => {

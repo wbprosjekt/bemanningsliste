@@ -1,0 +1,7 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/admin/bemanningsliste/[year]/[week]/page": "app/admin/bemanningsliste/[year]/[week]/page.js",
+  "/min/uke/[year]/[week]/page": "app/min/uke/[year]/[week]/page.js",
+  "/min/uke/page": "app/min/uke/page.js",
+  "/page": "app/page.js"
+}

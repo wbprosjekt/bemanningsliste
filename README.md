@@ -1,73 +1,151 @@
-# Welcome to your Lovable project
+# Bemanningsliste
 
-## Project info
+En moderne bemanningsstyringssystem bygget med Next.js og Supabase, integrert med Tripletex.
 
-**URL**: https://lovable.dev/projects/d673c25f-0b6e-4be5-9adf-47b09717b64e
+## 🚀 Teknologier
 
-## How can I edit this code?
+- **Next.js 15** (App Router med Turbopack)
+- **React 19**
+- **TypeScript**
+- **Supabase** (Database, Auth, Edge Functions)
+- **Tailwind CSS**
+- **shadcn/ui** komponenter
+- **React Query** (TanStack Query)
+- **Tripletex API** integrasjon
 
-There are several ways of editing your application.
+## 📋 Funksjonalitet
 
-**Use Lovable**
+### For ansatte:
+- **Min uke** (`/min/uke/:year/:week`) - Personlig ukevisning med timeføring
+- Prosjektsøk og tilordning
+- Overtidshåndtering (50%/100%)
+- Ukeoppsummering per prosjekt
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/d673c25f-0b6e-4be5-9adf-47b09717b64e) and start prompting.
+### For administratorer:
+- **Bemanningsliste** (`/admin/bemanningsliste/:year/:week`) - Oversikt over alle ansatte på tvers av uker
+- **Brukerhåndtering** (`/admin/brukere`) - Inviter brukere, synkroniser fra Tripletex, håndter roller
+- **Timer** (`/admin/timer`) - Godkjenne timer, eksportere til Tripletex
+- **Tripletex-integrasjon** (`/admin/integrasjoner/tripletex`) - Synkronisere ansatte, prosjekter, aktiviteter
 
-Changes made via Lovable will be committed automatically to this repo.
+### Generell ukevisning:
+- **Uke** (`/uke/:year/:week`) - Les-only visning for alle i organisasjonen
 
-**Use your preferred IDE**
+## 🛠️ Kom i gang
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Forutsetninger
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- Node.js 20+ (anbefalt)
+- npm
+- Supabase-prosjekt
 
-Follow these steps:
+### Installasjon
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
+# Klon repository
 git clone <YOUR_GIT_URL>
+cd bemanningsliste
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Installer avhengigheter
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Opprett .env.local fil med Supabase-credentials
+cp .env .env.local
+# Rediger .env.local med dine Supabase-variabler
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### Miljøvariabler
+
+Opprett en `.env.local` fil i rotmappen med følgende variabler:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### Kjøre utviklingsserver
+
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Åpne [http://localhost:3000](http://localhost:3000) i nettleseren.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Bygge for produksjon
 
-**Use GitHub Codespaces**
+```sh
+npm run build
+npm run start
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 📁 Prosjektstruktur
 
-## What technologies are used for this project?
+```
+bemanningsliste/
+├── src/
+│   ├── app/                  # Next.js App Router sider
+│   │   ├── admin/           # Admin-sider
+│   │   ├── min/uke/         # Personlig ukevisning
+│   │   ├── uke/             # Generell ukevisning
+│   │   ├── auth/            # Autentisering
+│   │   ├── layout.tsx       # Root layout
+│   │   └── page.tsx         # Dashboard/forsiden
+│   ├── components/          # React-komponenter
+│   │   ├── ui/             # shadcn/ui komponenter
+│   │   ├── DayCard.tsx     # Dagskort for timeføring
+│   │   ├── StaffingList.tsx # Bemanningsliste-komponent
+│   │   └── ...
+│   ├── hooks/              # Custom React hooks
+│   ├── lib/                # Utilities og hjelpefunksjoner
+│   └── integrations/       # Supabase types og client
+├── supabase/
+│   ├── migrations/         # Database-migrasjoner
+│   └── functions/          # Edge Functions (Tripletex API)
+├── public/                 # Statiske filer
+└── package.json
+```
 
-This project is built with:
+## 🔧 Utvikling
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Viktige kommandoer
 
-## How can I deploy this project?
+```sh
+npm run dev        # Start utviklingsserver
+npm run build      # Bygg for produksjon
+npm run start      # Kjør produksjonsbygg
+npm run lint       # Kjør ESLint
+```
 
-Simply open [Lovable](https://lovable.dev/projects/d673c25f-0b6e-4be5-9adf-47b09717b64e) and click on Share -> Publish.
+### Database
 
-## Can I connect a custom domain to my Lovable project?
+Databasen administreres via Supabase. Migrasjoner ligger i `supabase/migrations/`.
 
-Yes, you can!
+For å kjøre migrasjoner lokalt:
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+```sh
+cd supabase
+supabase db reset  # Reset local database
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Tripletex-integrasjon
+
+Tripletex API-kall håndteres via Supabase Edge Functions i `supabase/functions/`:
+
+- `tripletex-api/` - Generell Tripletex API-proxy
+- `calendar-sync/` - Synkroniserer kalenderdager
+- `onboarding-setup/` - Setter opp nye brukere
+
+## 🗓️ Dato-håndtering
+
+Alle datoer bruker `toLocalDateString()` og `toLocalDateTimeString()` fra `@/lib/utils` for å unngå tidssone-problemer. Dette sikrer konsistent datoformat (YYYY-MM-DD) uten UTC-justering.
+
+## 🔐 Autentisering
+
+Autentisering håndteres via Supabase Auth. `useAuth`-hooken tilbyr:
+- `user` - Innlogget bruker
+- `session` - Aktiv sesjon
+- `loading` - Loading-state
+- `signOut()` - Logg ut
+
+## 📝 Lisens
+
+Proprietær - Kristian Walberg

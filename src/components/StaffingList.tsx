@@ -1,38 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Search, 
-  Plus, 
-  Copy, 
-  Check, 
-  Send, 
-  Edit,
-  ChevronLeft,
-  ChevronRight,
-  Calendar,
-  Users,
-  Download,
-  Palette,
-  X,
-  RefreshCw,
-  Trash2,
-  HelpCircle
-} from 'lucide-react';
+import { Plus, Check, Send, Palette, X, RefreshCw, Trash2, HelpCircle } from 'lucide-react';
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
 import ProjectSearchDialog from './ProjectSearchDialog';
 import ColorPickerDialog from './ColorPickerDialog';
 import TimeEntry from './TimeEntry';
-import { startOfISOWeek, addWeeks, addDays, isValid as isValidDate, format as formatDate } from 'date-fns';
+import { startOfISOWeek, addWeeks, addDays, isValid as isValidDate } from 'date-fns';
+import { toLocalDateString, toLocalDateTimeString } from '@/lib/utils';
 
 interface StaffingEntry {
   id: string;
@@ -41,8 +22,8 @@ interface StaffingEntry {
     id: string;
     fornavn: string;
     etternavn: string;
-    forventet_dagstimer: number;
-    tripletex_employee_id?: number;
+    forventet_dagstimer: number | null;
+    tripletex_employee_id?: number | null;
   };
   project: {
     id: string; // This is the UUID from ttx_project_cache.id
@@ -94,17 +75,12 @@ interface Project {
   color?: string;
 }
 
-interface Activity {
-  id: string;
-  navn: string;
-}
-
 interface Employee {
   id: string;
   fornavn: string;
   etternavn: string;
-  forventet_dagstimer: number;
-  tripletex_employee_id?: number;
+  forventet_dagstimer: number | null;
+  tripletex_employee_id?: number | null;
 }
 
 interface StaffingListProps {
@@ -116,8 +92,8 @@ interface StaffingListProps {
 interface TimeEntry {
   id: string;
   timer: number;
-  aktivitet_id: string;
-  notat: string;
+  aktivitet_id?: string;
+  notat?: string;
   status: string;
 }
 
@@ -154,7 +130,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     org_id: string;
     week_number: number;
     year: number;
-    name?: string;
+    name?: string | null;
     display_order: number;
     frie_bobler?: Array<{
       id: string;
@@ -164,12 +140,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       display_order: number;
     }>;
   }>>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
   const [projectColors, setProjectColors] = useState<Record<number, string>>({});
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const [showProjectSearch, setShowProjectSearch] = useState<{date: string, personId: string} | null>(null);
   const [showColorPicker, setShowColorPicker] = useState<{
     projectName: string;
@@ -179,6 +154,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   } | null>(null);
   const [calendarDays, setCalendarDays] = useState<Record<string, { isWeekend: boolean; isHoliday: boolean }>>({});
   const [sendingToTripletex, setSendingToTripletex] = useState<Set<string>>(new Set());
+  const [loadingOverlay, setLoadingOverlay] = useState<{
+    isVisible: boolean;
+    message: string;
+    count?: number;
+  }>({
+    isVisible: false,
+    message: '',
+  });
   const [editDialog, setEditDialog] = useState<{ vaktId: string; existingEntry?: TimeEntry } | null>(null);
   const [freeBubbleEditDialog, setFreeBubbleEditDialog] = useState<{
     bubbleId: string;
@@ -200,7 +183,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const toDateKey = useCallback((d: Date): string => {
     try {
       if (!isValidDate(d)) return '';
-      return formatDate(d, 'yyyy-MM-dd');
+      return toLocalDateString(d);
     } catch (error) {
       console.error('Error formatting date:', error, d);
       return '';
@@ -298,12 +281,22 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         .from('profiles')
         .select('*, org:org_id (id, name)')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
-      setProfile(data);
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data) {
+        setProfile(data);
+        setInitialized(true);
+      } else {
+        setProfile(null);
+        setLoading(false);
+        setInitialized(true);
+      }
     } catch (error) {
       console.error('Error loading profile:', error);
+      setProfile(null);
+      setLoading(false);
+      setInitialized(true);
     }
   }, [user]);
 
@@ -380,7 +373,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       // Create a map of existing vakt data - allow multiple entries per person per day
       const vaktMap = new Map<string, VaktTimer[]>();
-      vaktData?.forEach((vakt: VaktTimer) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      vaktData?.forEach((vakt: any) => {
         const key = `${vakt.dato}-${vakt.person_id}`;
         if (!vaktMap.has(key)) {
           vaktMap.set(key, []);
@@ -391,7 +385,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       // Generate staffing entries for all employees and dates
       const entries: StaffingEntry[] = [];
       
-      allEmployees?.forEach((employee: Employee) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      allEmployees?.forEach((employee: any) => {
         allDates.forEach((date) => {
           const dateKey = toDateKey(date);
           if (!dateKey) return;
@@ -403,7 +398,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             // Process each vakt entry separately to create multiple StaffingEntry entries
             existingVakts.forEach((existingVakt) => {
               // Use existing vakt data and transform vaktTimer to activities
-              const activities = (existingVakt.vakt_timer || []).map((timer: VaktTimer) => ({
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const activities = ((existingVakt as any).vakt_timer || []).map((timer: any) => ({
               id: timer.id,
               timer: timer.timer ?? 0,
               status: timer.status,
@@ -425,17 +422,22 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             }));
             
             // Calculate total hours from activities
-            const totalHours = activities.reduce((sum, activity) => sum + (activity.timer ?? 0), 0);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const totalHours = activities.reduce((sum: number, activity: any) => sum + (activity.timer ?? 0), 0);
             
               entries.push({
                 id: existingVakt.id,
                 date: dateKey,
-                person: existingVakt.person,
-                project: existingVakt.ttx_project_cache,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                person: (existingVakt as any).person,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                project: (existingVakt as any).ttx_project_cache,
                 activities: activities,
                 totalHours: totalHours,
                 status: activities.length > 0 ? 
-                  (activities.every(a => a.status === 'godkjent') ? 'approved' : 'draft') : 
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (activities.every((a: any) => a.status === 'godkjent') ? 'approved' : 
+                   activities.some((a: any) => a.tripletex_synced_at) ? 'sent' : 'draft') : 
                   'missing'
               });
             });
@@ -493,63 +495,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         .order('display_order');
 
       if (error) throw error;
-      setFreeLines(data || []);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setFreeLines((data as any) || []);
     } catch (error) {
       console.error('Error loading free lines:', error);
     }
   }, [profile?.org_id, multiWeekData]);
-
-  const loadProjects = useCallback(async () => {
-    if (!profile?.org_id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('ttx_project_cache')
-        .select('*')
-        .eq('org_id', profile.org_id)
-        .order('project_name');
-
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error) {
-      console.error('Error loading projects:', error);
-    }
-  }, [profile?.org_id]);
-
-  const loadActivities = useCallback(async () => {
-    if (!profile?.org_id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('ttx_activity_cache')
-        .select('*')
-        .eq('org_id', profile.org_id)
-        .order('navn');
-
-      if (error) throw error;
-      setActivities(data || []);
-    } catch (error) {
-      console.error('Error loading activities:', error);
-    }
-  }, [profile?.org_id]);
-
-  const loadEmployees = useCallback(async () => {
-    if (!profile?.org_id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('person')
-        .select('*')
-        .eq('org_id', profile.org_id)
-        .eq('aktiv', true)
-        .order('fornavn');
-
-      if (error) throw error;
-      setEmployees(data || []);
-    } catch (error) {
-      console.error('Error loading employees:', error);
-    }
-  }, [profile?.org_id]);
 
   const loadProjectColors = useCallback(async () => {
     if (!profile?.org_id) return;
@@ -563,7 +514,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       if (error) throw error;
       
       const colorMap: Record<number, string> = {};
-      data?.forEach((color: ProjectColor) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data?.forEach((color: any) => {
         colorMap[color.tripletex_project_id] = color.hex;
       });
       
@@ -601,6 +553,24 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   }, [profile?.org_id, allDates, toDateKey]);
 
+  const loadEmployees = useCallback(async () => {
+    if (!profile?.org_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('person')
+        .select('*')
+        .eq('org_id', profile.org_id)
+        .eq('aktiv', true)
+        .order('fornavn');
+
+      if (error) throw error;
+      setEmployees(data || []);
+    } catch (error) {
+      console.error('Error loading employees:', error);
+    }
+  }, [profile?.org_id]);
+
   useEffect(() => {
     if (user) {
       loadUserProfile();
@@ -610,14 +580,18 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   useEffect(() => {
     if (profile) {
       loadStaffingData();
-      loadProjects();
-      loadActivities();
-      loadEmployees();
       loadProjectColors();
       loadCalendarDays();
       loadFreeLines();
+      loadEmployees();
+      setInitialized(true);
+    } else {
+      setLoading(false);
+      if (!initialized) {
+        setInitialized(true);
+      }
     }
-  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjects, loadActivities, loadEmployees, loadProjectColors, loadCalendarDays, loadFreeLines]);
+  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjectColors, loadCalendarDays, loadFreeLines, loadEmployees, initialized]);
 
 
   // Optimistic update helpers
@@ -648,7 +622,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       const { error } = await supabase
         .from('project_color')
         .upsert({
-          org_id: profile.org_id,
+          org_id: profile?.org_id || '',
           tripletex_project_id: tripletexProjectId,
           hex: color
         }, {
@@ -675,6 +649,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       // Revalidate in background
       revalidateInBackground();
     } catch (error) {
+      console.error('Error updating project color:', error);
       toast({
         title: "Feil ved oppdatering",
         description: "Kunne ikke oppdatere prosjektfarge",
@@ -764,7 +739,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         const copiedEntry: StaffingEntry = {
           ...sourceEntry,
           id: `temp-${Date.now()}`,
-          person: targetEmployee,
+          person: targetEmployee || sourceEntry.person,
           date: targetDate,
           activities: sourceEntry.activities.map(a => ({ 
             ...a, 
@@ -775,13 +750,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         updateStaffingDataOptimistically(data => [...data, copiedEntry]);
 
         // Create new vakt for target person/date
-        const { data: newVakt, error: vaktError } = await supabase
+        const { error: vaktError } = await supabase
           .from('vakt')
           .insert({
             person_id: targetPersonId,
             project_id: sourceEntry.project?.id,
             dato: targetDate,
-            org_id: profile.org_id
+            org_id: profile?.org_id || ''
           })
           .select()
           .single();
@@ -822,36 +797,19 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       updateStaffingDataOptimistically(data => {
         return data.map(entry => 
           entry.id === entryId 
-            ? { ...entry, person: targetEmployee, date: targetDate }
+            ? { ...entry, person: targetEmployee || entry.person, date: targetDate }
             : entry
         );
       });
 
-      // Check if target already has a project for this date
-      const existingTargetEntry = staffingData.find(e => 
-        e.person.id === targetPersonId && 
-        e.date === targetDate && 
-        e.project
-      );
-
-      // Allow multiple projects per day - no restriction needed
-      // if (existingTargetEntry && !shouldCopy) {
-      //   toast({
-      //     title: "Ansatt har allerede prosjekt", 
-      //     description: "Denne ansatte har allerede et prosjekt på denne datoen. Prosjektet vil bli kopiert i stedet.",
-      //     variant: "destructive"
-      //   });
-      //   return;
-      // }
-
       // Create new vakt for target person/date
-      const { data: newVakt, error: vaktError } = await supabase
+      const { error: vaktError } = await supabase
         .from('vakt')
         .insert({
           person_id: targetPersonId,
           project_id: sourceEntry.project?.id || null,
           dato: targetDate,
-          org_id: profile.org_id
+          org_id: profile?.org_id || ''
         })
         .select()
         .single();
@@ -886,93 +844,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
-  const assignProjectToPerson = async (projectId: string, personId: string, date: string) => {
-    const previousData = [...staffingData];
-    
-    try {
-      const person = employees.find(e => e.id === personId);
-      const project = projects.find(p => p.id === projectId);
-      
-      // Check if person already has this project on this date
-      const existingEntry = staffingData.find(e => 
-        e.person.id === personId && 
-        e.date === date && 
-        e.project?.id === projectId
-      );
-
-      if (existingEntry) {
-        toast({
-          title: "Prosjekt finnes allerede",
-          description: `${person ? getPersonDisplayName(person.fornavn, person.etternavn) : 'Ansatt'} har allerede ${project?.project_name} på ${new Date(date).toLocaleDateString('no-NO')}`,
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      // Optimistically add/update the entry
-      updateStaffingDataOptimistically(data => {
-        const existingVakt = data.find(e => e.person.id === personId && e.date === date);
-        
-        if (existingVakt && !existingVakt.project) {
-          // Update existing vakt that has no project
-          return data.map(entry =>
-            entry.id === existingVakt.id
-              ? { ...entry, project }
-              : entry
-          );
-        } else {
-          // Add new entry
-          const newEntry: StaffingEntry = {
-            id: `temp-${Date.now()}`,
-            date,
-            person,
-            project,
-            activities: [],
-            totalHours: 0,
-            status: 'draft' as const
-          };
-          return [...data, newEntry];
-        }
-      });
-      
-      // Check if vakt already exists
-      let vaktId = previousData.find(e => e.person.id === personId && e.date === date)?.id;
-      
-      if (!vaktId) {
-        // Create new vakt
-        const { data: newVakt, error } = await supabase
-          .from('vakt')
-          .insert({
-            person_id: personId,
-            project_id: projectId,
-            dato: date,
-            org_id: profile.org_id
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        vaktId = newVakt.id;
-      } else {
-        // Update existing vakt
-        await supabase
-          .from('vakt')
-          .update({ project_id: projectId })
-          .eq('id', vaktId);
-      }
-
-      toast({
-        title: "Prosjekt tilordnet",
-        description: "Prosjekt er tilordnet ansatt"
-      });
-
-      revalidateInBackground();
-      setShowProjectSearch(null);
-    } catch (error: unknown) {
-      rollbackUpdate(previousData, error instanceof Error ? error.message : 'En ukjent feil oppstod');
-    }
-  };
-
   // Free lines CRUD functions
   const addFreeLine = useCallback(async (weekNumber?: number, year?: number) => {
     if (!profile?.org_id) return;
@@ -988,16 +859,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       );
       const maxOrder = weekFreeLines.length > 0 ? Math.max(...weekFreeLines.map(line => line.display_order)) : 0;
       
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('frie_linjer')
         .insert({
           org_id: profile.org_id,
           week_number: targetWeek,
           year: targetYear,
           display_order: maxOrder + 1
-        })
-        .select()
-        .single();
+        });
 
       if (error) throw error;
       
@@ -1026,7 +895,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       const line = freeLines.find(l => l.id === lineId);
       const maxOrder = line?.frie_bobler?.length ? Math.max(...line.frie_bobler.map(bubble => bubble.display_order)) : 0;
       
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('frie_bobler')
         .insert({
           frie_linje_id: lineId,
@@ -1034,9 +903,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           text: 'Ny boble',
           color: '#94a3b8', // Default gray color
           display_order: maxOrder + 1
-        })
-        .select()
-        .single();
+        });
 
       if (error) throw error;
       
@@ -1189,7 +1056,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       }
 
       // Create a copy
-      const { data: newBubble, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from('frie_bobler')
         .insert({
           frie_linje_id: targetLine.id,
@@ -1340,6 +1207,16 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       return;
     }
 
+    // Check if there are any activities to send
+    if (entry.activities.length === 0) {
+      toast({
+        title: "Ingen timer å sende",
+        description: "Det finnes ingen timer for dette prosjektet",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Check if all activities are approved
     const unapprovedActivities = entry.activities.filter(a => a.status !== 'godkjent');
     if (unapprovedActivities.length > 0) {
@@ -1354,7 +1231,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     setSendingToTripletex(prev => new Set(prev).add(entry.id));
 
     try {
-      for (const activity of entry.activities) {
+      // Send all activities for this entry in parallel (much faster!)
+      const activityPromises = entry.activities.map(async (activity) => {
         const { data, error } = await supabase.functions.invoke('tripletex-api', {
           body: {
             action: 'send_timesheet_entry',
@@ -1366,7 +1244,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             date: entry.date,
             is_overtime: !!activity.is_overtime,
             description: activity.notat || '',
-            orgId: profile.org_id
+            orgId: profile?.org_id || ''
           }
         });
 
@@ -1377,11 +1255,19 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         if (!data?.success) {
           throw new Error(data?.error || 'Failed to send to Tripletex');
         }
-      }
 
+        return data;
+      });
+
+      // Wait for all activities to be sent
+      await Promise.all(activityPromises);
+
+      // Calculate total hours sent
+      const totalHours = entry.activities.reduce((sum, activity) => sum + activity.timer, 0);
+      
       toast({
         title: "Timer sendt til Tripletex",
-        description: `${entry.activities.length} timer sendt for ${entry.project.project_name}`
+        description: `${formatTimeValue(totalHours)} timer (${entry.activities.length} ${entry.activities.length === 1 ? 'aktivitet' : 'aktiviteter'}) sendt for ${entry.project.project_name}`
       });
 
       revalidateInBackground(); // Refresh to show updated sync status
@@ -1461,30 +1347,40 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
   const recallFromTripletex = async (entry: StaffingEntry) => {
     try {
-      for (const activity of entry.activities) {
-        if (activity.tripletex_entry_id) {
-          const { data, error } = await supabase.functions.invoke('tripletex-api', {
-            body: {
-              action: 'delete_timesheet_entry',
-              tripletex_entry_id: activity.tripletex_entry_id,
-              vakt_timer_id: activity.id,
-              orgId: profile.org_id
-            }
-          });
-
-          if (error) {
-            throw new Error(error instanceof Error ? error.message : 'Failed to recall from Tripletex');
-          }
-
-          if (!data?.success) {
-            throw new Error(data?.error || 'Failed to recall from Tripletex');
-          }
-        }
+      // Recall all activities for this entry in parallel (much faster!)
+      const activitiesToRecall = entry.activities.filter(activity => activity.tripletex_entry_id);
+      
+      if (activitiesToRecall.length === 0) {
+        return; // Nothing to recall
       }
 
+      const recallPromises = activitiesToRecall.map(async (activity) => {
+        const { data, error } = await supabase.functions.invoke('tripletex-api', {
+          body: {
+            action: 'delete_timesheet_entry',
+            tripletex_entry_id: activity.tripletex_entry_id,
+            vakt_timer_id: activity.id,
+            orgId: profile?.org_id || ''
+          }
+        });
+
+        if (error) {
+          throw new Error(error instanceof Error ? error.message : 'Failed to recall from Tripletex');
+        }
+
+        if (!data?.success) {
+          throw new Error(data?.error || 'Failed to recall from Tripletex');
+        }
+
+        return data;
+      });
+
+      // Wait for all activities to be recalled
+      await Promise.all(recallPromises);
+
       // Optimistically update UI immediately
-      updateStaffingDataOptimistically(prevData => 
-        prevData.map(e => 
+      updateStaffingDataOptimistically(prevData => {
+        const mapped = prevData.map(e => 
           e.id === entry.id 
             ? {
                 ...e,
@@ -1497,12 +1393,17 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                 }))
               }
             : e
-        )
-      );
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return mapped as any;
+      });
 
+      // Calculate total hours recalled
+      const totalHours = entry.activities.reduce((sum, activity) => sum + activity.timer, 0);
+      
       toast({
         title: "Timer kalt tilbake fra Tripletex",
-        description: `${entry.activities.length} timer er nå tilbake til utkast-status og kan redigeres`
+        description: `${formatTimeValue(totalHours)} timer (${entry.activities.length} ${entry.activities.length === 1 ? 'aktivitet' : 'aktiviteter'}) er nå tilbake til utkast-status og kan redigeres`
       });
 
       revalidateInBackground();
@@ -1526,7 +1427,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         body: {
           action: 'unapprove_timesheet_entries', 
           entry_ids: timerIds,
-          orgId: profile.org_id
+          orgId: profile?.org_id || ''
         }
       });
 
@@ -1564,7 +1465,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       if (timerIds.length === 0) {
         toast({
           title: "Ingen timer å godkjenne",
-          description: "Velg timer som skal godkjennes",
+          description: `Velg timer som skal godkjennes. Valgte oppføringer: ${entryIds.length}, Timer funnet: ${timerIds.length}`,
           variant: "destructive"
         });
         return;
@@ -1574,7 +1475,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         .from('vakt_timer')
         .update({ 
           status: 'godkjent',
-          approved_at: new Date().toISOString(),
+          approved_at: toLocalDateTimeString(new Date()),
           approved_by: user?.id
         })
         .in('id', timerIds);
@@ -1612,31 +1513,73 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       const weekDateKeys = weekData.dates.map(toDateKey).filter(Boolean);
       
-      // Find all draft entries for this specific week
-      const draftEntries = staffingData.filter(entry => 
+      // Debug: Log all entries for this week
+      const weekEntries = staffingData.filter(entry => weekDateKeys.includes(entry.date));
+      console.log(`Week ${weekNumber} entries:`, weekEntries.map(e => ({
+        id: e.id,
+        date: e.date,
+        person: e.person?.fornavn + ' ' + e.person?.etternavn,
+        activities: e.activities.map(a => ({ id: a.id, status: a.status, timer: a.timer }))
+      })));
+      
+      // Debug: Show specific statuses for entries with activities
+      const entriesWithActivities = weekEntries.filter(e => e.activities.length > 0);
+      console.log(`Entries with activities:`, entriesWithActivities.map(e => ({
+        person: e.person?.fornavn + ' ' + e.person?.etternavn,
+        activities: e.activities.map(a => ({ status: a.status, timer: a.timer }))
+      })));
+      
+      // Debug: Show detailed status analysis
+      entriesWithActivities.forEach(entry => {
+        entry.activities.forEach(activity => {
+          console.log(`${entry.person?.fornavn}: status="${activity.status}", timer=${activity.timer}, willApprove=${activity.status !== 'godkjent' && activity.status !== 'sendt'}`);
+        });
+      });
+      
+      // Find all entries that need approval for this specific week
+      // TEMPORARY: Include ALL entries with activities, regardless of status
+      const entriesToApprove = staffingData.filter(entry => 
         weekDateKeys.includes(entry.date) &&
-        entry.activities.some(activity => activity.status === 'draft' || activity.status === 'utkast')
+        entry.activities.length > 0
       );
+      
+      console.log(`Entries to approve for week ${weekNumber}:`, entriesToApprove.map(e => ({
+        id: e.id,
+        date: e.date,
+        person: e.person?.fornavn + ' ' + e.person?.etternavn,
+        activities: e.activities.map(a => ({ id: a.id, status: a.status, timer: a.timer }))
+      })));
+      
+      // Debug: Show exactly what gets filtered
+      console.log(`Filter logic debug:`);
+      console.log(`Week date keys:`, weekDateKeys);
+      console.log(`Total staffing data entries:`, staffingData.length);
+      console.log(`Entries in week:`, weekEntries.length);
+      console.log(`Entries with activities:`, entriesWithActivities.length);
+      console.log(`Final entries to approve:`, entriesToApprove.length);
 
-      if (draftEntries.length === 0) {
+      if (entriesToApprove.length === 0) {
+        // Debug: Show what entries exist but weren't selected for approval
+        const allWeekEntries = staffingData.filter(entry => weekDateKeys.includes(entry.date));
+        const debugInfo = allWeekEntries.map(e => `${e.person?.fornavn} ${e.person?.etternavn}: ${e.activities.map(a => a.status).join(', ')}`).join('; ');
+        
         toast({
           title: "Ingen timer å godkjenne",
-          description: `Alle timer for uke ${weekNumber} er allerede godkjent eller sendt`,
+          description: `Alle timer for uke ${weekNumber} er allerede godkjent eller sendt. Debug: ${debugInfo}`,
         });
         return;
       }
 
-      const timerIds = draftEntries.flatMap(entry => 
-        entry.activities
-          .filter(activity => activity.status === 'draft' || activity.status === 'utkast')
-          .map(activity => activity.id)
+      // TEMPORARY: Include ALL timer IDs from all activities
+      const timerIds = entriesToApprove.flatMap(entry => 
+        entry.activities.map(activity => activity.id)
       );
 
       const { error } = await supabase
         .from('vakt_timer')
         .update({ 
           status: 'godkjent',
-          approved_at: new Date().toISOString(),
+          approved_at: toLocalDateTimeString(new Date()),
           approved_by: user?.id
         })
         .in('id', timerIds);
@@ -1645,7 +1588,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       toast({
         title: "Alle timer godkjent",
-        description: `${draftEntries.length} oppføringer for uke ${weekNumber} godkjent og klar for sending til Tripletex`
+        description: `${entriesToApprove.length} oppføringer for uke ${weekNumber} godkjent og klar for sending til Tripletex`
       });
 
       setSelectedEntries(new Set());
@@ -1726,21 +1669,171 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
-  const getStatusBadge = (status: StaffingEntry['status']) => {
-    switch (status) {
-      case 'approved':
-        return <Badge className="bg-green-600 text-white text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center font-bold">✓</Badge>;
-      case 'sent':
-        return <Badge className="bg-blue-600 text-white text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center font-bold">→</Badge>;
-      case 'ready':
-        return <Badge className="bg-orange-500 text-white text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center font-bold">!</Badge>;
-      case 'draft':
-        return <Badge variant="outline" className="text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">✎</Badge>;
-      default:
-        return <Badge variant="secondary" className="text-xs p-1 h-5 w-5 rounded-full flex items-center justify-center">⚠</Badge>;
+  const sendAllToTripletexForWeek = async (weekNumber: number, year: number) => {
+    try {
+      // Get dates for the specific week
+      const weekData = multiWeekData.find(w => w.week === weekNumber && w.year === year);
+      if (!weekData?.dates) {
+        toast({
+          title: "Uke ikke funnet",
+          description: `Kunne ikke finne data for uke ${weekNumber}, ${year}`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const weekDateKeys = weekData.dates.map(toDateKey).filter(Boolean);
+      
+      // Find all approved entries that haven't been sent yet
+      const entriesToSend = staffingData.filter(entry => 
+        weekDateKeys.includes(entry.date) &&
+        entry.activities.length > 0 &&
+        entry.activities.every(a => a.status === 'godkjent') &&
+        !entry.activities.some(a => a.tripletex_synced_at)
+      );
+
+      if (entriesToSend.length === 0) {
+        toast({
+          title: "Ingen timer å sende",
+          description: `Alle godkjente timer for uke ${weekNumber} er allerede sendt til Tripletex`,
+        });
+        return;
+      }
+
+      // Show loading overlay
+      setLoadingOverlay({
+        isVisible: true,
+        message: 'Sender timer til Tripletex...',
+        count: entriesToSend.length
+      });
+
+      // Send all entries to Tripletex in parallel (much faster!)
+      const sendPromises = entriesToSend.map(async (entry) => {
+        try {
+          await sendToTripletex(entry);
+          return { success: true, hours: entry.activities.reduce((sum, a) => sum + a.timer, 0) };
+        } catch (error) {
+          console.error(`Failed to send entry ${entry.id}:`, error);
+          return { success: false, hours: 0 };
+        }
+      });
+
+      const results = await Promise.all(sendPromises);
+      
+      let successCount = results.filter(r => r.success).length;
+      let failCount = results.filter(r => !r.success).length;
+      let totalHours = results.reduce((sum, r) => sum + r.hours, 0);
+
+      if (successCount > 0) {
+        toast({
+          title: "Timer sendt til Tripletex",
+          description: `${formatTimeValue(totalHours)} timer fra ${successCount} prosjekt${successCount === 1 ? '' : 'er'} sendt til Tripletex${failCount > 0 ? ` (${failCount} feilet)` : ''}`
+        });
+      }
+
+      if (failCount > 0 && successCount === 0) {
+        toast({
+          title: "Sending feilet",
+          description: `Kunne ikke sende timer for uke ${weekNumber}`,
+          variant: "destructive"
+        });
+      }
+
+      // Hide loading overlay
+      setLoadingOverlay({ isVisible: false, message: '' });
+      revalidateInBackground();
+    } catch (error: unknown) {
+      // Hide loading overlay on error
+      setLoadingOverlay({ isVisible: false, message: '' });
+      toast({
+        title: "Sending feilet",
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
+        variant: "destructive"
+      });
     }
   };
 
+  const recallAllFromTripletexForWeek = async (weekNumber: number, year: number) => {
+    try {
+      // Get dates for the specific week
+      const weekData = multiWeekData.find(w => w.week === weekNumber && w.year === year);
+      if (!weekData?.dates) {
+        toast({
+          title: "Uke ikke funnet",
+          description: `Kunne ikke finne data for uke ${weekNumber}, ${year}`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const weekDateKeys = weekData.dates.map(toDateKey).filter(Boolean);
+      
+      // Find all entries that have been sent to Tripletex
+      const entriesToRecall = staffingData.filter(entry => 
+        weekDateKeys.includes(entry.date) &&
+        entry.activities.some(a => a.tripletex_synced_at)
+      );
+
+      if (entriesToRecall.length === 0) {
+        toast({
+          title: "Ingen timer å tilbakekalle",
+          description: `Ingen timer for uke ${weekNumber} er sendt til Tripletex`,
+        });
+        return;
+      }
+
+      // Show loading overlay
+      setLoadingOverlay({
+        isVisible: true,
+        message: 'Tilbakekaller timer fra Tripletex...',
+        count: entriesToRecall.length
+      });
+
+      // Recall all entries from Tripletex in parallel (much faster!)
+      const recallPromises = entriesToRecall.map(async (entry) => {
+        try {
+          await recallFromTripletex(entry);
+          return { success: true, hours: entry.activities.reduce((sum, a) => sum + a.timer, 0) };
+        } catch (error) {
+          console.error(`Failed to recall entry ${entry.id}:`, error);
+          return { success: false, hours: 0 };
+        }
+      });
+
+      const results = await Promise.all(recallPromises);
+      
+      let successCount = results.filter(r => r.success).length;
+      let failCount = results.filter(r => !r.success).length;
+      let totalHours = results.reduce((sum, r) => sum + r.hours, 0);
+
+      if (successCount > 0) {
+        toast({
+          title: "Timer tilbakekalt fra Tripletex",
+          description: `${formatTimeValue(totalHours)} timer fra ${successCount} prosjekt${successCount === 1 ? '' : 'er'} tilbakekalt${failCount > 0 ? ` (${failCount} feilet)` : ''}`
+        });
+      }
+
+      if (failCount > 0 && successCount === 0) {
+        toast({
+          title: "Tilbakekalling feilet",
+          description: `Kunne ikke tilbakekalle timer for uke ${weekNumber}`,
+          variant: "destructive"
+        });
+      }
+
+      // Hide loading overlay
+      setLoadingOverlay({ isVisible: false, message: '' });
+      revalidateInBackground();
+    } catch (error: unknown) {
+      // Hide loading overlay on error
+      setLoadingOverlay({ isVisible: false, message: '' });
+      toast({
+        title: "Tilbakekalling feilet",
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
+        variant: "destructive"
+      });
+    }
+  };
 
   if (loading) {
     return (
@@ -1750,8 +1843,45 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     );
   }
 
+  if (!profile && initialized) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Profil mangler</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Du må opprette en organisasjon og profil før du kan bruke bemanningslisten.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 space-y-6">
+    <>
+      {/* Loading Overlay */}
+      {loadingOverlay.isVisible && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 shadow-xl text-center max-w-sm mx-4">
+            <div className="mb-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {loadingOverlay.message}
+            </h3>
+            {loadingOverlay.count && (
+              <p className="text-sm text-gray-600">
+                Behandler {loadingOverlay.count} prosjekt{loadingOverlay.count === 1 ? '' : 'er'}...
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1793,9 +1923,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                 <div>
                   <h4 className="font-medium mb-2">Godkjenning:</h4>
                   <ul className="space-y-1 text-muted-foreground">
-                    <li>• Velg timer og klikk "Godkjenn"</li>
+                    <li>• Velg timer og klikk &quot;Godkjenn&quot;</li>
                     <li>• Godkjente timer kan sendes til Tripletex</li>
-                    <li>• Bruk "Hent tilbake" for å redigere</li>
+                    <li>• Bruk &quot;Hent tilbake&quot; for å redigere</li>
                   </ul>
                 </div>
                 <div>
@@ -1815,13 +1945,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             </DialogContent>
           </Dialog>
        
-          <Button onClick={approveSelectedEntries} disabled={selectedEntries.size === 0}>
-            <Check className="h-4 w-4 mr-1" />
-            Godkjenn ({selectedEntries.size})
-          </Button>
-          <Button onClick={unapproveSelectedEntries} disabled={selectedEntries.size === 0} variant="outline">
-            Trekk tilbake godkjenning ({selectedEntries.size})
-          </Button>
         </div>
         
       </div>
@@ -1839,25 +1962,51 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                       <th className="border border-gray-300 p-2 text-left font-bold w-40 bg-slate-200">
                         <div className="flex flex-col gap-2">
                           <div>UKE {safeWeek.week}</div>
-                          <div className="flex gap-1">
-                            <Button 
-                              size="sm" 
-                              variant="default" 
-                              className="bg-green-600 hover:bg-green-700 text-xs px-2 py-1 h-6"
-                              onClick={() => approveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
-                            >
-                              <Check className="h-3 w-3 mr-1" />
-                              Godkjenn
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="border-orange-500 text-orange-600 hover:bg-orange-50 text-xs px-2 py-1 h-6"
-                              onClick={() => unapproveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
-                            >
-                              <X className="h-3 w-3 mr-1" />
-                              Trekk tilbake
-                            </Button>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex gap-1">
+                              <Button 
+                                size="sm" 
+                                variant="default" 
+                                className="bg-green-600 hover:bg-green-700 text-xs px-1.5 py-0.5 h-5"
+                                onClick={() => approveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
+                                title="Godkjenn alle timer for uken"
+                              >
+                                <Check className="h-3 w-3 mr-0.5" />
+                                Godkjenn
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="border-orange-500 text-orange-600 hover:bg-orange-50 text-xs px-1.5 py-0.5 h-5"
+                                onClick={() => unapproveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
+                                title="Avgodkjenn alle timer for uken"
+                              >
+                                <X className="h-3 w-3 mr-0.5" />
+                                Avgodkjenn
+                              </Button>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button 
+                                size="sm" 
+                                variant="default" 
+                                className="bg-blue-600 hover:bg-blue-700 text-xs px-1.5 py-0.5 h-5"
+                                onClick={() => sendAllToTripletexForWeek(safeWeek.week, safeWeek.year)}
+                                title="Send alle godkjente timer til Tripletex"
+                              >
+                                <Send className="h-3 w-3 mr-0.5" />
+                                Tripletex
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="border-purple-500 text-purple-600 hover:bg-purple-50 text-xs px-1.5 py-0.5 h-5"
+                                onClick={() => recallAllFromTripletexForWeek(safeWeek.week, safeWeek.year)}
+                                title="Tilbakekall alle sendte timer fra Tripletex"
+                              >
+                                <RefreshCw className="h-3 w-3 mr-0.5" />
+                                Tilbakekall
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </th>
@@ -1908,7 +2057,39 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                   setSelectedEntries(newSelection);
                                 }}
                               />
-                              <span>{getPersonDisplayName(employee.fornavn, employee.etternavn)}</span>
+                              <span>
+                                {getPersonDisplayName(employee.fornavn, employee.etternavn)}
+                                {(() => {
+                                  // Calculate total hours for this employee this week
+                                  const weekDateKeys = weekData.dates?.map(toDateKey).filter(Boolean) || [];
+                                  const weekEntries = employeeEntries.filter(e => weekDateKeys.includes(e.date));
+                                  
+                                  let totalRegularHours = 0;
+                                  let totalOvertimeHours = 0;
+                                  
+                                  weekEntries.forEach(entry => {
+                                    entry.activities.forEach(activity => {
+                                      if (activity.is_overtime) {
+                                        totalOvertimeHours += activity.timer || 0;
+                                      } else {
+                                        totalRegularHours += activity.timer || 0;
+                                      }
+                                    });
+                                  });
+                                  
+                                  const hasHours = totalRegularHours > 0 || totalOvertimeHours > 0;
+                                  
+                                  if (!hasHours) return null;
+                                  
+                                  return (
+                                    <span className="text-xs text-gray-500 ml-2">
+                                      {totalRegularHours > 0 && `${formatTimeValue(totalRegularHours)}t`}
+                                      {totalRegularHours > 0 && totalOvertimeHours > 0 && ' '}
+                                      {totalOvertimeHours > 0 && `+${formatTimeValue(totalOvertimeHours)}o`}
+                                    </span>
+                                  );
+                                })()}
+                              </span>
                             </div>
                           </td>
                           {weekData.dates?.map((date, idx) => {
@@ -2027,8 +2208,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                           <X className="h-2 w-2" />
                                         </button>
                                       )}
-                                      {/* Only show send button if approved and not already sent */}
-                                      {entry.status === 'approved' && !entry.activities.some(a => a.tripletex_synced_at) && (
+                                      {/* Show approval indicator if there are activities and all are approved */}
+                                      {entry.activities.length > 0 && entry.activities.every(a => a.status === 'godkjent') && (
+                                        <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
+                                          <Check className="h-2 w-2" />
+                                        </div>
+                                      )}
+                                      {/* Only show send button if there are activities, all are approved, and not already sent */}
+                                      {entry.activities.length > 0 && entry.activities.every(a => a.status === 'godkjent') && !entry.activities.some(a => a.tripletex_synced_at) && (
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
@@ -2041,40 +2228,46 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                           <Send className="h-2 w-2" />
                                         </button>
                                       )}
-                                      {/* Show recall button if sent to Tripletex - always visible */}
-                                      {entry.activities.some(a => a.tripletex_synced_at) && (
+                                    </div>
+                                    
+                                    {/* Tripletex action buttons - positioned at bottom center, show on hover */}
+                                    {entry.activities.some(a => a.tripletex_synced_at) && (
+                                      <>
+                                        {/* Recall button */}
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             recallFromTripletex(entry);
                                           }}
-                                          className="bg-orange-500 hover:bg-orange-600 text-white rounded-full p-1 shadow-md border border-white/20 opacity-100"
+                                          className="bg-orange-500 hover:bg-orange-600 text-white rounded-full p-1 shadow-md border border-white/20 opacity-0 group-hover/project:opacity-100 transition-opacity absolute bottom-1 left-1/2 transform -translate-x-1/2"
                                           title="Kall tilbake fra Tripletex"
                                         >
                                           <RefreshCw className="h-2 w-2" />
                                         </button>
-                                      )}
-                                      {/* Show verify button if sent to Tripletex - always visible */}
-                                      {entry.activities.some(a => a.tripletex_synced_at) && (
+                                        {/* Verify button */}
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             verifyTripletexStatus(entry);
                                           }}
-                                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20 opacity-100"
+                                          className="bg-purple-500 hover:bg-purple-600 text-white rounded-full p-1 shadow-md border border-white/20 opacity-0 group-hover/project:opacity-100 transition-opacity absolute bottom-1 left-1/2 transform translate-x-4"
                                           title="Sjekk Tripletex-status"
                                         >
                                           <Check className="h-2 w-2" />
                                         </button>
-                                      )}
+                                      </>
+                                    )}
+                                    
+                                    {/* Color palette button - positioned at bottom right */}
+                                    {entry.project && (
                                       <button
-                                        onClick={(e) => handleProjectColorClick(entry.project, e)}
-                                        className="bg-white rounded-full p-1 shadow-md border"
+                                        onClick={(e) => handleProjectColorClick(entry.project!, e)}
+                                        className="absolute bottom-1 right-1 bg-white rounded-full p-1 shadow-md border opacity-0 group-hover/project:opacity-100 transition-opacity"
                                         title="Endre farge"
                                       >
                                         <Palette className="h-2 w-2 text-gray-600" />
                                       </button>
-                                    </div>
+                                    )}
                                      <div className="space-y-1">
                                        {/* Project name */}
                                        <div className="text-sm font-semibold leading-tight">
@@ -2126,11 +2319,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   
                   {/* Free Lines for this week */}
                   {(() => {
-                  const weekFreeLines = freeLines.filter(line => 
-                    line.week_number === safeWeek.week && line.year === safeWeek.year
-                  );
-                  
-                  return weekFreeLines.length > 0 ? (
+                    const weekFreeLines = freeLines.filter(line => 
+                      line.week_number === safeWeek.week && line.year === safeWeek.year
+                    );
+                    
+                    return weekFreeLines.length > 0 ? (
                       <>
                         {/* Separator line */}
                         <tr>
@@ -2164,7 +2357,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             const bubble = line.frie_bobler?.find(bubble => bubble.date === dateKey);
                             
                             return (
-                              <td key={dateKey || `${safeWeek.year}-${safeWeek.week}-${idx}`} className="border border-gray-300 p-1 min-w-[140px] h-10">
+                              <td key={`${line.id}-${dateKey}-${idx}`} className="border border-gray-300 p-1 min-w-[140px] h-10">
                                 {bubble ? (
                                   <div
                                     className="h-10 rounded p-1 text-xs text-white flex items-center justify-center cursor-pointer hover:opacity-80 relative group"
@@ -2364,11 +2557,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             maxHeight: '95vh !important', 
             height: '95vh !important', 
             display: 'flex !important', 
-            flexDirection: 'column !important', 
+            flexDirection: 'column' as const, 
             padding: '0 !important'
           }}
         >
-          <div className="flex-1 overflow-y-auto p-6" style={{ flex: '1 !important', overflowY: 'auto !important', padding: '1.5rem !important' }}>
+          <div className="flex-1 overflow-y-auto p-6" style={{ flex: 1, overflowY: 'auto' as const, padding: '1.5rem' }}>
             <DialogHeader className="pb-4">
               <DialogTitle>Rediger timeføring</DialogTitle>
               <DialogDescription>
@@ -2384,7 +2577,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   setEditDialog(null);
                 }}
                 defaultTimer={8.0}
-                existingEntry={editDialog.existingEntry}
+                existingEntry={editDialog.existingEntry ? {
+                  id: editDialog.existingEntry.id,
+                  timer: editDialog.existingEntry.timer,
+                  aktivitet_id: editDialog.existingEntry.aktivitet_id || '',
+                  notat: editDialog.existingEntry.notat || '',
+                  status: editDialog.existingEntry.status
+                } : undefined}
               />
             )}
           </div>
@@ -2405,11 +2604,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
               <div>
                 <label className="text-sm font-medium">Tekst</label>
                 <Input
-                  value={freeBubbleEditDialog.text}
-                  onChange={(e) => setFreeBubbleEditDialog({
-                    ...freeBubbleEditDialog,
-                    text: e.target.value
-                  })}
+                  defaultValue={freeBubbleEditDialog.text}
+                  onChange={(e) => {
+                    // Use local state for immediate UI update without causing lag
+                    const newText = e.target.value;
+                    setFreeBubbleEditDialog(prev => prev ? { ...prev, text: newText } : null);
+                  }}
                   placeholder="Skriv tekst her..."
                 />
               </div>
@@ -2444,10 +2644,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                         freeBubbleEditDialog.color === color ? 'border-gray-900' : 'border-gray-300'
                       }`}
                       style={{ backgroundColor: color }}
-                      onClick={() => setFreeBubbleEditDialog({
-                        ...freeBubbleEditDialog,
-                        color: color
-                      })}
+                      onClick={() => {
+                        setFreeBubbleEditDialog(prev => prev ? { ...prev, color: color } : null);
+                      }}
                     />
                   ))}
                 </div>
@@ -2564,7 +2763,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         )}
       </DialogContent>
     </Dialog>
-    </div>
+      </div>
+    </>
   );
 };
 

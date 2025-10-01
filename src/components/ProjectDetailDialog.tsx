@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Building, User, Phone, Mail, FileText, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,9 +10,9 @@ interface ProjectDetailDialogProps {
   open: boolean;
   onClose: () => void;
   project: {
-    project_name: string;
-    project_number: number;
-    tripletex_project_id: number;
+    project_name: string | null;
+    project_number: number | null;
+    tripletex_project_id: number | null;
   };
   orgId: string;
 }
