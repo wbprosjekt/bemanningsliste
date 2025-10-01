@@ -597,7 +597,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         setInitialized(true);
       }
     }
-  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjectColors, loadCalendarDays, loadFreeLines, loadEmployees, initialized]);
+  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjectColors, loadCalendarDays, loadFreeLines, initialized]);
 
 
   // Optimistic update helpers
