@@ -9,6 +9,8 @@ import { Clock, MessageSquare, Paperclip, ChevronUp, ChevronDown } from 'lucide-
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, validateTimeStep } from '@/lib/displayNames';
+import { validateHours, validateUUID, validateStatus, validateFreeLineText, ValidationError } from '@/lib/validation';
+import { useCSRFToken } from '@/lib/csrf';
 
 interface TimeEntryProps {
   vaktId: string;
@@ -42,6 +44,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { addCSRFHeader } = useCSRFToken();
 
   // Separate overtime time entries for 100% and 50%
   const [overtime100Hours, setOvertime100Hours] = useState(0);
@@ -291,42 +294,66 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const handleSave = async (nextStatus: 'utkast' | 'sendt' | 'godkjent' = status) => {
     console.log('handleSave called with:', { aktivitetId, timer, nextStatus, activities: activities.length });
     
-    if (!aktivitetId) {
-      toast({
-        title: "Aktivitet påkrevd",
-        description: "Du må velge en aktivitet før du kan lagre.",
-        variant: "destructive"
-      });
-      return;
-    }
+    try {
+      // Validate all inputs
+      const validatedData = {
+        vaktId: validateUUID(vaktId),
+        orgId: validateUUID(orgId),
+        aktivitetId: validateUUID(aktivitetId),
+        timer: validateHours(timer),
+        overtime100Timer: validateHours(overtime100Timer),
+        overtime50Timer: validateHours(overtime50Timer),
+        status: validateStatus(nextStatus),
+        notat: validateFreeLineText(notat)
+      };
+      
+      if (!aktivitetId) {
+        toast({
+          title: "Aktivitet påkrevd",
+          description: "Du må velge en aktivitet før du kan lagre.",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    if (activities.length === 0) {
-      toast({
-        title: "Ingen aktiviteter tilgjengelig",
-        description: "Det er ingen aktive aktiviteter konfigurert. Kontakt administrator.",
-        variant: "destructive"
-      });
-      return;
-    }
+      if (activities.length === 0) {
+        toast({
+          title: "Ingen aktiviteter tilgjengelig",
+          description: "Det er ingen aktive aktiviteter konfigurert. Kontakt administrator.",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    // Verify the selected activity exists
-    const selectedActivity = activities.find(a => a.id === aktivitetId);
-    if (!selectedActivity) {
-      toast({
-        title: "Ugyldig aktivitet",
-        description: "Den valgte aktiviteten eksisterer ikke lenger.",
-        variant: "destructive"
-      });
-      return;
-    }
+      // Verify the selected activity exists
+      const selectedActivity = activities.find(a => a.id === aktivitetId);
+      if (!selectedActivity) {
+        toast({
+          title: "Ugyldig aktivitet",
+          description: "Den valgte aktiviteten eksisterer ikke lenger.",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    if (!validateTimeStep(timer)) {
-      toast({
-        title: "Ugyldig timesteg",
-        description: "Timer må være i 0,25-steg (f.eks. 7,25, 7,50, 7,75, 8,00).",
-        variant: "destructive"
-      });
-      return;
+      if (!validateTimeStep(validatedData.timer)) {
+        toast({
+          title: "Ugyldig timesteg",
+          description: "Timer må være i 0,25-steg (f.eks. 7,25, 7,50, 7,75, 8,00).",
+          variant: "destructive"
+        });
+        return;
+      }
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        toast({
+          title: "Ugyldig input",
+          description: error.message,
+          variant: "destructive"
+        });
+        return;
+      }
+      throw error;
     }
 
     // Find specific overtime activities (50% and 100%)

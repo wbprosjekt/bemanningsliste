@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, getPersonDisplayName, generateProjectColor } from '@/lib/displayNames';
 import { toLocalDateString } from '@/lib/utils';
+import { useDeepMemo, usePerformanceMonitor } from '@/lib/reactOptimizations';
 import TimeEntry from './TimeEntry';
 import ProjectSearchDialog from './ProjectSearchDialog';
 import ProjectDetailDialog from './ProjectDetailDialog';

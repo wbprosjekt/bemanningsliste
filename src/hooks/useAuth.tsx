@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { logAuthEvent, getRequestContext } from '@/lib/monitoring';
 
 interface AuthContextType {
   user: User | null;
@@ -23,6 +24,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Log authentication events
+        const context = getRequestContext();
+        if (event === 'SIGNED_IN' && session?.user) {
+          logAuthEvent('LOGIN_SUCCESS', {
+            userId: session.user.id,
+            email: session.user.email,
+            event,
+          }, {
+            userId: session.user.id,
+            ...context,
+          });
+        } else if (event === 'SIGNED_OUT') {
+          logAuthEvent('LOGOUT', {
+            event,
+          }, context);
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          logAuthEvent('TOKEN_REFRESH', {
+            userId: session.user.id,
+            event,
+          }, {
+            userId: session.user.id,
+            ...context,
+          });
+        }
       }
     );
 

@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Calendar, User, Building } from 'lucide-react';
 import { getPersonDisplayName } from '@/lib/displayNames';
+import { validateUUID, validateDate, ValidationError } from '@/lib/validation';
 import ProjectSelector from './ProjectSelector';
 
 interface ProjectSearchDialogProps {
@@ -85,13 +86,21 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
 
     setLoading(true);
     try {
+      // Validate all inputs
+      const validatedData = {
+        date: validateDate(date),
+        personId: validateUUID(personId),
+        projectId: validateUUID(selectedProjectId),
+        orgId: validateUUID(orgId)
+      };
+
       const { error } = await supabase
         .from('vakt')
         .insert({
-          dato: date,
-          person_id: personId,
-          project_id: selectedProjectId,
-          org_id: orgId
+          dato: validatedData.date,
+          person_id: validatedData.personId,
+          project_id: validatedData.projectId,
+          org_id: validatedData.orgId
         });
 
       if (error) throw error;
@@ -105,11 +114,21 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
       onClose();
     } catch (error) {
       console.error('Error assigning project:', error);
-      toast({
-        title: "Feil ved tilordning",
-        description: error instanceof Error ? error.message : "Kunne ikke tilordne prosjekt.",
-        variant: "destructive"
-      });
+      
+      // Handle validation errors specifically
+      if (error instanceof ValidationError) {
+        toast({
+          title: "Ugyldig input",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Feil ved tilordning",
+          description: error instanceof Error ? error.message : "Kunne ikke tilordne prosjekt.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setLoading(false);
     }

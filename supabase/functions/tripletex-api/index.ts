@@ -1,9 +1,39 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getCorsHeaders, handleCorsPreflight } from '../_shared/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Simple rate limiting for Edge Functions
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(identifier: string, maxRequests: number = 10, windowMs: number = 60000): boolean {
+  const now = Date.now();
+  const key = `ratelimit:${identifier}`;
+  
+  let entry = rateLimitStore.get(key);
+  
+  if (!entry || now >= entry.resetTime) {
+    entry = { count: 0, resetTime: now + windowMs };
+    rateLimitStore.set(key, entry);
+  }
+  
+  entry.count++;
+  
+  // Clean up old entries periodically
+  if (Math.random() < 0.01) {
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (now >= v.resetTime) {
+        rateLimitStore.delete(k);
+      }
+    }
+  }
+  
+  return entry.count <= maxRequests;
+}
+
+function getClientIdentifier(req: Request): string {
+  const forwarded = req.headers.get('x-forwarded-for');
+  const realIp = req.headers.get('x-real-ip');
+  return forwarded?.split(',')[0] || realIp || 'unknown';
+}
 
 interface TripletexConfig {
   consumerToken: string;
@@ -462,9 +492,35 @@ async function exponentialBackoff(fn: () => Promise<unknown>, maxRetries: number
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  // Handle CORS preflight requests
+  const preflightResponse = handleCorsPreflight(req);
+  if (preflightResponse) {
+    return preflightResponse;
   }
+  
+  // Rate limiting check
+  const clientId = getClientIdentifier(req);
+  if (!checkRateLimit(clientId, 10, 60000)) { // 10 requests per minute
+    const corsHeaders = getCorsHeaders(req.headers.get('origin') || undefined);
+    return new Response(
+      JSON.stringify({ 
+        error: 'Rate limit exceeded', 
+        message: 'Too many requests. Please try again later.' 
+      }),
+      {
+        status: 429,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'Retry-After': '60',
+        },
+      }
+    );
+  }
+  
+  // Get CORS headers for the request
+  const requestOrigin = req.headers.get('origin') || undefined;
+  const corsHeaders = getCorsHeaders(requestOrigin);
 
   try {
     const url = new URL(req.url);

@@ -14,6 +14,14 @@ import ColorPickerDialog from './ColorPickerDialog';
 import TimeEntry from './TimeEntry';
 import { startOfISOWeek, addWeeks, addDays, isValid as isValidDate } from 'date-fns';
 import { toLocalDateString, toLocalDateTimeString } from '@/lib/utils';
+import { 
+  loadStaffingDataCached, 
+  loadEmployeesCached, 
+  loadFreeLinesOptimized, 
+  loadCalendarDaysOptimized,
+  batchUpdateTimeEntries,
+  QueryCache
+} from '@/lib/databaseOptimized';
 
 interface StaffingEntry {
   id: string;
@@ -312,15 +320,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         return;
       }
       
-      // Get all employees first 
-      const { data: allEmployees, error: employeeError } = await supabase
-        .from('person')
-        .select('*')
-        .eq('org_id', profile.org_id)
-        .eq('aktiv', true)
-        .order('fornavn');
+      // Use optimized query to load all data in parallel
+      const [optimizedStaffingData, allEmployees] = await Promise.all([
+        loadStaffingDataCached(
+          profile.org_id,
+          { start: dateStrings[0], end: dateStrings[dateStrings.length - 1] }
+        ),
+        loadEmployeesCached(profile.org_id)
+      ]);
 
-      if (employeeError) throw employeeError;
+      if (!allEmployees) {
+        console.warn('No employees found');
+        setStaffingData([]);
+        return;
+      }
 
       // Get existing vakt data
       const { data: vaktData, error } = await supabase
