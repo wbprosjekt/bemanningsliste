@@ -1222,6 +1222,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         } else if (message.includes('closed') || message.includes('avsluttet') || message.includes('project is closed') || message.includes('lukket')) {
           errorTitle = "Prosjekt avsluttet";
           errorMessage = "Prosjektet er avsluttet i Tripletex og kan ikke motta nye timer. Kontakt administrator hvis dette er feil.";
+        } else if (message.includes('validering feilet') || message.includes('validation failed')) {
+          errorTitle = "Validering feilet";
+          errorMessage = "Tripletex validering feilet. Dette kan være fordi prosjektet er avsluttet, perioden er låst, eller andre restriksjoner. Kontakt administrator.";
         } else {
           errorMessage = error.message;
         }
@@ -1716,6 +1719,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           if (error.includes('http 429') || error.includes('rate limit')) return 'Rate limiting';
           if (error.includes('period is closed') || error.includes('låst')) return 'Periode låst';
           if (error.includes('closed') || error.includes('avsluttet') || error.includes('project is closed') || error.includes('lukket')) return 'Prosjekt avsluttet';
+          if (error.includes('validering feilet') || error.includes('validation failed')) return 'Validering feilet';
           return 'Ukjent feil';
         }))];
         

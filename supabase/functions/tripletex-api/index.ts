@@ -324,10 +324,24 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
         err.status = response.status;
         throw err;
       }
-      console.error('Tripletex API error:', response.status, responseData);
+      console.error('Tripletex API error:', { 
+        status: response.status, 
+        url: url,
+        message: responseData?.message,
+        validationMessages: responseData?.validationMessages,
+        fullResponse: responseData 
+      });
+      
+      // Include validation details in error message if available
+      let errorMessage = responseData?.message || `HTTP ${response.status}`;
+      if (responseData?.validationMessages && Array.isArray(responseData.validationMessages)) {
+        const validationDetails = responseData.validationMessages.map((v: any) => v.message || v).join(', ');
+        errorMessage += ` (Detaljer: ${validationDetails})`;
+      }
+      
       return { 
         success: false, 
-        error: responseData?.message || `HTTP ${response.status}` 
+        error: errorMessage
       };
     }
 
