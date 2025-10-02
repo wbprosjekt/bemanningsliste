@@ -559,153 +559,89 @@ const MinUke = () => {
   return (
     <div className="min-h-screen bg-background p-2">
       <div className="max-w-md mx-auto space-y-3">
-        {/* Header */}
-        <div className="space-y-3">
+        {/* Simulation Badge */}
+        {isSimulation && simulatedPersonName && (
           <div className="text-center">
-            <h1 className="text-xl font-bold">Min uke</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {profile.org?.name}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Uke {currentWeek}, {currentYear}
-              {person && ` - ${getPersonDisplayName(person.fornavn, person.etternavn)}`}
-            </p>
-            {isSimulation && simulatedPersonName && (
-              <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                <Badge className="w-fit bg-blue-100 text-blue-800" variant="secondary">
-                  Simulerer {simulatedPersonName}
-                </Badge>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 sm:mt-0"
-                  onClick={exitSimulation}
-                >
-                  Avslutt simulering
-                </Button>
-              </div>
-            )}
+            <Badge className="bg-blue-100 text-blue-800" variant="secondary">
+              Simulerer {simulatedPersonName}
+            </Badge>
+            <Button 
+              variant="outline"
+              size="sm"
+              className="ml-2"
+              onClick={exitSimulation}
+            >
+              Avslutt
+            </Button>
           </div>
+        )}
 
-          {missingPersonRecord && (
-            <Card className="bg-amber-50 border-amber-200">
-              <CardContent className="p-4 text-sm text-amber-900">
-                <p className="font-medium">Ingen ansattprofil funnet</p>
-                <p className="mt-1">
-                  Vi fant ingen registrert ansatt med e-postadressen {user?.email}. Be administratoren knytte Tripletex-ansatte til brukere,
-                  eller legg inn e-post på riktig person i bemanningssystemet.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-          
-          {/* Action Buttons - Always Mobile Style */}
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              {isSimulation && (
+        {/* Missing Person Warning */}
+        {missingPersonRecord && (
+          <Card className="bg-amber-50 border-amber-200">
+            <CardContent className="p-4 text-sm text-amber-900">
+              <p className="font-medium">Ingen ansattprofil funnet</p>
+              <p className="mt-1">
+                Vi fant ingen registrert ansatt med e-postadressen {user?.email}. Be administratoren knytte Tripletex-ansatte til brukere,
+                eller legg inn e-post på riktig person i bemanningssystemet.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Compact Week Navigation & Summary */}
+        {person && weeklySummary && (
+          <Card>
+            <CardContent className="p-3 space-y-3">
+              {/* Week Navigation with Large Buttons */}
+              <div className="flex items-center justify-between gap-2">
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="h-10 w-full"
-                  onClick={exitSimulation}
+                  size="lg"
+                  onClick={() => navigateWeek(-1)}
+                  className="h-14 w-16 flex-shrink-0"
                 >
-                  Avslutt simulering
+                  <ChevronLeft className="h-6 w-6" />
                 </Button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Week Navigation */}
-        <div className="flex items-center justify-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigateWeek(-1)}
-            className="h-10 w-12"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="text-lg font-medium text-center px-2 min-w-[120px]">
-            Uke {currentWeek}, {currentYear}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigateWeek(1)}
-            className="h-10 w-12"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Weekly Summary - Compact Mobile Style */}
-        {person && weeklySummary && (
-          <Card className="mb-4">
-            <CardContent className="p-4">
-              {/* Compact Progress Overview */}
-              <div className="text-center space-y-2">
-                <div className="flex items-center justify-center gap-4">
-                  <div>
-                    <div className="text-3xl font-bold text-primary">
-                      {formatTimeValue(weeklySummary.totalHours)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Timer ført</div>
-                  </div>
-                  <div className="text-gray-300">/</div>
-                  <div>
-                    <div className="text-3xl font-bold text-muted-foreground">
-                      {formatTimeValue(weeklySummary.totalExpected)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Forventet</div>
-                  </div>
+                <div className="text-lg font-semibold text-center">
+                  Uke {currentWeek}, {currentYear}
                 </div>
-                
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => navigateWeek(1)}
+                  className="h-14 w-16 flex-shrink-0"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </Button>
+              </div>
+
+              {/* Compact Summary Line */}
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Timer:</span>
+                <span className={`font-semibold ${
+                  weeklySummary.totalHours >= weeklySummary.totalExpected 
+                    ? 'text-emerald-600' 
+                    : 'text-red-600'
+                }`}>
+                  {formatTimeValue(weeklySummary.totalHours)}/{formatTimeValue(weeklySummary.totalExpected)}t
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {weeklySummary.completionPercentage}%
+                </span>
+                <Progress 
+                  value={Math.min(weeklySummary.completionPercentage, 100)} 
+                  className={`h-2 flex-1 ${
+                    weeklySummary.totalHours >= weeklySummary.totalExpected
+                      ? '[&>div]:bg-emerald-500'
+                      : '[&>div]:bg-red-500'
+                  }`}
+                />
                 {weeklySummary.totalOvertime > 0 && (
-                  <div className="text-sm text-yellow-600">
-                    +{formatTimeValue(weeklySummary.totalOvertime)} overtid
-                  </div>
+                  <span className="text-yellow-600 text-xs font-medium whitespace-nowrap">
+                    +{formatTimeValue(weeklySummary.totalOvertime)}t OT
+                  </span>
                 )}
-
-                {/* Progress Bar */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span>Ukesfremgang</span>
-                    <span>{weeklySummary.completionPercentage}% fullført</span>
-                  </div>
-                  <Progress 
-                    value={weeklySummary.completionPercentage} 
-                    className="h-2"
-                  />
-                </div>
-
-                {/* Status Badge */}
-                <div className="flex justify-center">
-                  {weeklySummary.status === 'complete' && (
-                    <Badge className="bg-green-500 text-white text-xs">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Uke fullført
-                    </Badge>
-                  )}
-                  {weeklySummary.status === 'partial' && (
-                    <Badge className="bg-yellow-500 text-white text-xs">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      Delvis fullført
-                    </Badge>
-                  )}
-                  {weeklySummary.status === 'missing' && (
-                    <Badge className="bg-red-500 text-white text-xs">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      Mangler timer
-                    </Badge>
-                  )}
-                  {weeklySummary.status === 'empty' && (
-                    <Badge variant="outline" className="text-xs">
-                      <Clock className="h-3 w-3 mr-1" />
-                      Ingen timer ført
-                    </Badge>
-                  )}
-                </div>
               </div>
             </CardContent>
           </Card>
