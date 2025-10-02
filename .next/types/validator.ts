@@ -90,6 +90,24 @@ type LayoutConfig<Route extends LayoutRoutes = LayoutRoutes> = {
   type __Unused = __Check
 }
 
+// Validate ../../src/app/min/uke-v2/[year]/[week]/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/min/uke-v2/[year]/[week]">> = Specific
+  const handler = {} as typeof import("../../src/app/min/uke-v2/[year]/[week]/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/min/uke-v2/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/min/uke-v2">> = Specific
+  const handler = {} as typeof import("../../src/app/min/uke-v2/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/min/uke/[year]/[week]/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/min/uke/[year]/[week]">> = Specific

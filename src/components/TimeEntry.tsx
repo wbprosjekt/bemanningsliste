@@ -265,7 +265,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   }, [vaktId, existingEntry, defaultTimer]);
 
   const adjustHours = (delta: number) => {
-    const newHours = Math.max(0, Math.min(8, hours + delta));
+    const newHours = Math.max(0, Math.min(16, hours + delta));
     setHours(newHours);
   };
 
@@ -277,7 +277,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   };
 
   const adjustOvertime100Hours = (delta: number) => {
-    const newHours = Math.max(0, Math.min(12, overtime100Hours + delta));
+    const newHours = Math.max(0, Math.min(10, overtime100Hours + delta));
     setOvertime100Hours(newHours);
   };
 
@@ -288,7 +288,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   };
 
   const adjustOvertime50Hours = (delta: number) => {
-    const newHours = Math.max(0, Math.min(12, overtime50Hours + delta));
+    const newHours = Math.max(0, Math.min(10, overtime50Hours + delta));
     setOvertime50Hours(newHours);
   };
 
@@ -528,11 +528,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="lg"
+                className="h-12 w-16"
                 onClick={() => adjustHours(1)}
-                disabled={hours >= 8}
+                disabled={hours >= 16}
               >
-                <ChevronUp className="h-4 w-4" />
+                <ChevronUp className="h-6 w-6" />
               </Button>
               <div className="text-3xl font-bold w-16 text-center">
                 {hours.toString().padStart(2, '0')}
@@ -541,11 +542,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="lg"
+                className="h-12 w-16"
                 onClick={() => adjustHours(-1)}
                 disabled={hours <= 0}
               >
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-6 w-6" />
               </Button>
             </div>
 
@@ -554,11 +556,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="lg"
+                className="h-12 w-16"
                 onClick={() => adjustMinutes(15)}
                 disabled={minutes >= 45}
               >
-                <ChevronUp className="h-4 w-4" />
+                <ChevronUp className="h-6 w-6" />
               </Button>
               <div className="text-3xl font-bold w-16 text-center">
                 {minutes.toString().padStart(2, '0')}
@@ -567,14 +570,45 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="lg"
+                className="h-12 w-16"
                 onClick={() => adjustMinutes(-15)}
                 disabled={minutes <= 0}
               >
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-6 w-6" />
               </Button>
             </div>
           </div>
+
+          {/* Quick Select Buttons */}
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground text-center">Hurtigvalg:</div>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {[
+                { label: '0.5t', hours: 0, minutes: 30 },
+                { label: '1t', hours: 1, minutes: 0 },
+                { label: '2t', hours: 2, minutes: 0 },
+                { label: '4t', hours: 4, minutes: 0 },
+                { label: '7.5t', hours: 7, minutes: 30 },
+                { label: '8t', hours: 8, minutes: 0 },
+              ].map((quick) => (
+                <Button
+                  key={quick.label}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setHours(quick.hours);
+                    setMinutes(quick.minutes);
+                  }}
+                  className="bg-blue-600 text-white hover:bg-blue-700 border-0 min-w-[60px]"
+                >
+                  {quick.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           <div className="text-center text-sm text-muted-foreground">
             Total: {formatTimeValue(timer)} timer
             {totalOvertimeTimer > 0 && (
@@ -648,11 +682,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="lg"
+                      className="h-12 w-16"
                       onClick={() => adjustOvertime100Hours(1)}
-                      disabled={overtime100Hours >= 12}
+                      disabled={overtime100Hours >= 10}
                     >
-                      <ChevronUp className="h-4 w-4" />
+                      <ChevronUp className="h-6 w-6" />
                     </Button>
                     <div className="text-3xl font-bold w-16 text-center">
                       {overtime100Hours.toString().padStart(2, '0')}
@@ -661,11 +696,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="lg"
+                      className="h-12 w-16"
                       onClick={() => adjustOvertime100Hours(-1)}
                       disabled={overtime100Hours <= 0}
                     >
-                      <ChevronDown className="h-4 w-4" />
+                      <ChevronDown className="h-6 w-6" />
                     </Button>
                   </div>
 
@@ -674,11 +710,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="lg"
+                      className="h-12 w-16"
                       onClick={() => adjustOvertime100Minutes(15)}
                       disabled={overtime100Minutes >= 45}
                     >
-                      <ChevronUp className="h-4 w-4" />
+                      <ChevronUp className="h-6 w-6" />
                     </Button>
                     <div className="text-3xl font-bold w-16 text-center">
                       {overtime100Minutes.toString().padStart(2, '0')}
@@ -687,11 +724,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="lg"
+                      className="h-12 w-16"
                       onClick={() => adjustOvertime100Minutes(-15)}
                       disabled={overtime100Minutes <= 0}
                     >
-                      <ChevronDown className="h-4 w-4" />
+                      <ChevronDown className="h-6 w-6" />
                     </Button>
                   </div>
                 </div>
@@ -706,11 +744,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="lg"
+                      className="h-12 w-16"
                       onClick={() => adjustOvertime50Hours(1)}
-                      disabled={overtime50Hours >= 12}
+                      disabled={overtime50Hours >= 10}
                     >
-                      <ChevronUp className="h-4 w-4" />
+                      <ChevronUp className="h-6 w-6" />
                     </Button>
                     <div className="text-3xl font-bold w-16 text-center">
                       {overtime50Hours.toString().padStart(2, '0')}
@@ -719,11 +758,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="lg"
+                      className="h-12 w-16"
                       onClick={() => adjustOvertime50Hours(-1)}
                       disabled={overtime50Hours <= 0}
                     >
-                      <ChevronDown className="h-4 w-4" />
+                      <ChevronDown className="h-6 w-6" />
                     </Button>
                   </div>
 
@@ -732,11 +772,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="lg"
+                      className="h-12 w-16"
                       onClick={() => adjustOvertime50Minutes(15)}
                       disabled={overtime50Minutes >= 45}
                     >
-                      <ChevronUp className="h-4 w-4" />
+                      <ChevronUp className="h-6 w-6" />
                     </Button>
                     <div className="text-3xl font-bold w-16 text-center">
                       {overtime50Minutes.toString().padStart(2, '0')}
@@ -745,11 +786,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="lg"
+                      className="h-12 w-16"
                       onClick={() => adjustOvertime50Minutes(-15)}
                       disabled={overtime50Minutes <= 0}
                     >
-                      <ChevronDown className="h-4 w-4" />
+                      <ChevronDown className="h-6 w-6" />
                     </Button>
                   </div>
                 </div>

@@ -64,6 +64,63 @@ interface WeeklySummary {
   }>;
 }
 
+// Day Navigator Component
+const DayNavigator = ({ 
+  weekDays, 
+  selectedIndex, 
+  onDayClick, 
+  todayIndex 
+}: { 
+  weekDays: Date[]; 
+  selectedIndex: number; 
+  onDayClick: (index: number) => void; 
+  todayIndex: number;
+}) => {
+  const dayNames = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+  const dayNamesShort = ['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø'];
+  
+  return (
+    <div className="sticky top-0 bg-white z-20 border-b shadow-sm">
+      <div className="px-4 py-3">
+        <div className="grid grid-cols-7 gap-2">
+          {weekDays.map((date, index) => {
+            const isSelected = selectedIndex === index;
+            const isToday = todayIndex === index;
+            const dayNumber = date.getDate();
+            
+            return (
+              <button
+                key={index}
+                onClick={() => onDayClick(index)}
+                className={`
+                  flex flex-col items-center py-2 px-1 rounded-lg border-2 transition-all
+                  ${isSelected 
+                    ? 'border-blue-600 bg-blue-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                  }
+                `}
+              >
+                <span className={`text-xs font-medium mb-1 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`}>
+                  <span className="hidden sm:inline">{dayNames[index]}</span>
+                  <span className="sm:hidden">{dayNamesShort[index]}</span>
+                </span>
+                <div className="flex items-center gap-1">
+                  <span className={`text-lg font-bold ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+                    {dayNumber}
+                  </span>
+                  {isToday && (
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MinUke = () => {
   const params = useParams<{ year: string; week: string }>();
   const router = useRouter();
@@ -72,7 +129,6 @@ const MinUke = () => {
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
-  const [showFullWeek, setShowFullWeek] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isSimulation, setIsSimulation] = useState(false);
@@ -84,6 +140,7 @@ const MinUke = () => {
     is_weekend: boolean;
     holiday_name: string | null;
   }>>([]);
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
 
   const currentYear = parseInt(params?.year || new Date().getFullYear().toString(), 10);
   const currentWeek = parseInt(params?.week || getWeekNumber(new Date()).toString(), 10);
@@ -109,6 +166,19 @@ const MinUke = () => {
     
     return days;
   }, [currentYear, currentWeek]);
+
+  // Auto-select today's day on mount
+  useEffect(() => {
+    const today = new Date();
+    const weekDays = getWeekDays();
+    const todayIndex = weekDays.findIndex(d => 
+      toLocalDateString(d) === toLocalDateString(today)
+    );
+    
+    if (todayIndex !== -1) {
+      setSelectedDayIndex(todayIndex);
+    }
+  }, [currentYear, currentWeek, getWeekDays]);
 
   const loadUserData = useCallback(async () => {
     if (!user) return;
@@ -532,31 +602,16 @@ const MinUke = () => {
           {/* Action Buttons - Always Mobile Style */}
           <div className="space-y-2">
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                className="flex-1 h-10"
-                onClick={() => setShowFullWeek(!showFullWeek)}
-              >
-                <Eye className="h-4 w-4 mr-1" />
-{showFullWeek ? 'Relevante dager' : 'Denne uken'}
-              </Button>
               {isSimulation && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1 h-10"
+                  className="h-10 w-full"
                   onClick={exitSimulation}
                 >
                   Avslutt simulering
                 </Button>
               )}
-            </div>
-            <div className="flex justify-center">
-              <Badge variant="outline" className="text-xs">
-                <Calendar className="h-3 w-3 mr-1" />
-                {showFullWeek ? 'Relevante dager (7 dager)' : `Uke ${currentWeek} (7 dager)`}
-              </Badge>
             </div>
           </div>
         </div>
@@ -656,7 +711,19 @@ const MinUke = () => {
           </Card>
         )}
 
-        {/* Week View */}
+        {/* Day Navigator */}
+        {person && (
+          <DayNavigator
+            weekDays={getWeekDays()}
+            selectedIndex={selectedDayIndex}
+            onDayClick={setSelectedDayIndex}
+            todayIndex={getWeekDays().findIndex(d => 
+              toLocalDateString(d) === toLocalDateString(new Date())
+            )}
+          />
+        )}
+
+        {/* Single Day View with Fade-in */}
         {!person ? (
           <Card>
             <CardContent className="p-6 text-center">
@@ -672,40 +739,25 @@ const MinUke = () => {
               </div>
             </CardContent>
           </Card>
-        ) : showFullWeek ? (
-          <div className="space-y-2">
-            {getWeekDays()
-              .filter(date => {
-                // Show today and 3 days before and after (7 days total)
-                const today = new Date();
-                const daysDiff = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                return daysDiff >= -3 && daysDiff <= 3;
-              })
-              .map((date, index) => (
-                <div key={index}>
-                  <DayCard
-                    date={date}
-                    orgId={profile.org_id}
-                    personId={person?.id}
-                    forventetTimer={person?.forventet_dagstimer || 8.0}
-                    calendarDays={calendarDays}
-                  />
-                </div>
-              ))}
-          </div>
         ) : (
-          <div className="space-y-2">
-            {getWeekDays().map((date, index) => (
-              <div key={index}>
-                <DayCard
-                  date={date}
-                  orgId={profile.org_id}
-                  personId={person?.id}
-                  forventetTimer={person?.forventet_dagstimer || 8.0}
-                  calendarDays={calendarDays}
-                />
-              </div>
-            ))}
+          <div 
+            key={selectedDayIndex}
+            className="transition-opacity duration-150 ease-in-out"
+            style={{ animation: 'fadeIn 150ms ease-in-out' }}
+          >
+            <style jsx>{`
+              @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+              }
+            `}</style>
+            <DayCard
+              date={getWeekDays()[selectedDayIndex]}
+              orgId={profile.org_id}
+              personId={person?.id}
+              forventetTimer={person?.forventet_dagstimer || 8.0}
+              calendarDays={calendarDays}
+            />
           </div>
         )}
 
@@ -719,13 +771,12 @@ const MinUke = () => {
                 className="text-xs h-10"
                 onClick={() => {
                   const today = new Date();
-                  const todayElement = document.getElementById(`day-${today.toISOString().split('T')[0]}`);
-                  if (todayElement) {
-                    todayElement.scrollIntoView({ 
-                      behavior: 'smooth', 
-                      block: 'center',
-                      inline: 'nearest'
-                    });
+                  const weekDays = getWeekDays();
+                  const todayIndex = weekDays.findIndex(d => 
+                    toLocalDateString(d) === toLocalDateString(today)
+                  );
+                  if (todayIndex !== -1) {
+                    setSelectedDayIndex(todayIndex);
                   }
                 }}
               >
