@@ -373,11 +373,32 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
               tripletex_employee_id: employee.tripletex_employee_id,
             },
             project: null,
-            activities: []
+            activities: [],
+            totalHours: 0,
+            status: 'missing'
           });
         } else {
           // Convert existing vakts to StaffingEntry format
           existingVakts.forEach((vakt) => {
+            const activities = vakt.activities || [];
+            
+            // Calculate total hours from activities
+            const totalHours = activities.reduce((sum: number, activity: any) => sum + (activity.timer || 0), 0);
+            
+            // Calculate status based on activities
+            let status: 'missing' | 'draft' | 'ready' | 'approved' | 'sent' = 'missing';
+            if (activities.length > 0) {
+              if (activities.every((a: any) => a.status === 'godkjent' || a.tripletex_synced_at)) {
+                status = 'approved';
+              } else if (activities.some((a: any) => a.tripletex_synced_at)) {
+                status = 'sent';
+              } else if (activities.some((a: any) => a.status === 'sendt')) {
+                status = 'ready';
+              } else {
+                status = 'draft';
+              }
+            }
+            
             entries.push({
               id: vakt.id,
               date: vakt.date,
@@ -385,11 +406,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
               project: vakt.project ? {
                 id: vakt.project.id,
                 tripletex_project_id: vakt.project.tripletex_project_id,
-                project_name: vakt.project.project_name || '',
+                project_name: vakt.project.project_name || `Prosjekt ${vakt.project.project_number}`,
                 project_number: vakt.project.project_number,
                 color: projectColors[vakt.project.tripletex_project_id]
               } : null,
-              activities: vakt.activities || []
+              activities,
+              totalHours,
+              status
             });
           });
         }
@@ -502,9 +525,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     setStaffingData(prev => updateFn(prev));
   };
 
-  const revalidateInBackground = () => {
-    setTimeout(() => loadStaffingData(true), 100);
-  };
+  const revalidateInBackground = useCallback(() => {
+    // Invalidate React Query cache to trigger refetch
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['staffing'] });
+    }, 100);
+  }, [queryClient]);
 
   const rollbackUpdate = (previousData: StaffingEntry[], errorMessage: string) => {
     setStaffingData(previousData);

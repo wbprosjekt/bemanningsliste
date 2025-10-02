@@ -85,16 +85,15 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         throw allError;
       }
       
-      // Now try the filtered query
+      // Now try the filtered query (removed aktiv filter as column doesn't exist)
       const { data, error } = await supabase
         .from('ttx_activity_cache')
         .select('id, navn')
         .eq('org_id', orgId)
-        .eq('aktiv', true)
         .order('navn');
 
-      console.log('Filtered activities (aktiv=true):', data);
-      console.log('Filtered activities error:', error);
+      console.log('Activities for org:', data);
+      console.log('Activities error:', error);
 
       if (error) {
         console.error('Supabase error loading activities:', error);
@@ -382,12 +381,11 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
     
     if (overtime100Timer > 0 || overtime50Timer > 0) {
       try {
-        // Look for specific overtime activities
+        // Look for specific overtime activities (removed aktiv filter as column doesn't exist)
         const { data: overtimeActivities, error: overtimeError } = await supabase
           .from('ttx_activity_cache')
           .select('id, navn, ttx_id')
           .eq('org_id', orgId)
-          .eq('aktiv', true)
           .ilike('navn', '%overtid%');
 
         if (overtimeError) {
