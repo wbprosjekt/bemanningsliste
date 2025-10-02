@@ -47,7 +47,12 @@ export default function NavigationWrapper() {
         console.error('Error loading profile:', error);
         setProfile(null);
       } else {
-        setProfile(profileData);
+        setProfile({
+          ...profileData,
+          role: profileData.role || 'user',
+          fornavn: profileData.display_name?.split(' ')[0] || '',
+          etternavn: profileData.display_name?.split(' ').slice(1).join(' ') || ''
+        });
       }
     } catch (error) {
       console.error('Error loading profile:', error);
