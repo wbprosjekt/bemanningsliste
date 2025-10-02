@@ -655,21 +655,18 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
 
         {/* Overtime Section */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setShowOvertime(!showOvertime)}
+            className="w-full h-12 justify-between px-4 hover:bg-gray-100 rounded-lg"
+          >
+            <div className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Overtid
-            </Label>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowOvertime(!showOvertime)}
-              className="min-h-[44px] w-full sm:w-auto text-xs"
-            >
-              {showOvertime ? 'Skjul' : 'Vis'}
-            </Button>
-          </div>
+              <span className="font-medium">Overtid</span>
+            </div>
+            <ChevronDown className={`h-5 w-5 transition-transform ${showOvertime ? 'rotate-180' : ''}`} />
+          </Button>
           
           {showOvertime && (
             <div className="space-y-4 p-4 border rounded-lg bg-yellow-50 border-yellow-200">
