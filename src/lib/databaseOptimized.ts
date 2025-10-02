@@ -214,6 +214,32 @@ export async function loadProjectsOptimized(orgId: string): Promise<any[]> {
 }
 
 /**
+ * Optimized query to load project colors
+ */
+export async function loadProjectColorsOptimized(orgId: string): Promise<Record<number, string>> {
+  try {
+    validateUUID(orgId);
+
+    const { data, error } = await supabase
+      .from('project_color')
+      .select('tripletex_project_id, hex')
+      .eq('org_id', orgId);
+
+    if (error) throw error;
+    
+    const colorMap: Record<number, string> = {};
+    data?.forEach((color) => {
+      colorMap[color.tripletex_project_id] = color.hex;
+    });
+    
+    return colorMap;
+  } catch (error) {
+    console.error('Error loading project colors:', error);
+    throw error;
+  }
+}
+
+/**
  * Optimized query to load free lines and bubbles for multiple weeks
  */
 export async function loadFreeLinesOptimized(

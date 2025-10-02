@@ -9,6 +9,7 @@ import {
   loadStaffingDataOptimized, 
   loadEmployeesOptimized, 
   loadProjectsOptimized,
+  loadProjectColorsOptimized,
   loadFreeLinesOptimized,
   loadCalendarDaysOptimized,
 } from '@/lib/databaseOptimized';
@@ -52,6 +53,18 @@ export function useProjects(orgId: string) {
     queryFn: () => loadProjectsOptimized(orgId),
     enabled: !!orgId,
     staleTime: 10 * 60 * 1000, // 10 minutes - projects change rarely
+  });
+}
+
+/**
+ * Hook for loading project colors
+ */
+export function useProjectColors(orgId: string) {
+  return useQuery({
+    queryKey: ['projectColors', orgId],
+    queryFn: () => loadProjectColorsOptimized(orgId),
+    enabled: !!orgId,
+    staleTime: 30 * 60 * 1000, // 30 minutes - colors change very rarely
   });
 }
 

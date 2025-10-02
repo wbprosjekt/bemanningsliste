@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { useEmployees, useProjects, useUserProfile } from '@/hooks/useStaffingData';
+import { useEmployees, useProjects, useUserProfile, useProjectColors } from '@/hooks/useStaffingData';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Check, Send, Palette, X, RefreshCw, Trash2, HelpCircle } from 'lucide-react';
 import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTimeValue, getWeekNumber } from '@/lib/displayNames';
@@ -131,11 +132,13 @@ interface CalendarDay {
 const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   // React Query hooks for data fetching
   const { data: profile, isLoading: profileLoading } = useUserProfile(user?.id);
   const { data: employees = [], isLoading: employeesLoading } = useEmployees(profile?.org_id || '');
   const { data: projects = [], isLoading: projectsLoading } = useProjects(profile?.org_id || '');
+  const { data: projectColors = {}, isLoading: projectColorsLoading } = useProjectColors(profile?.org_id || '');
   
   // Keep local state for UI-only data
   const [profileState, setProfileState] = useState<Profile | null>(null);
@@ -155,8 +158,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       display_order: number;
     }>;
   }>>([]);
-  const [projectColors, setProjectColors] = useState<Record<number, string>>({});
   // MIGRATED TO REACT QUERY: const [employees, setEmployees] = useState<Employee[]>([]);
+  // MIGRATED TO REACT QUERY: const [projectColors, setProjectColors] = useState<Record<number, string>>({});
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
@@ -522,28 +525,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   }, [profile?.org_id, multiWeekData]);
 
-  const loadProjectColors = useCallback(async () => {
-    if (!profile?.org_id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('project_color')
-        .select('*')
-        .eq('org_id', profile.org_id);
-
-      if (error) throw error;
-      
-      const colorMap: Record<number, string> = {};
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data?.forEach((color: any) => {
-        colorMap[color.tripletex_project_id] = color.hex;
-      });
-      
-      setProjectColors(colorMap);
-    } catch (error) {
-      console.error('Error loading project colors:', error);
-    }
-  }, [profile?.org_id]);
+  // MIGRATED TO REACT QUERY: loadProjectColors function removed
+  // Now using: const { data: projectColors = {} } = useProjectColors(profile?.org_id || '');
 
   const loadCalendarDays = useCallback(async () => {
     if (!profile?.org_id) return;
@@ -586,10 +569,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   useEffect(() => {
     if (profile) {
       loadStaffingData();
-      loadProjectColors();
       loadCalendarDays();
       loadFreeLines();
       // MIGRATED: loadEmployees() - now handled by useEmployees() hook
+      // MIGRATED: loadProjectColors() - now handled by useProjectColors() hook
       setInitialized(true);
     } else {
       setLoading(false);
@@ -597,7 +580,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         setInitialized(true);
       }
     }
-  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadProjectColors, loadCalendarDays, loadFreeLines, initialized]);
+  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadCalendarDays, loadFreeLines, initialized]);
 
 
   // Optimistic update helpers
@@ -637,15 +620,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       if (error) throw error;
       
-      setProjectColors(prev => ({ ...prev, [tripletexProjectId]: color }));
+      // Invalidate project colors query to refetch updated data
+      queryClient.invalidateQueries({ queryKey: ['projectColors', profile?.org_id] });
       
       // Count how many instances were updated
       const affectedEntries = staffingData.filter(entry => 
         entry.project?.tripletex_project_id === tripletexProjectId
       );
-      
-      // Optimistically update project colors  
-      setProjectColors(prev => ({ ...prev, [tripletexProjectId]: color }));
       
       toast({
         title: "Prosjektfarge oppdatert",
@@ -1841,7 +1822,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
-  if (loading) {
+  // Show loading if any critical data is still loading
+  const isLoadingCriticalData = profileLoading || employeesLoading || projectsLoading || projectColorsLoading;
+  
+  if (isLoadingCriticalData) {
     return (
       <div className="p-6">
         <div className="text-center">Laster bemanningsdata...</div>
