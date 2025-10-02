@@ -340,7 +340,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
 
     // Create a map of existing vakt data
-    const vaktMap = new Map<string, any[]>();
+    const vaktMap = new Map<string, unknown[]>();
     rawStaffingData.forEach((entry) => {
       const key = `${entry.date}-${entry.person.id}`;
       if (!vaktMap.has(key)) {
@@ -383,16 +383,28 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             const activities = vakt.activities || [];
             
             // Calculate total hours from activities
-            const totalHours = activities.reduce((sum: number, activity: any) => sum + (activity.timer || 0), 0);
+            const totalHours = activities.reduce((sum: number, activity: unknown) => {
+              const act = activity as { timer?: number };
+              return sum + (act.timer || 0);
+            }, 0);
             
             // Calculate status based on activities
             let status: 'missing' | 'draft' | 'ready' | 'approved' | 'sent' = 'missing';
             if (activities.length > 0) {
-              if (activities.every((a: any) => a.status === 'godkjent' || a.tripletex_synced_at)) {
+              if (activities.every((a: unknown) => {
+                const act = a as { status?: string; tripletex_synced_at?: string };
+                return act.status === 'godkjent' || act.tripletex_synced_at;
+              })) {
                 status = 'approved';
-              } else if (activities.some((a: any) => a.tripletex_synced_at)) {
+              } else if (activities.some((a: unknown) => {
+                const act = a as { tripletex_synced_at?: string };
+                return act.tripletex_synced_at;
+              })) {
                 status = 'sent';
-              } else if (activities.some((a: any) => a.status === 'sendt')) {
+              } else if (activities.some((a: unknown) => {
+                const act = a as { status?: string };
+                return act.status === 'sendt';
+              })) {
                 status = 'ready';
               } else {
                 status = 'draft';
@@ -1705,9 +1717,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         }
       }
       
-      let successCount = results.filter(r => r.success).length;
-      let failCount = results.filter(r => !r.success).length;
-      let totalHours = results.reduce((sum, r) => sum + r.hours, 0);
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      const totalHours = results.reduce((sum, r) => sum + r.hours, 0);
 
       if (successCount > 0) {
         toast({
@@ -1800,9 +1812,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       const results = await Promise.all(recallPromises);
       
-      let successCount = results.filter(r => r.success).length;
-      let failCount = results.filter(r => !r.success).length;
-      let totalHours = results.reduce((sum, r) => sum + r.hours, 0);
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      const totalHours = results.reduce((sum, r) => sum + r.hours, 0);
 
       if (successCount > 0) {
         toast({

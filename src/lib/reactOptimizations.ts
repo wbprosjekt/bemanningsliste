@@ -248,7 +248,7 @@ export function useVirtualScroll<T>(
 /**
  * Optimized button component with memoization
  */
-export const OptimizedButton = withMemo<React.ComponentType<any>>(
+export const OptimizedButton = withMemo<React.ComponentType<React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>>>(
   ({ children, onClick, ...props }) => (
     <button onClick={onClick} {...props}>
       {children}

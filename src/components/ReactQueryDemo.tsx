@@ -23,7 +23,7 @@ interface DemoProps {
  * OLD WAY: Manual state management
  */
 export function EmployeeListOldWay({ orgId }: DemoProps) {
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -144,11 +144,14 @@ export function EmployeeListReactQuery({ orgId }: DemoProps) {
             <div className="mt-4 space-y-1">
               <p className="text-sm font-medium">Employees:</p>
               <ul className="text-xs space-y-1">
-                {employees.slice(0, 3).map((emp: any) => (
-                  <li key={emp.id}>
-                    {emp.fornavn} {emp.etternavn}
-                  </li>
-                ))}
+                {employees.slice(0, 3).map((emp: unknown) => {
+                  const employee = emp as { id: string; fornavn: string; etternavn: string };
+                  return (
+                    <li key={employee.id}>
+                      {employee.fornavn} {employee.etternavn}
+                    </li>
+                  );
+                })}
                 {employees.length > 3 && (
                   <li className="text-muted-foreground">
                     ... and {employees.length - 3} more
