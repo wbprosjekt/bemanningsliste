@@ -15,7 +15,7 @@ export class SecureQueryBuilder {
 
   constructor(table: string) {
     this.table = table;
-    this.query = supabase.from(table);
+    this.query = supabase.from(table as any);
   }
 
   /**
@@ -273,7 +273,7 @@ export async function secureInsert(
     }
   }
 
-  return await supabase.from(table).insert(sanitizedData);
+  return await supabase.from(table as any).insert(sanitizedData);
 }
 
 /**
@@ -309,7 +309,7 @@ export async function secureUpdate(
     }
   }
 
-  let query = supabase.from(table).update(sanitizedData);
+  let query = supabase.from(table as any).update(sanitizedData);
   
   // Apply filters
   for (const [key, value] of Object.entries(sanitizedFilter)) {
@@ -339,7 +339,7 @@ export async function secureDelete(
     }
   }
 
-  let query = supabase.from(table).delete();
+  let query = supabase.from(table as any).delete();
   
   // Apply filters
   for (const [key, value] of Object.entries(sanitizedFilter)) {

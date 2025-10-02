@@ -296,7 +296,7 @@ export class CSRFTokenManager {
       if (response.ok) {
         const data = await response.json();
         this.token = data.token;
-        return this.token;
+        return this.token || '';
       }
     } catch (error) {
       console.error('Failed to get CSRF token:', error);

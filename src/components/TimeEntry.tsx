@@ -448,7 +448,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
       entries.push({
         timer: overtime100Timer,
         aktivitetId,
-        overtimeAktivitetId: overtime100ActivityId,
+        overtimeAktivitetId: overtime100ActivityId || undefined,
         notat: notat || '',
         status: nextStatus,
         isOvertime: true,
@@ -460,7 +460,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
       entries.push({
         timer: overtime50Timer,
         aktivitetId,
-        overtimeAktivitetId: overtime50ActivityId,
+        overtimeAktivitetId: overtime50ActivityId || undefined,
         notat: notat || '',
         status: nextStatus,
         isOvertime: true,

@@ -59,7 +59,9 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
 
       if (error) throw error;
       
-      const projectIds = (data || []).map(v => v.project_id).filter(Boolean);
+      const projectIds = (data || [])
+        .map(v => v.project_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
       setExistingProjectIds(projectIds);
     } catch (error) {
       console.error('Error loading existing projects:', error);

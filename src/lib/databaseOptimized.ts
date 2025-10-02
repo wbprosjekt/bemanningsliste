@@ -107,18 +107,18 @@ export async function loadStaffingDataOptimized(
       const activities = entry.vakt_timer?.map(timer => ({
         id: timer.id,
         timer: timer.timer,
-        status: timer.status,
+        status: timer.status || 'utkast',
         activity_name: timer.ttx_activity_cache?.navn || 'Unknown',
-        lonnstype: timer.lonnstype,
-        notat: timer.notat,
-        is_overtime: timer.is_overtime,
-        approved_at: timer.approved_at,
-        approved_by: timer.approved_by,
-        tripletex_synced_at: timer.tripletex_synced_at,
-        tripletex_entry_id: timer.tripletex_entry_id,
-        sync_error: timer.sync_error,
-        aktivitet_id: timer.aktivitet_id,
-        ttx_activity_id: timer.ttx_activity_cache?.ttx_id,
+        lonnstype: timer.lonnstype || 'normal',
+        notat: timer.notat || undefined,
+        is_overtime: timer.is_overtime || undefined,
+        approved_at: timer.approved_at || undefined,
+        approved_by: timer.approved_by || undefined,
+        tripletex_synced_at: timer.tripletex_synced_at || undefined,
+        tripletex_entry_id: timer.tripletex_entry_id || undefined,
+        sync_error: timer.sync_error || undefined,
+        aktivitet_id: timer.aktivitet_id || undefined,
+        ttx_activity_id: timer.ttx_activity_cache?.ttx_id || undefined,
       })) || [];
 
       const totalHours = activities.reduce((sum, activity) => sum + activity.timer, 0);
@@ -141,9 +141,9 @@ export async function loadStaffingDataOptimized(
         person: entry.person,
         project: entry.project ? {
           id: entry.project.id,
-          tripletex_project_id: entry.project.tripletex_project_id,
-          project_number: entry.project.project_number,
-          project_name: entry.project.project_name,
+          tripletex_project_id: entry.project.tripletex_project_id || 0,
+          project_number: entry.project.project_number || 0,
+          project_name: entry.project.project_name || '',
           color: undefined, // Color will be fetched separately if needed
         } : null,
         activities,
@@ -331,8 +331,9 @@ export async function batchUpdateTimeEntries(
           status: 'godkjent',
           approved_at: new Date().toISOString(),
         })
-        .in('id', statusUpdates.map(u => u.id));
-      promises.push(statusPromise);
+        .in('id', statusUpdates.map(u => u.id))
+        .then();
+      promises.push(Promise.resolve(statusPromise));
     }
 
     // Batch sync updates
@@ -342,8 +343,9 @@ export async function batchUpdateTimeEntries(
         .update({ 
           tripletex_synced_at: new Date().toISOString(),
         })
-        .in('id', syncUpdates.map(u => u.id));
-      promises.push(syncPromise);
+        .in('id', syncUpdates.map(u => u.id))
+        .then();
+      promises.push(Promise.resolve(syncPromise));
     }
 
     // Batch approval updates
@@ -353,8 +355,9 @@ export async function batchUpdateTimeEntries(
         .update({ 
           approved_at: new Date().toISOString(),
         })
-        .in('id', approvalUpdates.map(u => u.id));
-      promises.push(approvalPromise);
+        .in('id', approvalUpdates.map(u => u.id))
+        .then();
+      promises.push(Promise.resolve(approvalPromise));
     }
 
     // Execute all updates in parallel

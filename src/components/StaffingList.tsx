@@ -380,31 +380,56 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         } else {
           // Convert existing vakts to StaffingEntry format
           existingVakts.forEach((vakt) => {
-            const activities = vakt.activities || [];
+            const vaktData = vakt as { 
+              id: string; 
+              date: string; 
+              person: { 
+                id: string; 
+                fornavn: string; 
+                etternavn: string; 
+                forventet_dagstimer: number | null; 
+                tripletex_employee_id?: number | null; 
+              }; 
+              project: { 
+                id: string; 
+                tripletex_project_id: number; 
+                project_name: string; 
+                project_number: number; 
+              }; 
+              activities?: unknown[] 
+            };
+            const activities = (vaktData.activities || []).map((activity: unknown) => {
+              const act = activity as {
+                id: string;
+                timer: number;
+                status: string;
+                activity_name: string;
+                lonnstype: string;
+                notat?: string;
+                is_overtime?: boolean;
+                approved_at?: string;
+                approved_by?: string;
+                tripletex_synced_at?: string;
+                tripletex_entry_id?: number;
+                sync_error?: string;
+                ttx_activity_id?: number;
+              };
+              return act;
+            });
             
             // Calculate total hours from activities
-            const totalHours = activities.reduce((sum: number, activity: unknown) => {
-              const act = activity as { timer?: number };
-              return sum + (act.timer || 0);
+            const totalHours = activities.reduce((sum: number, activity) => {
+              return sum + (activity.timer || 0);
             }, 0);
             
             // Calculate status based on activities
             let status: 'missing' | 'draft' | 'ready' | 'approved' | 'sent' = 'missing';
             if (activities.length > 0) {
-              if (activities.every((a: unknown) => {
-                const act = a as { status?: string; tripletex_synced_at?: string };
-                return act.status === 'godkjent' || act.tripletex_synced_at;
-              })) {
+              if (activities.every((a) => a.status === 'godkjent' || a.tripletex_synced_at)) {
                 status = 'approved';
-              } else if (activities.some((a: unknown) => {
-                const act = a as { tripletex_synced_at?: string };
-                return act.tripletex_synced_at;
-              })) {
+              } else if (activities.some((a) => a.tripletex_synced_at)) {
                 status = 'sent';
-              } else if (activities.some((a: unknown) => {
-                const act = a as { status?: string };
-                return act.status === 'sendt';
-              })) {
+              } else if (activities.some((a) => a.status === 'sendt')) {
                 status = 'ready';
               } else {
                 status = 'draft';
@@ -412,15 +437,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             }
             
             entries.push({
-              id: vakt.id,
-              date: vakt.date,
-              person: vakt.person,
-              project: vakt.project ? {
-                id: vakt.project.id,
-                tripletex_project_id: vakt.project.tripletex_project_id,
-                project_name: vakt.project.project_name || `Prosjekt ${vakt.project.project_number}`,
-                project_number: vakt.project.project_number,
-                color: projectColors[vakt.project.tripletex_project_id]
+              id: vaktData.id,
+              date: vaktData.date,
+              person: vaktData.person,
+              project: vaktData.project ? {
+                id: vaktData.project.id,
+                tripletex_project_id: vaktData.project.tripletex_project_id,
+                project_name: vaktData.project.project_name || `Prosjekt ${vaktData.project.project_number}`,
+                project_number: vaktData.project.project_number,
+                color: projectColors[vaktData.project.tripletex_project_id] || '#6366f1'
               } : null,
               activities,
               totalHours,
@@ -1177,7 +1202,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             action: 'send_timesheet_entry',
             vakt_timer_id: activity.id,
             employee_id: entry.person.tripletex_employee_id,
-            project_id: entry.project.tripletex_project_id,
+            project_id: entry.project?.tripletex_project_id,
             activity_id: activity.ttx_activity_id || null,
             hours: activity.timer,
             date: entry.date,
