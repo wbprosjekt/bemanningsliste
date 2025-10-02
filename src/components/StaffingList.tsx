@@ -1176,10 +1176,17 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         });
 
         if (error) {
+          console.error('Supabase function error:', error);
           throw new Error(error instanceof Error ? error.message : 'Failed to send to Tripletex');
         }
 
         if (!data?.success) {
+          console.error('Tripletex API response:', { 
+            success: data?.success, 
+            error: data?.error, 
+            details: data?.details,
+            fullResponse: data 
+          });
           throw new Error(data?.error || 'Failed to send to Tripletex');
         }
 
