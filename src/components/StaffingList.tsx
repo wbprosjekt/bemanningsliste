@@ -129,6 +129,37 @@ interface CalendarDay {
   is_holiday: boolean;
 }
 
+// Separate component to prevent re-rendering of entire StaffingList on input change
+const EditLineNameForm = ({ initialName, onSave, onCancel }: {
+  initialName: string;
+  onSave: (name: string) => void;
+  onCancel: () => void;
+}) => {
+  const [name, setName] = useState(initialName);
+  
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium">Navn</label>
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Skriv linje-navn her..."
+          autoFocus
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onCancel}>
+          Avbryt
+        </Button>
+        <Button onClick={() => onSave(name)}>
+          Lagre
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -372,32 +403,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const lastWeekData = multiWeekData.length > 0 ? multiWeekData[multiWeekData.length - 1] : null;
   const safeLastWeek = coerceWeekRef(lastWeekData);
 
-  const loadUserProfile = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*, org:org_id (id, name)')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      if (data) {
-        setProfile(data);
-        setInitialized(true);
-      } else {
-        setProfile(null);
-        setLoading(false);
-        setInitialized(true);
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      setProfile(null);
-      setLoading(false);
-      setInitialized(true);
-    }
-  }, [user]);
+  // MIGRATED TO REACT QUERY: loadUserProfile function removed
+  // Now using: useUserProfile(user?.id) hook
 
   // MIGRATED TO REACT QUERY: loadStaffingData function removed
   // Now using: useStaffingData() hook + useEffect for data transformation
@@ -470,11 +477,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   // Old loadEmployees function removed - now using:
   // const { data: employees = [] } = useEmployees(profile?.org_id || '');
 
-  useEffect(() => {
-    if (user) {
-      loadUserProfile();
-    }
-  }, [user, loadUserProfile]);
+  // MIGRATED TO REACT QUERY: loadUserProfile useEffect removed
+  // Now handled automatically by useUserProfile(user?.id) hook
 
   useEffect(() => {
     if (profile) {
@@ -2628,38 +2632,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           </DialogDescription>
         </DialogHeader>
         {editLineNameDialog && (
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Navn</label>
-              <Input
-                value={editLineNameDialog.currentName}
-                onChange={(e) => setEditLineNameDialog({
-                  ...editLineNameDialog,
-                  currentName: e.target.value
-                })}
-                placeholder="Skriv linje-navn her..."
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setEditLineNameDialog(null)}
-              >
-                Avbryt
-              </Button>
-              <Button
-                onClick={() => {
-                  updateLineName(
-                    editLineNameDialog.lineId,
-                    editLineNameDialog.currentName
-                  );
-                  setEditLineNameDialog(null);
-                }}
-              >
-                Lagre
-              </Button>
-            </div>
-          </div>
+          <EditLineNameForm
+            initialName={editLineNameDialog.currentName}
+            onSave={(newName) => {
+              updateLineName(editLineNameDialog.lineId, newName);
+              setEditLineNameDialog(null);
+            }}
+            onCancel={() => setEditLineNameDialog(null)}
+          />
         )}
       </DialogContent>
     </Dialog>

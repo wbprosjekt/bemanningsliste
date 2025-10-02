@@ -202,7 +202,6 @@ export async function loadProjectsOptimized(orgId: string): Promise<any[]> {
         project_name
       `)
       .eq('org_id', orgId)
-      .eq('aktiv', true)
       .order('project_number', { ascending: true });
 
     if (error) throw error;

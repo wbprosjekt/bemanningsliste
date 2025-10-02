@@ -27,7 +27,7 @@ export function useStaffingData(
   return useQuery({
     queryKey: ['staffing', orgId, dateRange.start, dateRange.end, personIds],
     queryFn: () => loadStaffingDataOptimized(orgId, dateRange, personIds),
-    enabled: !!orgId && !!dateRange.start && !!dateRange.end,
+    enabled: !!orgId && orgId.length > 0 && !!dateRange.start && !!dateRange.end,
     staleTime: 60 * 1000, // 1 minute
   });
 }
@@ -39,7 +39,7 @@ export function useEmployees(orgId: string) {
   return useQuery({
     queryKey: ['employees', orgId],
     queryFn: () => loadEmployeesOptimized(orgId),
-    enabled: !!orgId,
+    enabled: !!orgId && orgId.length > 0,
     staleTime: 5 * 60 * 1000, // 5 minutes - employees don't change often
   });
 }
@@ -51,7 +51,7 @@ export function useProjects(orgId: string) {
   return useQuery({
     queryKey: ['projects', orgId],
     queryFn: () => loadProjectsOptimized(orgId),
-    enabled: !!orgId,
+    enabled: !!orgId && orgId.length > 0,
     staleTime: 10 * 60 * 1000, // 10 minutes - projects change rarely
   });
 }
@@ -63,7 +63,7 @@ export function useProjectColors(orgId: string) {
   return useQuery({
     queryKey: ['projectColors', orgId],
     queryFn: () => loadProjectColorsOptimized(orgId),
-    enabled: !!orgId,
+    enabled: !!orgId && orgId.length > 0,
     staleTime: 30 * 60 * 1000, // 30 minutes - colors change very rarely
   });
 }

@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, validateTimeStep } from '@/lib/displayNames';
 import { validateHours, validateUUID, validateStatus, validateFreeLineText, ValidationError } from '@/lib/validation';
 import { useCSRFToken } from '@/lib/csrf';
+import { useTimeEntryMutation, useDeleteTimeEntry } from '@/hooks/useStaffingData';
 
 interface TimeEntryProps {
   vaktId: string;
@@ -45,6 +46,13 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { addCSRFHeader } = useCSRFToken();
+  
+  // React Query mutations
+  const timeEntryMutation = useTimeEntryMutation();
+  const deleteTimeEntryMutation = useDeleteTimeEntry();
+  
+  // Use React Query loading state instead of local loading
+  const isLoading = timeEntryMutation.isPending || deleteTimeEntryMutation.isPending || loading;
 
   // Separate overtime time entries for 100% and 50%
   const [overtime100Hours, setOvertime100Hours] = useState(0);
@@ -344,6 +352,18 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         });
         return;
       }
+
+      if (
+        totalOvertimeTimer > 0 &&
+        (!validateTimeStep(overtime100Timer) || !validateTimeStep(overtime50Timer))
+      ) {
+        toast({
+          title: "Ugyldig overtidstidsverdi",
+          description: "Overtidstimer må være i 0,25-steg (f.eks. 1,25, 2,50, 3,75, 4,00).",
+          variant: "destructive"
+        });
+        return;
+      }
     } catch (error) {
       if (error instanceof ValidationError) {
         toast({
@@ -408,111 +428,75 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
       }
     }
 
-    if (!validateTimeStep(timer)) {
-      toast({
-        title: "Ugyldig tidsverdi",
-        description: "Timer må være i 0,25-steg (f.eks. 7,25, 7,50, 7,75, 8,00).",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (
-      totalOvertimeTimer > 0 &&
-      (!validateTimeStep(overtime100Timer) || !validateTimeStep(overtime50Timer))
-    ) {
-      toast({
-        title: "Ugyldig overtidstidsverdi",
-        description: "Overtidstimer må være i 0,25-steg (f.eks. 1,25, 2,50, 3,75, 4,00).",
-        variant: "destructive"
-      });
-      return;
-    }
-
     const previousStatus = status;
     setStatus(nextStatus);
     setLoading(true);
-    try {
-      // Delete all existing timer entries for this vakt to avoid duplicates
-      await supabase
-        .from('vakt_timer')
-        .delete()
-        .eq('vakt_id', vaktId);
 
-      // Save normal time entry
-      const normalTimeData = {
-        vakt_id: vaktId,
-        org_id: orgId,
-        timer,
-        aktivitet_id: aktivitetId || null, // Convert empty string to null
-        notat: notat || null,
+    // Prepare entries for React Query mutation
+    const entries = [];
+    
+    // Normal time entry
+    entries.push({
+      timer,
+      aktivitetId,
+      notat: notat || '',
+      status: nextStatus,
+      isOvertime: false,
+      lonnstype: 'normal'
+    });
+
+    // Overtime entries
+    if (overtime100Timer > 0) {
+      entries.push({
+        timer: overtime100Timer,
+        aktivitetId,
+        overtimeAktivitetId: overtime100ActivityId,
+        notat: notat || '',
         status: nextStatus,
-        is_overtime: false
-      };
-
-      const result = await supabase
-        .from('vakt_timer')
-        .insert(normalTimeData);
-
-      if (result.error) throw result.error;
-
-      // Insert overtime entries if they exist
-      if (overtime100Timer > 0) {
-        const overtime100Data = {
-          vakt_id: vaktId,
-          org_id: orgId,
-          timer: overtime100Timer,
-          aktivitet_id: aktivitetId || null, // Convert empty string to null
-          overtime_aktivitet_id: overtime100ActivityId || null, // Use specific 100% overtime activity
-          notat: notat || null,
-          status: nextStatus,
-          is_overtime: true,
-          lonnstype: 'overtid_100' // Mark as 100% overtime
-        };
-
-        const overtime100Result = await supabase
-          .from('vakt_timer')
-          .insert(overtime100Data);
-
-        if (overtime100Result.error) throw overtime100Result.error;
-      }
-
-      if (overtime50Timer > 0) {
-        const overtime50Data = {
-          vakt_id: vaktId,
-          org_id: orgId,
-          timer: overtime50Timer,
-          aktivitet_id: aktivitetId || null, // Convert empty string to null
-          overtime_aktivitet_id: overtime50ActivityId || null, // Use specific 50% overtime activity
-          notat: notat || null,
-          status: nextStatus,
-          is_overtime: true,
-          lonnstype: 'overtid_50' // Mark as 50% overtime
-        };
-
-        const overtime50Result = await supabase
-          .from('vakt_timer')
-          .insert(overtime50Data);
-
-        if (overtime50Result.error) throw overtime50Result.error;
-      }
-
-      toast({
-        title: "Lagret",
-        description: `Timeføring lagret${totalOvertimeTimer > 0 ? ` med ${formatTimeValue(totalOvertimeTimer)} overtid` : ''}.`
+        isOvertime: true,
+        lonnstype: 'overtid_100'
       });
-
-      onSave?.();
-    } catch (error: unknown) {
-      toast({
-        title: "Lagring feilet",
-        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
-        variant: "destructive"
-      });
-      setStatus(previousStatus);
-    } finally {
-      setLoading(false);
     }
+
+    if (overtime50Timer > 0) {
+      entries.push({
+        timer: overtime50Timer,
+        aktivitetId,
+        overtimeAktivitetId: overtime50ActivityId,
+        notat: notat || '',
+        status: nextStatus,
+        isOvertime: true,
+        lonnstype: 'overtid_50'
+      });
+    }
+
+    // Use React Query mutation
+    timeEntryMutation.mutate(
+      {
+        vaktId,
+        orgId,
+        entries
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Lagret",
+            description: `Timeføring lagret${totalOvertimeTimer > 0 ? ` med ${formatTimeValue(totalOvertimeTimer)} overtid` : ''}.`
+          });
+          onSave?.();
+          setLoading(false);
+        },
+        onError: (error: unknown) => {
+          toast({
+            title: "Lagring feilet",
+            description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
+            variant: "destructive"
+          });
+          setStatus(previousStatus);
+          setLoading(false);
+        }
+      }
+    );
   };
 
   const getStatusBadge = () => {
@@ -797,16 +781,16 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         <div className="flex gap-2">
           <Button
             onClick={() => handleSave('utkast')}
-            disabled={loading}
+            disabled={isLoading}
             variant="outline"
           >
-            {loading && status === 'utkast' ? 'Lagrer...' : 'Lagre utkast'}
+            {isLoading && status === 'utkast' ? 'Lagrer...' : 'Lagre utkast'}
           </Button>
           <Button
             onClick={() => handleSave('sendt')}
-            disabled={loading}
+            disabled={isLoading}
           >
-            {loading && status === 'sendt' ? 'Sender...' : 'Send til godkjenning'}
+            {isLoading && status === 'sendt' ? 'Sender...' : 'Send til godkjenning'}
           </Button>
           {existingEntry && (
             <div className="flex gap-1">
