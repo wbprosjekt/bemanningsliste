@@ -500,7 +500,7 @@ Deno.serve(async (req) => {
   
   // Rate limiting check
   const clientId = getClientIdentifier(req);
-  if (!checkRateLimit(clientId, 10, 60000)) { // 10 requests per minute
+  if (!checkRateLimit(clientId, 20, 60000)) { // 20 requests per minute (increased from 10)
     const corsHeaders = getCorsHeaders(req.headers.get('origin') || undefined);
     return new Response(
       JSON.stringify({ 
@@ -1252,17 +1252,23 @@ Deno.serve(async (req) => {
           }
 
           // 2) Sørg for deltaker
+          console.log('🔍 Checking if employee is participant on project:', { employeeId: employee_id, projectId: project_id });
           const part = await ensureParticipant(orgId, Number(project_id), Number(employee_id));
           if (!part.ok) {
+            console.error('❌ Employee not participant:', { employeeId: employee_id, projectId: project_id, reason: part.reason });
             return { success: false, error: 'employee_not_participant', projectId: project_id, employeeId: employee_id, details: part.reason };
           }
+          console.log('✅ Employee is participant on project');
 
           // 3) Sjekk at aktiviteten hører til prosjektet (hvis satt)
           if (finalActivityId) {
+            console.log('🔍 Checking if activity exists on project:', { activityId: finalActivityId, projectId: project_id });
             const actOk = await ensureActivityOnProject(orgId, Number(project_id), Number(finalActivityId));
             if (!actOk.ok) {
+              console.error('❌ Activity not on project:', { activityId: finalActivityId, projectId: project_id, reason: actOk.reason });
               return { success: false, error: 'activity_not_on_project', projectId: project_id, activityId: finalActivityId, details: actOk.reason };
             }
+            console.log('✅ Activity exists on project');
           }
 
           // Check if there are existing timesheet entries in Tripletex for this combination

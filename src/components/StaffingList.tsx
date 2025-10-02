@@ -1200,9 +1200,33 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       revalidateInBackground(); // Refresh to show updated sync status
     } catch (error: unknown) {
       console.error('Error sending to Tripletex:', error);
+      
+      let errorMessage = "Ukjent feil oppstod";
+      let errorTitle = "Feil ved sending til Tripletex";
+      
+      if (error instanceof Error) {
+        const message = error.message.toLowerCase();
+        
+        if (message.includes('activity_not_on_project')) {
+          errorTitle = "Aktivitet ikke tilgjengelig";
+          errorMessage = "Aktiviteten finnes ikke på dette prosjektet i Tripletex. Kontakt administrator for å legge til aktiviteten.";
+        } else if (message.includes('employee_not_participant')) {
+          errorTitle = "Ansatt ikke deltaker";
+          errorMessage = "Ansatt er ikke registrert som deltaker på dette prosjektet i Tripletex. Kontakt administrator.";
+        } else if (message.includes('http 429') || message.includes('rate limit')) {
+          errorTitle = "For mange forespørsler";
+          errorMessage = "Tripletex API har rate limiting. Vent litt og prøv igjen.";
+        } else if (message.includes('period is closed') || message.includes('låst')) {
+          errorTitle = "Periode er låst";
+          errorMessage = "Perioden er låst i Tripletex. Kontakt lønn for å åpne perioden.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
-        title: "Feil ved sending til Tripletex",
-        description: error instanceof Error ? error.message : "Ukjent feil oppstod",
+        title: errorTitle,
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -1634,18 +1658,39 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         count: entriesToSend.length
       });
 
-      // Send all entries to Tripletex in parallel (much faster!)
-      const sendPromises = entriesToSend.map(async (entry) => {
-        try {
-          await sendToTripletex(entry);
-          return { success: true, hours: entry.activities.reduce((sum, a) => sum + a.timer, 0) };
-        } catch (error) {
-          console.error(`Failed to send entry ${entry.id}:`, error);
-          return { success: false, hours: 0 };
-        }
-      });
+      // Send entries in smaller batches with delays to avoid rate limiting
+      const batchSize = 3; // Reduced from parallel to avoid rate limits
+      const delayBetweenBatches = 2000; // 2 seconds between batches
+      const results = [];
 
-      const results = await Promise.all(sendPromises);
+      for (let i = 0; i < entriesToSend.length; i += batchSize) {
+        const batch = entriesToSend.slice(i, i + batchSize);
+        
+        // Update loading message with progress
+        setLoadingOverlay({
+          isVisible: true,
+          message: `Sender timer til Tripletex... (${i + 1}-${Math.min(i + batchSize, entriesToSend.length)} av ${entriesToSend.length})`,
+          count: entriesToSend.length
+        });
+
+        const batchPromises = batch.map(async (entry) => {
+          try {
+            await sendToTripletex(entry);
+            return { success: true, hours: entry.activities.reduce((sum, a) => sum + a.timer, 0) };
+          } catch (error) {
+            console.error(`Failed to send entry ${entry.id}:`, error);
+            return { success: false, hours: 0, error: error instanceof Error ? error.message : 'Unknown error' };
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        results.push(...batchResults);
+
+        // Add delay between batches (except for the last batch)
+        if (i + batchSize < entriesToSend.length) {
+          await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+        }
+      }
       
       let successCount = results.filter(r => r.success).length;
       let failCount = results.filter(r => !r.success).length;
@@ -1659,9 +1704,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       }
 
       if (failCount > 0 && successCount === 0) {
+        // Get error details from failed results
+        const failedResults = results.filter(r => !r.success && r.error);
+        const errorTypes = [...new Set(failedResults.map(r => {
+          const error = r.error?.toLowerCase() || '';
+          if (error.includes('activity_not_on_project')) return 'Aktivitet ikke på prosjekt';
+          if (error.includes('employee_not_participant')) return 'Ansatt ikke deltaker';
+          if (error.includes('http 429') || error.includes('rate limit')) return 'Rate limiting';
+          if (error.includes('period is closed') || error.includes('låst')) return 'Periode låst';
+          return 'Ukjent feil';
+        }))];
+        
         toast({
           title: "Sending feilet",
-          description: `Kunne ikke sende timer for uke ${weekNumber}`,
+          description: `Kunne ikke sende timer for uke ${weekNumber}. Vanligste feil: ${errorTypes.slice(0, 2).join(', ')}`,
           variant: "destructive"
         });
       }
