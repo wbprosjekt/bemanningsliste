@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { useEmployees, useProjects, useUserProfile, useProjectColors } from '@/hooks/useStaffingData';
+import { useEmployees, useProjects, useUserProfile, useProjectColors, useStaffingData } from '@/hooks/useStaffingData';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Check, Send, Palette, X, RefreshCw, Trash2, HelpCircle } from 'lucide-react';
@@ -287,6 +287,87 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     return multiWeekData.flatMap(w => w.dates).filter(d => d instanceof Date && !isNaN(d.getTime()));
   }, [multiWeekData]);
 
+  // Calculate date range for staffing data (after allDates is defined)
+  const dateRange = useMemo(() => {
+    const dateStrings = allDates.map(toDateKey).filter(Boolean);
+    if (dateStrings.length === 0) return null;
+    return {
+      start: dateStrings[0],
+      end: dateStrings[dateStrings.length - 1]
+    };
+  }, [allDates, toDateKey]);
+  
+  const { data: rawStaffingData, isLoading: staffingDataLoading } = useStaffingData(
+    profile?.org_id || '',
+    dateRange || { start: '', end: '' }
+  );
+
+  // Convert rawStaffingData to StaffingEntry format and generate entries for all employees/dates
+  useEffect(() => {
+    if (!rawStaffingData || !employees || employees.length === 0 || allDates.length === 0) {
+      return;
+    }
+
+    // Create a map of existing vakt data
+    const vaktMap = new Map<string, any[]>();
+    rawStaffingData.forEach((entry) => {
+      const key = `${entry.date}-${entry.person.id}`;
+      if (!vaktMap.has(key)) {
+        vaktMap.set(key, []);
+      }
+      vaktMap.get(key)!.push(entry);
+    });
+
+    // Generate staffing entries for all employees and dates
+    const entries: StaffingEntry[] = [];
+    
+    employees.forEach((employee) => {
+      allDates.forEach((date) => {
+        const dateKey = toDateKey(date);
+        if (!dateKey) return;
+        
+        const vaktKey = `${dateKey}-${employee.id}`;
+        const existingVakts = vaktMap.get(vaktKey) || [];
+        
+        if (existingVakts.length === 0) {
+          // No existing vakt - create empty entry
+          entries.push({
+            id: `empty-${employee.id}-${dateKey}`,
+            date: dateKey,
+            person: {
+              id: employee.id,
+              fornavn: employee.fornavn,
+              etternavn: employee.etternavn,
+              forventet_dagstimer: employee.forventet_dagstimer,
+              tripletex_employee_id: employee.tripletex_employee_id,
+            },
+            project: null,
+            activities: []
+          });
+        } else {
+          // Convert existing vakts to StaffingEntry format
+          existingVakts.forEach((vakt) => {
+            entries.push({
+              id: vakt.id,
+              date: vakt.date,
+              person: vakt.person,
+              project: vakt.project ? {
+                id: vakt.project.id,
+                tripletex_project_id: vakt.project.tripletex_project_id,
+                project_name: vakt.project.project_name || '',
+                project_number: vakt.project.project_number,
+                color: projectColors[vakt.project.tripletex_project_id]
+              } : null,
+              activities: vakt.activities || []
+            });
+          });
+        }
+      });
+    });
+
+    setStaffingData(entries);
+  }, [rawStaffingData, employees, allDates, toDateKey, projectColors]);
+
   // Safe access to last week data with fallback
   const lastWeekData = multiWeekData.length > 0 ? multiWeekData[multiWeekData.length - 1] : null;
   const safeLastWeek = coerceWeekRef(lastWeekData);
@@ -318,179 +399,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   }, [user]);
 
-  const loadStaffingData = useCallback(async (silent: boolean = false) => {
-    if (!profile?.org_id) return;
-
-    if (!silent) setLoading(true);
-    try {
-      const dateStrings = allDates.map(toDateKey).filter(Boolean);
-      if (dateStrings.length === 0) {
-        console.warn('No valid dates generated for staffing query');
-        setStaffingData([]);
-        return;
-      }
-      
-      // Use optimized query to load all data in parallel
-      const [optimizedStaffingData, allEmployees] = await Promise.all([
-        loadStaffingDataCached(
-          profile.org_id,
-          { start: dateStrings[0], end: dateStrings[dateStrings.length - 1] }
-        ),
-        loadEmployeesCached(profile.org_id)
-      ]);
-
-      if (!allEmployees) {
-        console.warn('No employees found');
-        setStaffingData([]);
-        return;
-      }
-
-      // Get existing vakt data
-      const { data: vaktData, error } = await supabase
-        .from('vakt')
-        .select(`
-          id,
-          dato,
-          person_id,
-          person:person_id (
-            id,
-            fornavn,
-            etternavn,
-            forventet_dagstimer,
-            tripletex_employee_id
-          ),
-          ttx_project_cache:project_id (
-            id,
-            tripletex_project_id,
-            project_name,
-            project_number
-          ),
-          vakt_timer (
-            id,
-            timer,
-            status,
-            lonnstype,
-            notat,
-            is_overtime,
-            aktivitet_id,
-            tripletex_synced_at,
-            tripletex_entry_id,
-            sync_error,
-            approved_at,
-            approved_by,
-            original_timer,
-            original_aktivitet_id,
-            original_notat,
-            original_status,
-            ttx_activity_cache:aktivitet_id (
-              id,
-              navn,
-              ttx_id
-            )
-          )
-        `)
-        .in('dato', dateStrings)
-        .eq('org_id', profile.org_id);
-
-      if (error) throw error;
-
-      // Create a map of existing vakt data - allow multiple entries per person per day
-      const vaktMap = new Map<string, VaktTimer[]>();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vaktData?.forEach((vakt: any) => {
-        const key = `${vakt.dato}-${vakt.person_id}`;
-        if (!vaktMap.has(key)) {
-          vaktMap.set(key, []);
-        }
-        vaktMap.get(key)!.push(vakt);
-      });
-
-      // Generate staffing entries for all employees and dates
-      const entries: StaffingEntry[] = [];
-      
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      allEmployees?.forEach((employee: any) => {
-        allDates.forEach((date) => {
-          const dateKey = toDateKey(date);
-          if (!dateKey) return;
-          
-          const vaktKey = `${dateKey}-${employee.id}`;
-          const existingVakts = vaktMap.get(vaktKey) || [];
-          
-          if (existingVakts.length > 0) {
-            // Process each vakt entry separately to create multiple StaffingEntry entries
-            existingVakts.forEach((existingVakt) => {
-              // Use existing vakt data and transform vaktTimer to activities
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const activities = ((existingVakt as any).vakt_timer || []).map((timer: any) => ({
-              id: timer.id,
-              timer: timer.timer ?? 0,
-              status: timer.status,
-              activity_name: timer.ttx_activity_cache?.navn || 'Ukjent aktivitet',
-              lonnstype: timer.lonnstype,
-              notat: timer.notat,
-              is_overtime: timer.is_overtime,
-              approved_at: timer.approved_at,
-              approved_by: timer.approved_by,
-              tripletex_synced_at: timer.tripletex_synced_at,
-              tripletex_entry_id: timer.tripletex_entry_id,
-              sync_error: timer.sync_error,
-              aktivitet_id: timer.aktivitet_id,
-              ttx_activity_id: timer.ttx_activity_cache?.ttx_id ?? undefined,
-              original_timer: timer.original_timer,
-              original_aktivitet_id: timer.original_aktivitet_id,
-              original_notat: timer.original_notat,
-              original_status: timer.original_status
-            }));
-            
-            // Calculate total hours from activities
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const totalHours = activities.reduce((sum: number, activity: any) => sum + (activity.timer ?? 0), 0);
-            
-              entries.push({
-                id: existingVakt.id,
-                date: dateKey,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                person: (existingVakt as any).person,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                project: (existingVakt as any).ttx_project_cache,
-                activities: activities,
-                totalHours: totalHours,
-                status: activities.length > 0 ? 
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (activities.every((a: any) => a.status === 'godkjent') ? 'approved' : 
-                   activities.some((a: any) => a.tripletex_synced_at) ? 'sent' : 'draft') : 
-                  'missing'
-              });
-            });
-          } else {
-            // Create new entry
-            entries.push({
-              id: `new-${employee.id}-${dateKey}`,
-              date: dateKey,
-              person: employee,
-              project: null,
-              activities: [],
-              totalHours: 0,
-              status: 'missing'
-            });
-          }
-        });
-      });
-
-      setStaffingData(entries);
-    } catch (error) {
-      console.error('Error loading staffing data:', error);
-      toast({
-        title: "Feil ved lasting av bemanningsdata",
-        description: "Kunne ikke laste bemanningsliste.",
-        variant: "destructive"
-      });
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [profile?.org_id, allDates, toDateKey, toast]);
+  // MIGRATED TO REACT QUERY: loadStaffingData function removed
+  // Now using: useStaffingData() hook + useEffect for data transformation
 
   const loadFreeLines = useCallback(async () => {
     if (!profile?.org_id) return;
@@ -568,11 +478,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
   useEffect(() => {
     if (profile) {
-      loadStaffingData();
       loadCalendarDays();
       loadFreeLines();
       // MIGRATED: loadEmployees() - now handled by useEmployees() hook
       // MIGRATED: loadProjectColors() - now handled by useProjectColors() hook
+      // MIGRATED: loadStaffingData() - now handled by useStaffingData() hook + useEffect
       setInitialized(true);
     } else {
       setLoading(false);
@@ -580,7 +490,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         setInitialized(true);
       }
     }
-  }, [profile, startWeek, startYear, weeksToShow, loadStaffingData, loadCalendarDays, loadFreeLines, initialized]);
+  }, [profile, startWeek, startYear, weeksToShow, loadCalendarDays, loadFreeLines, initialized]);
 
 
   // Optimistic update helpers
@@ -1823,7 +1733,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   };
 
   // Show loading if any critical data is still loading
-  const isLoadingCriticalData = profileLoading || employeesLoading || projectsLoading || projectColorsLoading;
+  const isLoadingCriticalData = profileLoading || employeesLoading || projectsLoading || projectColorsLoading || staffingDataLoading;
   
   if (isLoadingCriticalData) {
     return (
