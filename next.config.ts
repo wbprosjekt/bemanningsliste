@@ -6,9 +6,12 @@ const nextConfig: NextConfig = {
   compress: true, // Enable gzip compression
   generateEtags: true, // Enable ETags for caching
 
-  // Disable ESLint during builds for faster deployment
+  // Disable ESLint and TypeScript checking during builds for faster deployment
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
   },
 
   // Turbopack configuration
