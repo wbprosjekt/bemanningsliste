@@ -1219,6 +1219,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         } else if (message.includes('period is closed') || message.includes('låst')) {
           errorTitle = "Periode er låst";
           errorMessage = "Perioden er låst i Tripletex. Kontakt lønn for å åpne perioden.";
+        } else if (message.includes('closed') || message.includes('avsluttet') || message.includes('project is closed') || message.includes('lukket')) {
+          errorTitle = "Prosjekt avsluttet";
+          errorMessage = "Prosjektet er avsluttet i Tripletex og kan ikke motta nye timer. Kontakt administrator hvis dette er feil.";
         } else {
           errorMessage = error.message;
         }
@@ -1712,6 +1715,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           if (error.includes('employee_not_participant')) return 'Ansatt ikke deltaker';
           if (error.includes('http 429') || error.includes('rate limit')) return 'Rate limiting';
           if (error.includes('period is closed') || error.includes('låst')) return 'Periode låst';
+          if (error.includes('closed') || error.includes('avsluttet') || error.includes('project is closed') || error.includes('lukket')) return 'Prosjekt avsluttet';
           return 'Ukjent feil';
         }))];
         
