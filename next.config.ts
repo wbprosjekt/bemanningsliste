@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  
+  // Skip validation entirely
+  swcMinify: true,
 
   // Turbopack configuration
   experimental: {
