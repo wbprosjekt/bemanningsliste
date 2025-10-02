@@ -723,14 +723,7 @@ const MinUke = () => {
                 variant="outline" 
                 size="sm" 
                 className="text-xs h-10"
-                onClick={() => {
-                  if (weeklySummary) {
-                    toast({
-                      title: "Ukessammendrag",
-                      description: `Du har ført ${formatTimeValue(weeklySummary.totalHours)} av ${formatTimeValue(weeklySummary.totalExpected)} timer (${weeklySummary.completionPercentage}% fullført)`,
-                    });
-                  }
-                }}
+                onClick={() => router.push(`/min/uke/${currentYear}/${currentWeek}/oversikt`)}
               >
                 <BarChart3 className="h-3 w-3 mr-1" />
                 Ukeoversikt
