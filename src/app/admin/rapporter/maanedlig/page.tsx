@@ -145,7 +145,10 @@ const MonthlyReportPage = () => {
       //   throw new Error('Insufficient permissions. Only administrators and managers can access reports.');
       // }
 
-      setProfile(profileData);
+      setProfile({
+        ...profileData,
+        role: profileData.role || 'user'
+      });
 
       // Load employees for the organization
       const { data: employeesData, error: employeesError } = await supabase
