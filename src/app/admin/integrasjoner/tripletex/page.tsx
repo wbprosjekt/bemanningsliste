@@ -24,6 +24,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import OnboardingDialog from "@/components/OnboardingDialog";
+import { TripletexRateLimiter } from "@/lib/tripletexRateLimiter";
 
 interface Profile {
   id: string;
@@ -205,9 +206,35 @@ const TripletexIntegrationPage = () => {
       activities: "aktiviteter",
     } as const;
 
+    const rateLimitKey = `tripletex_sync_${type}_${profile?.org_id}`;
+    
+    // Check cooldown before sync
+    if (TripletexRateLimiter.isLimited(rateLimitKey)) {
+      const countdown = TripletexRateLimiter.getCountdown(rateLimitKey);
+      toast({
+        title: "Tripletex rate limit",
+        description: `Må vente ${countdown} sekunder før synkronisering av ${titleMap[type]}.`,
+        variant: "destructive",
+        duration: 5000
+      });
+      return;
+    }
+
     setLoadingState(type, true);
     try {
       const result = await callTripletexAPI(actionMap[type]);
+
+      // Check for retryInfo
+      if (result?.retryInfo) {
+        TripletexRateLimiter.setLimit(rateLimitKey, result.retryInfo.seconds);
+        toast({
+          title: "Tripletex rate limit nådd",
+          description: `Må vente ${result.retryInfo.seconds} sekunder før neste synkronisering. Prøv igjen kl. ${new Date(result.retryInfo.iso).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}.`,
+          variant: "destructive",
+          duration: 10000
+        });
+        return;
+      }
 
       if (result?.success) {
         toast({
@@ -575,15 +602,33 @@ const TripletexIntegrationPage = () => {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Button onClick={() => syncData("employees")} disabled={loading.employees} className="w-full" variant="outline">
+                <Button 
+                  onClick={() => syncData("employees")} 
+                  disabled={loading.employees || TripletexRateLimiter.isLimited(`tripletex_sync_employees_${profile?.org_id}`)} 
+                  className="w-full" 
+                  variant="outline"
+                  title={TripletexRateLimiter.isLimited(`tripletex_sync_employees_${profile?.org_id}`)
+                    ? `Rate limit - vent ${TripletexRateLimiter.getCountdown(`tripletex_sync_employees_${profile?.org_id}`)}s`
+                    : "Synk ansatte fra Tripletex"}
+                >
                   {loading.employees ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
-                  Synk ansatte
+                  {TripletexRateLimiter.isLimited(`tripletex_sync_employees_${profile?.org_id}`)
+                    ? `Vent ${TripletexRateLimiter.getCountdown(`tripletex_sync_employees_${profile?.org_id}`)}s`
+                    : 'Synk ansatte'}
                 </Button>
                 <p className="text-xs text-muted-foreground">Henter ansatte fra Tripletex og lagrer i lokal cache.</p>
               </div>
 
               <div className="space-y-2">
-                <Button onClick={() => syncData("projects")} disabled={loading.projects} className="w-full" variant="outline">
+                <Button 
+                  onClick={() => syncData("projects")} 
+                  disabled={loading.projects || TripletexRateLimiter.isLimited(`tripletex_sync_projects_${profile?.org_id}`)} 
+                  className="w-full" 
+                  variant="outline"
+                  title={TripletexRateLimiter.isLimited(`tripletex_sync_projects_${profile?.org_id}`)
+                    ? `Rate limit - vent ${TripletexRateLimiter.getCountdown(`tripletex_sync_projects_${profile?.org_id}`)}s`
+                    : "Synk prosjekter fra Tripletex"}
+                >
                   {loading.projects ? (
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -595,13 +640,23 @@ const TripletexIntegrationPage = () => {
               </div>
 
               <div className="space-y-2">
-                <Button onClick={() => syncData("activities")} disabled={loading.activities} className="w-full" variant="outline">
+                <Button 
+                  onClick={() => syncData("activities")} 
+                  disabled={loading.activities || TripletexRateLimiter.isLimited(`tripletex_sync_activities_${profile?.org_id}`)} 
+                  className="w-full" 
+                  variant="outline"
+                  title={TripletexRateLimiter.isLimited(`tripletex_sync_activities_${profile?.org_id}`)
+                    ? `Rate limit - vent ${TripletexRateLimiter.getCountdown(`tripletex_sync_activities_${profile?.org_id}`)}s`
+                    : "Synk aktiviteter fra Tripletex"}
+                >
                   {loading.activities ? (
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Activity className="mr-2 h-4 w-4" />
                   )}
-                  Synk aktiviteter
+                  {TripletexRateLimiter.isLimited(`tripletex_sync_activities_${profile?.org_id}`)
+                    ? `Vent ${TripletexRateLimiter.getCountdown(`tripletex_sync_activities_${profile?.org_id}`)}s`
+                    : 'Synk aktiviteter'}
                 </Button>
                 <p className="text-xs text-muted-foreground">Henter aktiviteter fra Tripletex og lagrer i lokal cache.</p>
               </div>

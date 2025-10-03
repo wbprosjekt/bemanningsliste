@@ -1844,14 +1844,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   };
 
   const sendAllToTripletexForWeek = async (weekNumber: number, year: number) => {
-    const rateLimitKey = `tripletex_send_week_${profile?.org_id}`;
+    // Use same rate limit key as sendToTripletex for consistency
+    const rateLimitKey = `tripletex_send_${profile?.org_id}`;
     
     // Check cooldown before batch send
     if (TripletexRateLimiter.isLimited(rateLimitKey)) {
       const countdown = TripletexRateLimiter.getCountdown(rateLimitKey);
       toast({
         title: "Tripletex rate limit",
-        description: `Må vente ${countdown} sekunder før batch-sending til Tripletex.`,
+        description: `Må vente ${countdown} sekunder før sending til Tripletex.`,
         variant: "destructive",
         duration: 5000
       });
@@ -2218,10 +2219,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 variant="default" 
                                 className="bg-blue-600 hover:bg-blue-700 text-xs px-1.5 py-0.5 h-5"
                                 onClick={() => sendAllToTripletexForWeek(safeWeek.week, safeWeek.year)}
-                                title="Send alle godkjente timer til Tripletex"
+                                title={TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`)
+                                  ? `Rate limit - vent ${TripletexRateLimiter.getCountdown(`tripletex_send_${profile?.org_id}`)}s`
+                                  : "Send alle godkjente timer til Tripletex"}
+                                disabled={TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`)}
                               >
                                 <Send className="h-3 w-3 mr-0.5" />
-                                Tripletex
+                                {TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`)
+                                  ? `Vent ${TripletexRateLimiter.getCountdown(`tripletex_send_${profile?.org_id}`)}s`
+                                  : 'Tripletex'}
                               </Button>
                               <Button 
                                 size="sm" 
@@ -2448,9 +2454,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                             e.stopPropagation();
                                             sendToTripletex(entry);
                                           }}
-                                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20"
-                                          title="Send til Tripletex"
-                                          disabled={sendingToTripletex.has(entry.id)}
+                                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          title={TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`) 
+                                            ? `Rate limit - vent ${TripletexRateLimiter.getCountdown(`tripletex_send_${profile?.org_id}`)}s` 
+                                            : "Send til Tripletex"}
+                                          disabled={sendingToTripletex.has(entry.id) || TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`)}
                                         >
                                           <Send className="h-2 w-2" />
                                         </button>
