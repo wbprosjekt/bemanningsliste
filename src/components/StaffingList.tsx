@@ -24,6 +24,7 @@ import {
   batchUpdateTimeEntries,
   QueryCache
 } from '@/lib/databaseOptimized';
+import { TripletexRateLimiter } from '@/lib/tripletexRateLimiter';
 
 interface StaffingEntry {
   id: string;
@@ -1153,6 +1154,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   }, [profile?.org_id, loadFreeLines, toast]);
 
   const sendToTripletex = async (entry: StaffingEntry) => {
+    const rateLimitKey = `tripletex_send_${profile?.org_id}`;
+    
+    // Check if we're in cooldown period
+    if (TripletexRateLimiter.isLimited(rateLimitKey)) {
+      const countdown = TripletexRateLimiter.getCountdown(rateLimitKey);
+      toast({
+        title: "Tripletex rate limit",
+        description: `Må vente ${countdown} sekunder før neste sending til Tripletex.`,
+        variant: "destructive",
+        duration: 5000
+      });
+      return;
+    }
+    
     if (!entry.project?.tripletex_project_id) {
       toast({
         title: "Kan ikke sende til Tripletex",
@@ -1243,6 +1258,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         if (error) {
           console.error('Supabase function error:', error);
           throw new Error(error instanceof Error ? error.message : 'Failed to send to Tripletex');
+        }
+
+        // Check if we got retryInfo (rate limited)
+        if (data?.retryInfo) {
+          TripletexRateLimiter.setLimit(rateLimitKey, data.retryInfo.seconds);
+          
+          toast({
+            title: "Tripletex rate limit nådd",
+            description: `Systemet må vente ${data.retryInfo.seconds} sekunder. Prøv igjen kl. ${new Date(data.retryInfo.iso).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}.`,
+            variant: "destructive",
+            duration: 10000
+          });
+          
+          throw new Error('Rate limit - cooldown set');
         }
 
         if (!data?.success) {
@@ -1815,6 +1844,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   };
 
   const sendAllToTripletexForWeek = async (weekNumber: number, year: number) => {
+    const rateLimitKey = `tripletex_send_week_${profile?.org_id}`;
+    
+    // Check cooldown before batch send
+    if (TripletexRateLimiter.isLimited(rateLimitKey)) {
+      const countdown = TripletexRateLimiter.getCountdown(rateLimitKey);
+      toast({
+        title: "Tripletex rate limit",
+        description: `Må vente ${countdown} sekunder før batch-sending til Tripletex.`,
+        variant: "destructive",
+        duration: 5000
+      });
+      return;
+    }
+    
     try {
       // Get dates for the specific week
       const weekData = multiWeekData.find(w => w.week === weekNumber && w.year === year);
