@@ -1236,6 +1236,21 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       // Calculate total hours sent
       const totalHours = entry.activities.reduce((sum, activity) => sum + activity.timer, 0);
       
+      // Optimistic update: Mark activities as synced immediately
+      const now = new Date().toISOString();
+      updateStaffingDataOptimistically(prev => prev.map(e => {
+        if (e.id !== entry.id) return e;
+        
+        return {
+          ...e,
+          activities: e.activities.map(activity => ({
+            ...activity,
+            tripletex_synced_at: now,
+            status: 'sendt' as const
+          }))
+        };
+      }));
+      
       toast({
         title: "Timer sendt til Tripletex",
         description: `${formatTimeValue(totalHours)} timer (${entry.activities.length} ${entry.activities.length === 1 ? 'aktivitet' : 'aktiviteter'}) sendt for ${entry.project.project_name}`
@@ -1440,6 +1455,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         throw new Error(data?.error || 'Failed to unapprove entries');
       }
 
+      // Optimistic update: Update local state immediately
+      updateStaffingDataOptimistically(prev => prev.map(entry => {
+        if (!entryIds.includes(entry.id)) return entry;
+        
+        return {
+          ...entry,
+          activities: entry.activities.map(activity => 
+            timerIds.includes(activity.id)
+              ? { ...activity, status: 'utkast' as const }
+              : activity
+          )
+        };
+      }));
+
       toast({
         title: "Godkjenning trukket tilbake",
         description: `${entryIds.length} oppføringer satt tilbake til utkast`
@@ -1482,6 +1511,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         .in('id', timerIds);
 
       if (error) throw error;
+
+      // Optimistic update: Update local state immediately for instant UI feedback
+      updateStaffingDataOptimistically(prev => prev.map(entry => {
+        if (!entryIds.includes(entry.id)) return entry;
+        
+        return {
+          ...entry,
+          activities: entry.activities.map(activity => 
+            timerIds.includes(activity.id)
+              ? { ...activity, status: 'godkjent' as const }
+              : activity
+          )
+        };
+      }));
 
       toast({
         title: "Timer godkjent",
@@ -1586,6 +1629,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         .in('id', timerIds);
 
       if (error) throw error;
+
+      // Optimistic update: Update local state immediately for instant UI feedback
+      updateStaffingDataOptimistically(prev => prev.map(entry => {
+        if (!weekDateKeys.includes(entry.date)) return entry;
+        
+        return {
+          ...entry,
+          activities: entry.activities.map(activity => 
+            timerIds.includes(activity.id)
+              ? { ...activity, status: 'godkjent' as const }
+              : activity
+          )
+        };
+      }));
 
       toast({
         title: "Alle timer godkjent",
