@@ -12,6 +12,7 @@ import { formatTimeValue, validateTimeStep } from '@/lib/displayNames';
 import { validateHours, validateUUID, validateStatus, validateFreeLineText, ValidationError } from '@/lib/validation';
 import { useCSRFToken } from '@/lib/csrf';
 import { useTimeEntryMutation, useDeleteTimeEntry } from '@/hooks/useStaffingData';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface TimeEntryProps {
   vaktId: string;
@@ -46,6 +47,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { addCSRFHeader } = useCSRFToken();
+  const queryClient = useQueryClient();
   
   // React Query mutations
   const timeEntryMutation = useTimeEntryMutation();
@@ -488,6 +490,13 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
       },
       {
         onSuccess: () => {
+          // Optimistic update: Invalidate ALL staffing queries immediately
+          // This ensures admin/bemanningsliste gets fresh data when navigating from min/uke
+          queryClient.invalidateQueries({ queryKey: ['staffing'] });
+          
+          // Force immediate refetch for instant cross-page updates
+          queryClient.refetchQueries({ queryKey: ['staffing', orgId] });
+          
           toast({
             title: "Lagret",
             description: `Timeføring lagret${totalOvertimeTimer > 0 ? ` med ${formatTimeValue(totalOvertimeTimer)} overtid` : ''}.`
