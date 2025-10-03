@@ -163,10 +163,10 @@ export default function UkeoversiktPage() {
           ? colorMap.get(project.tripletex_project_id) 
           : undefined;
 
-        // Sum ALL approved timer entries for this vakt (normal + overtime)
-        const approvedTimers = (vakt.vakt_timer || []).filter((timer: any) => timer.status === 'godkjent');
-        const totalHours = approvedTimers.reduce((sum: number, timer: any) => sum + (timer.timer || 0), 0);
-        const hasOvertime = approvedTimers.some((timer: any) => timer.is_overtime);
+        // Sum ALL timer entries for this vakt (normal + overtime, all statuses)
+        const allTimers = vakt.vakt_timer || [];
+        const totalHours = allTimers.reduce((sum: number, timer: any) => sum + (timer.timer || 0), 0);
+        const hasOvertime = allTimers.some((timer: any) => timer.is_overtime);
 
         total += totalHours;
 
