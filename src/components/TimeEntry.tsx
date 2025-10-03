@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Clock, MessageSquare, Paperclip, ChevronUp, ChevronDown } from 'lucide-react';
+import { Clock, MessageSquare, Paperclip, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, validateTimeStep } from '@/lib/displayNames';
@@ -60,6 +60,8 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const [overtime50Hours, setOvertime50Hours] = useState(0);
   const [overtime50Minutes, setOvertime50Minutes] = useState(0);
   const [showOvertime, setShowOvertime] = useState(false); // Collapsed by default
+  const [isLocked, setIsLocked] = useState(false);
+  const [tripletexSynced, setTripletexSynced] = useState(false);
 
   // Calculate total timer value from hours and minutes
   const timer = hours + (minutes / 60);
@@ -176,12 +178,21 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
       try {
         const { data, error } = await supabase
           .from('vakt_timer')
-          .select('timer, is_overtime, lonnstype, aktivitet_id, notat, status, original_timer, original_aktivitet_id, original_notat, original_status')
+          .select('timer, is_overtime, lonnstype, aktivitet_id, notat, status, original_timer, original_aktivitet_id, original_notat, original_status, tripletex_synced_at')
           .eq('vakt_id', vaktId);
 
         if (error) throw error;
 
         if (data && data.length > 0) {
+          // Check if ANY entry is locked (godkjent, sendt, or synced to Tripletex)
+          const anyLocked = data.some(entry => 
+            entry.status === 'godkjent' || 
+            entry.status === 'sendt' || 
+            entry.tripletex_synced_at !== null
+          );
+          setIsLocked(anyLocked);
+          setTripletexSynced(data.some(entry => entry.tripletex_synced_at !== null));
+          
           // Separate regular time and overtime
           let totalRegularTime = 0;
           let totalOvertime50 = 0;
@@ -520,6 +531,23 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Locked Message */}
+        {isLocked && (
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center gap-2 text-yellow-800">
+              <AlertCircle className="h-5 w-5" />
+              <div>
+                <p className="font-semibold">Timer er godkjent og kan ikke endres</p>
+                <p className="text-sm mt-1">
+                  {tripletexSynced 
+                    ? 'Timene er sendt til Tripletex og kan ikke redigeres.' 
+                    : 'Timene er godkjent av admin og kan ikke redigeres.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-3">
           <Label>Timer</Label>
           <div className="flex items-center justify-center gap-6 p-4 border rounded-lg bg-muted/20">
@@ -531,7 +559,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                 size="lg"
                 className="h-12 w-16"
                 onClick={() => adjustHours(1)}
-                disabled={hours >= 16}
+                disabled={hours >= 16 || isLocked}
               >
                 <ChevronUp className="h-6 w-6" />
               </Button>
@@ -545,7 +573,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                 size="lg"
                 className="h-12 w-16"
                 onClick={() => adjustHours(-1)}
-                disabled={hours <= 0}
+                disabled={hours <= 0 || isLocked}
               >
                 <ChevronDown className="h-6 w-6" />
               </Button>
@@ -559,7 +587,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                 size="lg"
                 className="h-12 w-16"
                 onClick={() => adjustMinutes(15)}
-                disabled={minutes >= 45}
+                disabled={minutes >= 45 || isLocked}
               >
                 <ChevronUp className="h-6 w-6" />
               </Button>
@@ -573,7 +601,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                 size="lg"
                 className="h-12 w-16"
                 onClick={() => adjustMinutes(-15)}
-                disabled={minutes <= 0}
+                disabled={minutes <= 0 || isLocked}
               >
                 <ChevronDown className="h-6 w-6" />
               </Button>
@@ -581,33 +609,35 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
           </div>
 
           {/* Quick Select Buttons */}
-          <div className="space-y-2">
-            <div className="text-xs text-muted-foreground text-center">Hurtigvalg:</div>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {[
-                { label: '0.5t', hours: 0, minutes: 30 },
-                { label: '1t', hours: 1, minutes: 0 },
-                { label: '2t', hours: 2, minutes: 0 },
-                { label: '4t', hours: 4, minutes: 0 },
-                { label: '7.5t', hours: 7, minutes: 30 },
-                { label: '8t', hours: 8, minutes: 0 },
-              ].map((quick) => (
-                <Button
-                  key={quick.label}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setHours(quick.hours);
-                    setMinutes(quick.minutes);
-                  }}
-                  className="bg-blue-600 text-white hover:bg-blue-700 border-0 min-w-[60px]"
-                >
-                  {quick.label}
-                </Button>
-              ))}
+          {!isLocked && (
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground text-center">Hurtigvalg:</div>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {[
+                  { label: '0.5t', hours: 0, minutes: 30 },
+                  { label: '1t', hours: 1, minutes: 0 },
+                  { label: '2t', hours: 2, minutes: 0 },
+                  { label: '4t', hours: 4, minutes: 0 },
+                  { label: '7.5t', hours: 7, minutes: 30 },
+                  { label: '8t', hours: 8, minutes: 0 },
+                ].map((quick) => (
+                  <Button
+                    key={quick.label}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setHours(quick.hours);
+                      setMinutes(quick.minutes);
+                    }}
+                    className="bg-blue-600 text-white hover:bg-blue-700 border-0 min-w-[60px]"
+                  >
+                    {quick.label}
+                  </Button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="text-center text-sm text-muted-foreground">
             Total: {formatTimeValue(timer)} timer
@@ -627,7 +657,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
               console.log('Activity selected:', value);
               setAktivitetId(value);
             }}
-            disabled={activities.length === 0}
+            disabled={activities.length === 0 || isLocked}
           >
             <SelectTrigger>
               <SelectValue placeholder={activities.length === 0 ? "Ingen aktiviteter tilgjengelig" : "Velg aktivitet"} />
@@ -660,6 +690,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
             variant="ghost"
             onClick={() => setShowOvertime(!showOvertime)}
             className="w-full h-12 justify-between px-4 hover:bg-gray-100 rounded-lg"
+            disabled={isLocked}
           >
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
@@ -682,7 +713,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                       size="lg"
                       className="h-12 w-16"
                       onClick={() => adjustOvertime100Hours(1)}
-                      disabled={overtime100Hours >= 10}
+                      disabled={overtime100Hours >= 10 || isLocked}
                     >
                       <ChevronUp className="h-6 w-6" />
                     </Button>
@@ -696,7 +727,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                       size="lg"
                       className="h-12 w-16"
                       onClick={() => adjustOvertime100Hours(-1)}
-                      disabled={overtime100Hours <= 0}
+                      disabled={overtime100Hours <= 0 || isLocked}
                     >
                       <ChevronDown className="h-6 w-6" />
                     </Button>
@@ -710,7 +741,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                       size="lg"
                       className="h-12 w-16"
                       onClick={() => adjustOvertime100Minutes(15)}
-                      disabled={overtime100Minutes >= 45}
+                      disabled={overtime100Minutes >= 45 || isLocked}
                     >
                       <ChevronUp className="h-6 w-6" />
                     </Button>
@@ -724,7 +755,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                       size="lg"
                       className="h-12 w-16"
                       onClick={() => adjustOvertime100Minutes(-15)}
-                      disabled={overtime100Minutes <= 0}
+                      disabled={overtime100Minutes <= 0 || isLocked}
                     >
                       <ChevronDown className="h-6 w-6" />
                     </Button>
@@ -744,7 +775,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                       size="lg"
                       className="h-12 w-16"
                       onClick={() => adjustOvertime50Hours(1)}
-                      disabled={overtime50Hours >= 10}
+                      disabled={overtime50Hours >= 10 || isLocked}
                     >
                       <ChevronUp className="h-6 w-6" />
                     </Button>
@@ -758,7 +789,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                       size="lg"
                       className="h-12 w-16"
                       onClick={() => adjustOvertime50Hours(-1)}
-                      disabled={overtime50Hours <= 0}
+                      disabled={overtime50Hours <= 0 || isLocked}
                     >
                       <ChevronDown className="h-6 w-6" />
                     </Button>
@@ -772,7 +803,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                       size="lg"
                       className="h-12 w-16"
                       onClick={() => adjustOvertime50Minutes(15)}
-                      disabled={overtime50Minutes >= 45}
+                      disabled={overtime50Minutes >= 45 || isLocked}
                     >
                       <ChevronUp className="h-6 w-6" />
                     </Button>
@@ -786,7 +817,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
                       size="lg"
                       className="h-12 w-16"
                       onClick={() => adjustOvertime50Minutes(-15)}
-                      disabled={overtime50Minutes <= 0}
+                      disabled={overtime50Minutes <= 0 || isLocked}
                     >
                       <ChevronDown className="h-6 w-6" />
                     </Button>
@@ -812,23 +843,28 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
             onChange={(e) => setNotat(e.target.value)}
             placeholder="Valgfritt notat..."
             rows={3}
+            disabled={isLocked}
           />
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            onClick={() => handleSave('utkast')}
-            disabled={isLoading}
-            variant="outline"
-          >
-            {isLoading && status === 'utkast' ? 'Lagrer...' : 'Lagre utkast'}
-          </Button>
-          <Button
-            onClick={() => handleSave('sendt')}
-            disabled={isLoading}
-          >
-            {isLoading && status === 'sendt' ? 'Sender...' : 'Send til godkjenning'}
-          </Button>
+        <div className="flex gap-2 justify-between">
+          {!isLocked && (
+            <div className="flex gap-2">
+              <Button
+                onClick={() => handleSave('utkast')}
+                disabled={isLoading}
+                variant="outline"
+              >
+                {isLoading && status === 'utkast' ? 'Lagrer...' : 'Lagre utkast'}
+              </Button>
+              <Button
+                onClick={() => handleSave('sendt')}
+                disabled={isLoading}
+              >
+                {isLoading && status === 'sendt' ? 'Sender...' : 'Send til godkjenning'}
+              </Button>
+            </div>
+          )}
           {existingEntry && (
             <div className="flex gap-1">
               <Button variant="outline" size="icon">

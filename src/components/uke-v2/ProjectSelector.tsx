@@ -44,6 +44,7 @@ export default function ProjectSelector({ open, onClose, onSelect, orgId }: Proj
         .from('ttx_project_cache')
         .select('*')
         .eq('org_id', orgId)
+        .eq('is_active', true)
         .order('project_name');
 
       if (error) throw error;
