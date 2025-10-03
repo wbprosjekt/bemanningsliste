@@ -1495,32 +1495,16 @@ Deno.serve(async (req) => {
           }
 
         if (deleteResponse.success && deleteVaktTimerId) {
-          // Get original values before restoring
-          const { data: originalValues, error: fetchError } = await supabase
-            .from('vakt_timer')
-            .select('original_timer, original_aktivitet_id, original_notat, original_status')
-            .eq('id', deleteVaktTimerId)
-            .single();
-
-          if (fetchError) {
-            console.error('Failed to fetch original values:', fetchError);
-            return { 
-              success: true,
-              warning: 'Entry deleted from Tripletex but could not restore original values'
-            };
-          }
-
-          // Update local entry to mark as deleted/reset sync status and restore original values
+          // Update local entry to reset sync status only
+          // Keep current timer values (don't restore to original)
           const { error: updateError } = await supabase
             .from('vakt_timer')
             .update({
               tripletex_entry_id: null,
               tripletex_synced_at: null,
               sync_error: null,
-              status: originalValues?.original_status || 'utkast',
-              timer: originalValues?.original_timer || null,
-              aktivitet_id: originalValues?.original_aktivitet_id || null,
-              notat: originalValues?.original_notat || null
+              status: 'utkast'  // Always set to draft after recall (must be re-approved)
+              // Keep current timer, aktivitet_id, notat values as-is
             })
             .eq('id', deleteVaktTimerId);
 
