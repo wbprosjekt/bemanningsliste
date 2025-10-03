@@ -1192,11 +1192,39 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       return;
     }
 
+    // LAG 1: Filter out activities that are already synced to Tripletex
+    const unsyncedActivities = entry.activities.filter(activity => 
+      !activity.tripletex_synced_at && !activity.tripletex_entry_id
+    );
+
+    if (unsyncedActivities.length === 0) {
+      toast({
+        title: "Allerede synkronisert",
+        description: "Alle timer er allerede sendt til Tripletex.",
+      });
+      setSendingToTripletex(prev => {
+        const next = new Set(prev);
+        next.delete(entry.id);
+        return next;
+      });
+      return;
+    }
+
+    // Log filtering results for debugging
+    if (entry.activities.length > unsyncedActivities.length) {
+      console.log('Tripletex send: Filtering out already synced activities', {
+        total: entry.activities.length,
+        unsynced: unsyncedActivities.length,
+        skipped: entry.activities.length - unsyncedActivities.length,
+        entry: entry.id
+      });
+    }
+
     setSendingToTripletex(prev => new Set(prev).add(entry.id));
 
     try {
-      // Send all activities for this entry in parallel (much faster!)
-      const activityPromises = entry.activities.map(async (activity) => {
+      // Send ONLY unsynced activities in parallel
+      const activityPromises = unsyncedActivities.map(async (activity) => {
         const { data, error } = await supabase.functions.invoke('tripletex-api', {
           body: {
             action: 'send_timesheet_entry',
@@ -1233,27 +1261,33 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       // Wait for all activities to be sent
       await Promise.all(activityPromises);
 
-      // Calculate total hours sent
-      const totalHours = entry.activities.reduce((sum, activity) => sum + activity.timer, 0);
+      // Calculate total hours sent (only the ones we just sent)
+      const totalHours = unsyncedActivities.reduce((sum, activity) => sum + activity.timer, 0);
       
-      // Optimistic update: Mark activities as synced immediately
+      // Optimistic update: Mark ONLY the unsynced activities as synced immediately
       const now = new Date().toISOString();
+      const unsyncedIds = unsyncedActivities.map(a => a.id);
+      
       updateStaffingDataOptimistically(prev => prev.map(e => {
         if (e.id !== entry.id) return e;
         
         return {
           ...e,
-          activities: e.activities.map(activity => ({
-            ...activity,
-            tripletex_synced_at: now,
-            status: 'sendt' as const
-          }))
+          activities: e.activities.map(activity => 
+            unsyncedIds.includes(activity.id)
+              ? {
+                  ...activity,
+                  tripletex_synced_at: now,
+                  status: 'sendt' as const
+                }
+              : activity // Keep already synced as is
+          )
         };
       }));
       
       toast({
         title: "Timer sendt til Tripletex",
-        description: `${formatTimeValue(totalHours)} timer (${entry.activities.length} ${entry.activities.length === 1 ? 'aktivitet' : 'aktiviteter'}) sendt for ${entry.project.project_name}`
+        description: `${formatTimeValue(totalHours)} timer (${unsyncedActivities.length} ${unsyncedActivities.length === 1 ? 'aktivitet' : 'aktiviteter'}) sendt for ${entry.project.project_name}`
       });
 
       revalidateInBackground(); // Refresh to show updated sync status
@@ -1262,6 +1296,59 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       
       let errorMessage = "Ukjent feil oppstod";
       let errorTitle = "Feil ved sending til Tripletex";
+      
+      // LAG 2: Graceful handling of duplicate entry error
+      if (error instanceof Error && error.message.toLowerCase().includes('allerede registrert timer')) {
+        console.warn('Duplicate timesheet entry detected, updating local status', {
+          entry: entry.id,
+          activities: entry.activities.map(a => a.id),
+          message: error.message
+        });
+        
+        // Tripletex HAS these entries, even if our DB doesn't know
+        // Mark as synced to prevent future duplicate attempts
+        try {
+          const now = new Date().toISOString();
+          const activityIds = entry.activities.map(a => a.id);
+          
+          await supabase
+            .from('vakt_timer')
+            .update({ 
+              tripletex_synced_at: now,
+              status: 'sendt'
+            })
+            .in('id', activityIds);
+          
+          // Optimistic update UI
+          updateStaffingDataOptimistically(prev => prev.map(e => {
+            if (e.id !== entry.id) return e;
+            return {
+              ...e,
+              activities: e.activities.map(a => ({
+                ...a,
+                tripletex_synced_at: now,
+                status: 'sendt' as const
+              }))
+            };
+          }));
+          
+          toast({
+            title: "Timer allerede i Tripletex",
+            description: "Timene var allerede registrert i Tripletex. Status oppdatert.",
+          });
+          
+          setSendingToTripletex(prev => {
+            const next = new Set(prev);
+            next.delete(entry.id);
+            return next;
+          });
+          
+          revalidateInBackground();
+          return; // Success case, not error
+        } catch (updateError) {
+          console.error('Failed to update sync status after duplicate detection:', updateError);
+        }
+      }
       
       if (error instanceof Error) {
         const message = error.message.toLowerCase();
@@ -1743,11 +1830,13 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       const weekDateKeys = weekData.dates.map(toDateKey).filter(Boolean);
       
       // Find all approved entries that haven't been sent yet
+      // LAG 1: Filter at week level - only entries with unsynced activities
       const entriesToSend = staffingData.filter(entry => 
         weekDateKeys.includes(entry.date) &&
         entry.activities.length > 0 &&
         entry.activities.every(a => a.status === 'godkjent') &&
-        !entry.activities.some(a => a.tripletex_synced_at)
+        // At least one activity must be unsynced
+        entry.activities.some(a => !a.tripletex_synced_at && !a.tripletex_entry_id)
       );
 
       if (entriesToSend.length === 0) {
