@@ -54,6 +54,15 @@ type LayoutConfig<Route extends LayoutRoutes = LayoutRoutes> = {
   type __Unused = __Check
 }
 
+// Validate ../../src/app/admin/integrasjoner/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/admin/integrasjoner">> = Specific
+  const handler = {} as typeof import("../../src/app/admin/integrasjoner/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/admin/integrasjoner/tripletex/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/admin/integrasjoner/tripletex">> = Specific
@@ -85,6 +94,15 @@ type LayoutConfig<Route extends LayoutRoutes = LayoutRoutes> = {
 {
   type __IsExpected<Specific extends AppPageConfig<"/auth">> = Specific
   const handler = {} as typeof import("../../src/app/auth/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/auth/reset-password/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/auth/reset-password">> = Specific
+  const handler = {} as typeof import("../../src/app/auth/reset-password/page.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

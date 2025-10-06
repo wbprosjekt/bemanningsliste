@@ -32,6 +32,7 @@ import {
   Eye,
   EyeOff,
   UserCheck,
+  Key,
 } from "lucide-react";
 import { getWeekNumber } from "@/lib/displayNames";
 import OnboardingDialog from "@/components/OnboardingDialog";
@@ -258,6 +259,27 @@ const AdminBrukerePage = () => {
       toast({
         title: "Feil ved endring av brukerstatus",
         description: error instanceof Error ? error.message : "En uventet feil oppstod",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetUserPassword = async (email: string, userName: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "✉️ Passord-reset sendt",
+        description: `Reset-lenke er sendt til ${email}. ${userName} kan nå endre passordet sitt.`,
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Feil ved sending av reset-lenke",
+        description: error instanceof Error ? error.message : "Kunne ikke sende reset-lenke.",
         variant: "destructive",
       });
     }
@@ -570,8 +592,30 @@ const AdminBrukerePage = () => {
                             size="sm"
                             variant="outline"
                             onClick={() => toggleUserStatus(userProfile.id, userProfile.role !== "inactive")}
+                            title={userProfile.role !== "inactive" ? "Deaktiver bruker" : "Aktiver bruker"}
                           >
                             {userProfile.role !== "inactive" ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const email = userProfile.person?.epost || userProfile.user_email;
+                              const name = userProfile.display_name || "Brukeren";
+                              if (email && confirm(`Send passord-reset e-post til ${email}?`)) {
+                                resetUserPassword(email, name);
+                              } else if (!email) {
+                                toast({
+                                  title: "Mangler e-post",
+                                  description: "Kan ikke sende reset-lenke uten e-postadresse.",
+                                  variant: "destructive"
+                                });
+                              }
+                            }}
+                            disabled={!userProfile.person?.epost && !userProfile.user_email}
+                            title="Send passord-reset e-post"
+                          >
+                            <Key className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"
