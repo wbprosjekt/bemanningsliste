@@ -9,6 +9,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/hooks/useAuth";
 import NavigationWrapper from "@/components/NavigationWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import OfflineBanner from "@/components/OfflineBanner";
 
 interface RootProvidersProps {
   children: React.ReactNode;
@@ -51,6 +52,7 @@ export default function RootProviders({ children }: RootProvidersProps) {
         <AuthProvider>
           <TooltipProvider>
             <NavigationWrapper />
+            <OfflineBanner />
             <ShadcnToaster />
             <Sonner />
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}

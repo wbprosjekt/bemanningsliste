@@ -22,6 +22,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Home,
   Users,
   BarChart3,
@@ -29,6 +35,7 @@ import {
   User,
   LogOut,
   ChevronDown,
+  Menu,
 } from "lucide-react";
 
 interface AdminNavigationProps {
@@ -43,6 +50,7 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -210,17 +218,164 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={() => setMobileMenuOpen(true)}
                 className="text-gray-300 hover:bg-gray-700 hover:text-white"
               >
                 <span className="sr-only">Åpne meny</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
+                <Menu className="h-6 w-6" />
               </Button>
             </div>
           </div>
         </div>
       </nav>
+
+      {/* Mobile menu sheet */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+          <SheetHeader>
+            <SheetTitle>Meny</SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-4 mt-6">
+            {/* Main navigation */}
+            <Button
+              variant={pathname === "/" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                router.push("/");
+                setMobileMenuOpen(false);
+              }}
+            >
+              <Home className="h-4 w-4 mr-2" />
+              Hjem
+            </Button>
+
+            <Button
+              variant={isActive("/admin/bemanningsliste") ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                router.push(`/admin/bemanningsliste/${getCurrentYear()}/${getCurrentWeek()}`);
+                setMobileMenuOpen(false);
+              }}
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Bemanningsliste
+            </Button>
+
+            <Button
+              variant={isActive("/admin/rapporter") ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                router.push("/admin/rapporter/maanedlig");
+                setMobileMenuOpen(false);
+              }}
+            >
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Rapporter
+            </Button>
+
+            {/* Admin submenu */}
+            <div className="border-t pt-4 mt-2">
+              <p className="text-sm font-semibold text-muted-foreground mb-2 px-2">Admin</p>
+              
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => {
+                  router.push("/admin/brukere");
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Brukere
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => {
+                  router.push("/admin/integrasjoner");
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Integrasjoner
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => {
+                  router.push("/admin/timer");
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Timer
+              </Button>
+            </div>
+
+            {/* User menu */}
+            <div className="border-t pt-4 mt-2">
+              <p className="text-sm font-semibold text-muted-foreground mb-2 px-2">
+                {profile?.fornavn || user?.email}
+              </p>
+              
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => {
+                  router.push("/min/profil");
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <User className="h-4 w-4 mr-2" />
+                Min profil
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => {
+                  router.push(`/min/uke/${getCurrentYear()}/${getCurrentWeek()}`);
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Min uke
+              </Button>
+            </div>
+
+            {/* Logout */}
+            <div className="border-t pt-4 mt-2">
+              <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logg ut
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Logg ut?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Er du sikker på at du vil logge ut av systemet?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleLogout} className="bg-red-600 hover:bg-red-700">
+                      Logg ut
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

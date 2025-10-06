@@ -24,7 +24,6 @@ import {
   batchUpdateTimeEntries,
   QueryCache
 } from '@/lib/databaseOptimized';
-import { TripletexRateLimiter } from '@/lib/tripletexRateLimiter';
 
 interface StaffingEntry {
   id: string;
@@ -106,6 +105,7 @@ interface TimeEntry {
   aktivitet_id?: string;
   notat?: string;
   status: string;
+  tripletex_synced_at?: string | null;
 }
 
 interface VaktTimer {
@@ -1154,20 +1154,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   }, [profile?.org_id, loadFreeLines, toast]);
 
   const sendToTripletex = async (entry: StaffingEntry) => {
-    const rateLimitKey = `tripletex_send_${profile?.org_id}`;
-    
-    // Check if we're in cooldown period
-    if (TripletexRateLimiter.isLimited(rateLimitKey)) {
-      const countdown = TripletexRateLimiter.getCountdown(rateLimitKey);
-      toast({
-        title: "Tripletex rate limit",
-        description: `Må vente ${countdown} sekunder før neste sending til Tripletex.`,
-        variant: "destructive",
-        duration: 5000
-      });
-      return;
-    }
-    
     if (!entry.project?.tripletex_project_id) {
       toast({
         title: "Kan ikke sende til Tripletex",
@@ -1207,39 +1193,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       return;
     }
 
-    // LAG 1: Filter out activities that are already synced to Tripletex
-    const unsyncedActivities = entry.activities.filter(activity => 
-      !activity.tripletex_synced_at && !activity.tripletex_entry_id
-    );
-
-    if (unsyncedActivities.length === 0) {
-      toast({
-        title: "Allerede synkronisert",
-        description: "Alle timer er allerede sendt til Tripletex.",
-      });
-      setSendingToTripletex(prev => {
-        const next = new Set(prev);
-        next.delete(entry.id);
-        return next;
-      });
-      return;
-    }
-
-    // Log filtering results for debugging
-    if (entry.activities.length > unsyncedActivities.length) {
-      console.log('Tripletex send: Filtering out already synced activities', {
-        total: entry.activities.length,
-        unsynced: unsyncedActivities.length,
-        skipped: entry.activities.length - unsyncedActivities.length,
-        entry: entry.id
-      });
-    }
-
     setSendingToTripletex(prev => new Set(prev).add(entry.id));
 
     try {
-      // Send ONLY unsynced activities in parallel
-      const activityPromises = unsyncedActivities.map(async (activity) => {
+      // Send all activities for this entry in parallel (much faster!)
+      const activityPromises = entry.activities.map(async (activity) => {
         const { data, error } = await supabase.functions.invoke('tripletex-api', {
           body: {
             action: 'send_timesheet_entry',
@@ -1260,20 +1218,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
           throw new Error(error instanceof Error ? error.message : 'Failed to send to Tripletex');
         }
 
-        // Check if we got retryInfo (rate limited)
-        if (data?.retryInfo) {
-          TripletexRateLimiter.setLimit(rateLimitKey, data.retryInfo.seconds);
-          
-          toast({
-            title: "Tripletex rate limit nådd",
-            description: `Systemet må vente ${data.retryInfo.seconds} sekunder. Prøv igjen kl. ${new Date(data.retryInfo.iso).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}.`,
-            variant: "destructive",
-            duration: 10000
-          });
-          
-          throw new Error('Rate limit - cooldown set');
-        }
-
         if (!data?.success) {
           console.error('Tripletex API response:', { 
             success: data?.success, 
@@ -1290,33 +1234,12 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       // Wait for all activities to be sent
       await Promise.all(activityPromises);
 
-      // Calculate total hours sent (only the ones we just sent)
-      const totalHours = unsyncedActivities.reduce((sum, activity) => sum + activity.timer, 0);
-      
-      // Optimistic update: Mark ONLY the unsynced activities as synced immediately
-      const now = new Date().toISOString();
-      const unsyncedIds = unsyncedActivities.map(a => a.id);
-      
-      updateStaffingDataOptimistically(prev => prev.map(e => {
-        if (e.id !== entry.id) return e;
-        
-        return {
-          ...e,
-          activities: e.activities.map(activity => 
-            unsyncedIds.includes(activity.id)
-              ? {
-                  ...activity,
-                  tripletex_synced_at: now,
-                  status: 'sendt' as const
-                }
-              : activity // Keep already synced as is
-          )
-        };
-      }));
+      // Calculate total hours sent
+      const totalHours = entry.activities.reduce((sum, activity) => sum + activity.timer, 0);
       
       toast({
         title: "Timer sendt til Tripletex",
-        description: `${formatTimeValue(totalHours)} timer (${unsyncedActivities.length} ${unsyncedActivities.length === 1 ? 'aktivitet' : 'aktiviteter'}) sendt for ${entry.project.project_name}`
+        description: `${formatTimeValue(totalHours)} timer (${entry.activities.length} ${entry.activities.length === 1 ? 'aktivitet' : 'aktiviteter'}) sendt for ${entry.project.project_name}`
       });
 
       revalidateInBackground(); // Refresh to show updated sync status
@@ -1325,59 +1248,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       
       let errorMessage = "Ukjent feil oppstod";
       let errorTitle = "Feil ved sending til Tripletex";
-      
-      // LAG 2: Graceful handling of duplicate entry error
-      if (error instanceof Error && error.message.toLowerCase().includes('allerede registrert timer')) {
-        console.warn('Duplicate timesheet entry detected, updating local status', {
-          entry: entry.id,
-          activities: entry.activities.map(a => a.id),
-          message: error.message
-        });
-        
-        // Tripletex HAS these entries, even if our DB doesn't know
-        // Mark as synced to prevent future duplicate attempts
-        try {
-          const now = new Date().toISOString();
-          const activityIds = entry.activities.map(a => a.id);
-          
-          await supabase
-            .from('vakt_timer')
-            .update({ 
-              tripletex_synced_at: now,
-              status: 'sendt'
-            })
-            .in('id', activityIds);
-          
-          // Optimistic update UI
-          updateStaffingDataOptimistically(prev => prev.map(e => {
-            if (e.id !== entry.id) return e;
-            return {
-              ...e,
-              activities: e.activities.map(a => ({
-                ...a,
-                tripletex_synced_at: now,
-                status: 'sendt' as const
-              }))
-            };
-          }));
-          
-          toast({
-            title: "Timer allerede i Tripletex",
-            description: "Timene var allerede registrert i Tripletex. Status oppdatert.",
-          });
-          
-          setSendingToTripletex(prev => {
-            const next = new Set(prev);
-            next.delete(entry.id);
-            return next;
-          });
-          
-          revalidateInBackground();
-          return; // Success case, not error
-        } catch (updateError) {
-          console.error('Failed to update sync status after duplicate detection:', updateError);
-        }
-      }
       
       if (error instanceof Error) {
         const message = error.message.toLowerCase();
@@ -1571,20 +1441,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         throw new Error(data?.error || 'Failed to unapprove entries');
       }
 
-      // Optimistic update: Update local state immediately
-      updateStaffingDataOptimistically(prev => prev.map(entry => {
-        if (!entryIds.includes(entry.id)) return entry;
-        
-        return {
-          ...entry,
-          activities: entry.activities.map(activity => 
-            timerIds.includes(activity.id)
-              ? { ...activity, status: 'utkast' as const }
-              : activity
-          )
-        };
-      }));
-
       toast({
         title: "Godkjenning trukket tilbake",
         description: `${entryIds.length} oppføringer satt tilbake til utkast`
@@ -1627,20 +1483,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         .in('id', timerIds);
 
       if (error) throw error;
-
-      // Optimistic update: Update local state immediately for instant UI feedback
-      updateStaffingDataOptimistically(prev => prev.map(entry => {
-        if (!entryIds.includes(entry.id)) return entry;
-        
-        return {
-          ...entry,
-          activities: entry.activities.map(activity => 
-            timerIds.includes(activity.id)
-              ? { ...activity, status: 'godkjent' as const }
-              : activity
-          )
-        };
-      }));
 
       toast({
         title: "Timer godkjent",
@@ -1746,20 +1588,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       if (error) throw error;
 
-      // Optimistic update: Update local state immediately for instant UI feedback
-      updateStaffingDataOptimistically(prev => prev.map(entry => {
-        if (!weekDateKeys.includes(entry.date)) return entry;
-        
-        return {
-          ...entry,
-          activities: entry.activities.map(activity => 
-            timerIds.includes(activity.id)
-              ? { ...activity, status: 'godkjent' as const }
-              : activity
-          )
-        };
-      }));
-
       toast({
         title: "Alle timer godkjent",
         description: `${entriesToApprove.length} oppføringer for uke ${weekNumber} godkjent og klar for sending til Tripletex`
@@ -1844,21 +1672,6 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   };
 
   const sendAllToTripletexForWeek = async (weekNumber: number, year: number) => {
-    // Use same rate limit key as sendToTripletex for consistency
-    const rateLimitKey = `tripletex_send_${profile?.org_id}`;
-    
-    // Check cooldown before batch send
-    if (TripletexRateLimiter.isLimited(rateLimitKey)) {
-      const countdown = TripletexRateLimiter.getCountdown(rateLimitKey);
-      toast({
-        title: "Tripletex rate limit",
-        description: `Må vente ${countdown} sekunder før sending til Tripletex.`,
-        variant: "destructive",
-        duration: 5000
-      });
-      return;
-    }
-    
     try {
       // Get dates for the specific week
       const weekData = multiWeekData.find(w => w.week === weekNumber && w.year === year);
@@ -1874,13 +1687,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       const weekDateKeys = weekData.dates.map(toDateKey).filter(Boolean);
       
       // Find all approved entries that haven't been sent yet
-      // LAG 1: Filter at week level - only entries with unsynced activities
       const entriesToSend = staffingData.filter(entry => 
         weekDateKeys.includes(entry.date) &&
         entry.activities.length > 0 &&
         entry.activities.every(a => a.status === 'godkjent') &&
-        // At least one activity must be unsynced
-        entry.activities.some(a => !a.tripletex_synced_at && !a.tripletex_entry_id)
+        !entry.activities.some(a => a.tripletex_synced_at)
       );
 
       if (entriesToSend.length === 0) {
@@ -2219,15 +2030,10 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 variant="default" 
                                 className="bg-blue-600 hover:bg-blue-700 text-xs px-1.5 py-0.5 h-5"
                                 onClick={() => sendAllToTripletexForWeek(safeWeek.week, safeWeek.year)}
-                                title={TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`)
-                                  ? `Rate limit - vent ${TripletexRateLimiter.getCountdown(`tripletex_send_${profile?.org_id}`)}s`
-                                  : "Send alle godkjente timer til Tripletex"}
-                                disabled={TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`)}
+                                title="Send alle godkjente timer til Tripletex"
                               >
                                 <Send className="h-3 w-3 mr-0.5" />
-                                {TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`)
-                                  ? `Vent ${TripletexRateLimiter.getCountdown(`tripletex_send_${profile?.org_id}`)}s`
-                                  : 'Tripletex'}
+                                Tripletex
                               </Button>
                               <Button 
                                 size="sm" 
@@ -2454,11 +2260,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                             e.stopPropagation();
                                             sendToTripletex(entry);
                                           }}
-                                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                                          title={TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`) 
-                                            ? `Rate limit - vent ${TripletexRateLimiter.getCountdown(`tripletex_send_${profile?.org_id}`)}s` 
-                                            : "Send til Tripletex"}
-                                          disabled={sendingToTripletex.has(entry.id) || TripletexRateLimiter.isLimited(`tripletex_send_${profile?.org_id}`)}
+                                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20"
+                                          title="Send til Tripletex"
+                                          disabled={sendingToTripletex.has(entry.id)}
                                         >
                                           <Send className="h-2 w-2" />
                                         </button>
@@ -2811,13 +2615,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                   revalidateInBackground();
                   setEditDialog(null);
                 }}
+                onClose={() => setEditDialog(null)}
                 defaultTimer={8.0}
                 existingEntry={editDialog.existingEntry ? {
                   id: editDialog.existingEntry.id,
                   timer: editDialog.existingEntry.timer,
                   aktivitet_id: editDialog.existingEntry.aktivitet_id || '',
                   notat: editDialog.existingEntry.notat || '',
-                  status: editDialog.existingEntry.status
+                  status: editDialog.existingEntry.status,
+                  tripletex_synced_at: editDialog.existingEntry.tripletex_synced_at
                 } : undefined}
               />
             )}

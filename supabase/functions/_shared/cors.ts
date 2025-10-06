@@ -64,16 +64,17 @@ export function getCorsHeaders(requestOrigin?: string): Record<string, string> {
     'Access-Control-Allow-Headers': config.allowedHeaders.join(', '),
   };
   
-  // Only set origin if it's allowed or if we're in development with wildcard
+  // Only set origin if it's allowed
   if (isAllowedOrigin) {
     corsHeaders['Access-Control-Allow-Origin'] = origin;
-  } else if (config.origin === '*' && Deno.env.get('ENVIRONMENT') === 'development') {
-    // Fallback for development - but log a warning
-    console.warn(`⚠️ CORS: Origin ${origin} not explicitly allowed in development`);
+  } else if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+    // Allow any localhost port in development
+    console.warn(`⚠️ CORS: Allowing localhost origin ${origin} for development`);
     corsHeaders['Access-Control-Allow-Origin'] = origin;
   } else {
     // In production, don't set the header if origin is not allowed
-    corsHeaders['Access-Control-Allow-Origin'] = 'null';
+    console.warn(`⚠️ CORS: Origin ${origin} not allowed`);
+    corsHeaders['Access-Control-Allow-Origin'] = allowedOrigins[0] || '*';
   }
   
   if (config.credentials) {

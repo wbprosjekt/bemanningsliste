@@ -164,7 +164,7 @@ export default function UkeoversiktPage() {
           : undefined;
 
         // Sum ALL timer entries for this vakt (normal + overtime, all statuses)
-        const allTimers = vakt.vakt_timer || [];
+        const allTimers = (vakt.vakt_timer || []);
         const totalHours = allTimers.reduce((sum: number, timer: any) => sum + (timer.timer || 0), 0);
         const hasOvertime = allTimers.some((timer: any) => timer.is_overtime);
 
@@ -390,6 +390,7 @@ export default function UkeoversiktPage() {
               vaktId={selectedEntry.vaktId}
               orgId={profile.org_id}
               onSave={handleCloseDialog}
+              onClose={handleCloseDialog}
             />
           </DialogContent>
         </Dialog>

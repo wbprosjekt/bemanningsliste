@@ -562,13 +562,18 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                           setActiveVaktId(null);
                           setSelectedTimer(null);
                         }}
+                        onClose={() => {
+                          setActiveVaktId(null);
+                          setSelectedTimer(null);
+                        }}
                         defaultTimer={vakt.person?.forventet_dagstimer || 8.0}
                         existingEntry={selectedTimer ? {
                           id: selectedTimer.id,
                           timer: selectedTimer.timer,
                           aktivitet_id: selectedTimer.aktivitet_id || '',
                           notat: selectedTimer.notat || '',
-                          status: selectedTimer.status || 'pending'
+                          status: selectedTimer.status || 'pending',
+                          tripletex_synced_at: selectedTimer.tripletex_synced_at
                         } : undefined}
                       />
                     </div>

@@ -45,10 +45,6 @@ interface TripletexResponse {
   success: boolean;
   data?: unknown;
   error?: string;
-  retryInfo?: {
-    seconds: number;
-    iso: string;
-  };
 }
 
 interface TripletexEmployeeRecord {
@@ -278,91 +274,82 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
 }
 
 async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: unknown, orgId?: string): Promise<TripletexResponse> {
-  // Get config and validate tokens
   const config = await getTripletexConfig(orgId || '');
   if (!config.consumerToken || !config.employeeToken) {
     return { success: false, error: 'Tripletex tokens not configured for this organization' };
   }
-  
-  // Prepare headers (session handling done inside fetchFn)
-  const baseHeaders: Record<string, string> = { 
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-  };
+  const url = `${config.baseUrl}${endpoint}`;
+  let headers: Record<string, string> = { 
+  'Content-Type': 'application/json',
+  'Accept': 'application/json'
+};;
 
-  // Build fetch function for exponentialBackoffWithRetry
-  const fetchFn = async (): Promise<Response> => {
-    const url = `${config.baseUrl}${endpoint}`;
-    let headers = { ...baseHeaders };
-
-    // Use session token for all non-session endpoints
-    if (!endpoint.startsWith('/token/session')) {
-      try {
-        const session = await getOrCreateSession(orgId!);
-        headers = {
-          ...headers,
-          Authorization: `Basic ${btoa(`${session.companyId}:${session.token}`)}`
-        };
-      } catch (e) {
-        throw new Error((e as Error).message || 'Failed to create session');
-      }
+  // Use session token for all non-session endpoints
+  if (!endpoint.startsWith('/token/session')) {
+    try {
+      const session = await getOrCreateSession(orgId!);
+      headers = {
+        ...headers,
+        Authorization: `Basic ${btoa(`${session.companyId}:${session.token}`)}`
+      };
+    } catch (e) {
+      return { success: false, error: (e as Error).message || 'Failed to create session' };
     }
+  }
 
+  try {
     console.log(`Calling Tripletex API: ${method} ${url}`);
     console.log('Tripletex request headers', { hasAuth: !!headers.Authorization, auth: maskAuthHeader(headers.Authorization) });
     
-    return fetch(url, {
+    const response = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined
     });
-  };
 
-  // Use new backoff with Retry-After support and jitter
-  let result: BackoffResult;
-  try {
-    result = await exponentialBackoffWithRetry(
-      fetchFn,
-      orgId || 'unknown',
-      endpoint
-    );
-  } catch (error: any) {
-    console.error('exponentialBackoffWithRetry threw error:', error);
-    return { success: false, error: error.message || 'Backoff function error' };
-  }
-
-  // If rate limited with retryInfo, pass it along
-  if (!result.success && result.retryInfo) {
-    console.log('Rate limit detected, returning retryInfo to frontend:', result.retryInfo);
-    return {
-      success: false,
-      error: result.error,
-      retryInfo: result.retryInfo
-    };
-  }
-
-  // Handle other errors
-  if (!result.success) {
-    console.error('callTripletexAPI failed:', { endpoint, error: result.error });
-    return { success: false, error: result.error };
-  }
-
-  // Success - parse and return data with validation message handling
-  const responseData = result.data;
-  
-  // Check if Tripletex returned an error in the data (even with 200 OK)
-  if (responseData?.message && !responseData?.value) {
-    // Include validation details in error message if available
-    if (responseData?.validationMessages && Array.isArray(responseData.validationMessages)) {
-      const validationDetails = responseData.validationMessages.map((v: any) => v.message || v).join(', ');
-      const errorMessage = `${responseData.message} (Detaljer: ${validationDetails})`;
-      return { success: false, error: errorMessage };
+    const text = await response.text();
+    let responseData: unknown = {};
+    try { 
+      responseData = JSON.parse(text); 
+    } catch (error) {
+      console.debug('Failed to parse JSON response:', error);
     }
-    // Regular error message
-    return { success: false, error: responseData.message };
-  }
 
-  return { success: true, data: responseData };
+    console.log('Tripletex API response', { status: response.status, url });
+
+    if (!response.ok) {
+      // Optional: throw on 429/5xx to let exponentialBackoff handle it
+      if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
+        const err: Error = new Error(responseData?.message || `HTTP ${response.status}`);
+        err.status = response.status;
+        throw err;
+      }
+      console.error('Tripletex API error:', { 
+        status: response.status, 
+        url: url,
+        message: responseData?.message,
+        validationMessages: responseData?.validationMessages,
+        fullResponse: responseData 
+      });
+      
+      // Include validation details in error message if available
+      let errorMessage = responseData?.message || `HTTP ${response.status}`;
+      if (responseData?.validationMessages && Array.isArray(responseData.validationMessages)) {
+        const validationDetails = responseData.validationMessages.map((v: any) => v.message || v).join(', ');
+        errorMessage += ` (Detaljer: ${validationDetails})`;
+      }
+      
+      return { 
+        success: false, 
+        error: errorMessage
+      };
+    }
+
+    return { success: true, data: responseData };
+  } catch (error: unknown) {
+    console.error('Network error calling Tripletex API:', error);
+    return { success: false, error: error.message ?? String(error) };
+  }
 }
 
 async function fetchAllTripletexEmployees(orgId: string) {
@@ -497,192 +484,8 @@ async function ensureActivityOnProject(orgId: string, projectId: number, activit
 }
 // === end helpers ===
 
-/**
- * Parse Retry-After header from Tripletex response
- * Supports both formats: seconds (number) and HTTP-date (string)
- * @param header - Retry-After header value
- * @returns Milliseconds to wait, or null if invalid
- */
-function parseRetryAfter(header: string | null): number | null {
-  if (!header) return null;
-  
-  // Format 1: Seconds (number)
-  const seconds = parseInt(header, 10);
-  if (!isNaN(seconds) && seconds > 0) {
-    return seconds * 1000; // Convert to ms
-  }
-  
-  // Format 2: HTTP-date
-  const date = new Date(header);
-  if (!isNaN(date.getTime())) {
-    const waitTime = date.getTime() - Date.now();
-    return Math.max(0, waitTime); // Never negative
-  }
-  
-  return null;
-}
-
-interface BackoffOptions {
-  initialDelay?: number;
-  maxDelay?: number;
-  maxRetries?: number;
-  jitterFactor?: number;
-}
-
-interface BackoffResult {
-  success: boolean;
-  data?: any;
-  error?: string;
-  retryInfo?: {
-    seconds: number;
-    iso: string;
-  };
-}
-
-/**
- * Exponential backoff with Retry-After support and jitter
- * Follows Tripletex API guidelines for rate limiting
- */
-async function exponentialBackoffWithRetry(
-  fn: () => Promise<Response>,
-  orgId: string,
-  endpoint: string,
-  options: BackoffOptions = {}
-): Promise<BackoffResult> {
-  const {
-    initialDelay = 1000,
-    maxDelay = 30000,
-    maxRetries = 5,
-    jitterFactor = 0.2
-  } = options;
-  
-  let delay = initialDelay;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fn();
-      
-      // Success case
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Log success on retry
-        if (attempt > 0) {
-          console.info(JSON.stringify({
-            event: 'tripletex_retry_success',
-            orgId,
-            endpoint,
-            totalAttempts: attempt + 1,
-            timestamp: new Date().toISOString()
-          }));
-        }
-        
-        return { success: true, data };
-      }
-      
-      // Not retriable (4xx except 429)
-      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-        const data = await response.json().catch(() => ({}));
-        return { 
-          success: false, 
-          error: data.message || `HTTP ${response.status}` 
-        };
-      }
-      
-      // Retriable (429 or 5xx)
-      if (response.status === 429 || response.status >= 500) {
-        // Parse Retry-After
-        const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'));
-        const baseWait = retryAfterMs 
-          ? Math.max(retryAfterMs, delay)
-          : delay;
-        
-        // Add jitter to avoid thundering herd
-        const jitter = baseWait * jitterFactor * (Math.random() - 0.5) * 2;
-        const finalWait = Math.min(baseWait + jitter, maxDelay);
-        
-        // Structured logging
-        console.warn(JSON.stringify({
-          event: 'tripletex_rate_limit',
-          orgId,
-          endpoint,
-          attempt: attempt + 1,
-          maxRetries,
-          statusCode: response.status,
-          retryAfterMs,
-          retryAfterSeconds: retryAfterMs ? Math.ceil(retryAfterMs / 1000) : null,
-          plannedDelayMs: delay,
-          actualWaitMs: Math.round(finalWait),
-          jitterMs: Math.round(jitter),
-          timestamp: new Date().toISOString()
-        }));
-        
-        // Last attempt - return with retry info for frontend
-        if (attempt === maxRetries - 1) {
-          const retrySeconds = Math.ceil(finalWait / 1000);
-          
-          console.error(JSON.stringify({
-            event: 'tripletex_max_retries_exceeded',
-            orgId,
-            endpoint,
-            maxRetries,
-            lastStatusCode: response.status,
-            suggestedRetrySeconds: retrySeconds,
-            timestamp: new Date().toISOString()
-          }));
-          
-          return {
-            success: false,
-            error: `Rate limit exceeded (HTTP ${response.status})`,
-            retryInfo: {
-              seconds: retrySeconds,
-              iso: new Date(Date.now() + finalWait).toISOString()
-            }
-          };
-        }
-        
-        // Wait and retry
-        await new Promise(resolve => setTimeout(resolve, finalWait));
-        delay = Math.min(delay * 2, maxDelay);
-        continue;
-      }
-      
-      // Other error
-      const data = await response.json().catch(() => ({}));
-      return { 
-        success: false, 
-        error: data.message || `HTTP ${response.status}` 
-      };
-      
-    } catch (error: any) {
-      // Network error
-      console.error(JSON.stringify({
-        event: 'tripletex_network_error',
-        orgId,
-        endpoint,
-        attempt: attempt + 1,
-        error: error.message,
-        timestamp: new Date().toISOString()
-      }));
-      
-      if (attempt === maxRetries - 1) {
-        return { 
-          success: false, 
-          error: error.message || 'Network error' 
-        };
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay = Math.min(delay * 2, maxDelay);
-    }
-  }
-  
-  return { success: false, error: 'Max retries exceeded' };
-}
-
-// Legacy wrapper for backward compatibility
 async function exponentialBackoff(fn: () => Promise<unknown>, maxRetries: number = 3): Promise<unknown> {
-  let delay = 1000;
+  let delay = 1000; // Start with 1 second
   
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -694,9 +497,9 @@ async function exponentialBackoff(fn: () => Promise<unknown>, maxRetries: number
       if (status === 429 || (status >= 500 && status < 600)) {
         console.log(`Retrying after ${delay}ms (attempt ${i + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2;
+        delay *= 2; // Exponential backoff
       } else {
-        throw error;
+        throw error; // Don't retry for other errors
       }
     }
   }
@@ -980,16 +783,41 @@ Deno.serve(async (req) => {
           if (response.success && response.data?.values) {
             console.log(`Syncing ${response.data.values.length} projects for org ${orgId}`);
             
+            // Debug: Log ALL projects with full details (for debugging closed projects)
+            const debugProjects = response.data.values.map((p: unknown) => {
+              const proj = p as any;
+              return {
+                id: proj.id,
+                number: proj.number,
+                name: proj.displayName || proj.name,
+                isActive: proj.isActive,
+                isClosed: proj.isClosed,
+                endDate: proj.endDate,
+                mainProjectId: proj.mainProjectId,
+                projectCategoryId: proj.projectCategoryId
+              };
+            });
+            console.log('DEBUG: ALL projects from Tripletex:', debugProjects);
+            console.log('DEBUG: Closed projects:', debugProjects.filter((p: any) => p.isClosed === true));
+            console.log('DEBUG: Projects with end date passed:', debugProjects.filter((p: any) => p.endDate && new Date(p.endDate) < new Date()));
+            
             // Cache projects in database
             const projects = response.data.values.map((proj: unknown) => {
-              const project = proj as { id: number; number?: string; displayName?: string; name?: string; customer?: { name?: string }; isActive?: boolean };
+              const project = proj as { id: number; number?: string; displayName?: string; name?: string; customer?: { name?: string }; isActive?: boolean; isClosed?: boolean; endDate?: string };
+              
+              // Check multiple conditions to determine if project is truly active
+              const isActive = 
+                project.isActive !== false &&           // Not inactive
+                project.isClosed !== true &&            // Not closed
+                (!project.endDate || new Date(project.endDate) >= new Date());  // Not past end date
+              
               return {
                 org_id: orgId,
                 tripletex_project_id: project.id,
                 project_number: project.number,
                 project_name: project.displayName || project.name,
                 customer_name: project.customer?.name,
-                is_active: project.isActive !== false, // Default to true if undefined
+                is_active: isActive,
                 last_synced: new Date().toISOString()
               };
             });
@@ -1007,7 +835,13 @@ Deno.serve(async (req) => {
             }
 
             console.log(`Successfully synced ${projects.length} projects`);
-            return { success: true, data: { count: projects.length } };
+            return { 
+              success: true, 
+              data: { 
+                count: projects.length,
+                debug: debugProjects  // Return debug info so it shows in browser console
+              } 
+            };
           }
           return response;
         });
@@ -1692,16 +1526,32 @@ Deno.serve(async (req) => {
           }
 
         if (deleteResponse.success && deleteVaktTimerId) {
-          // Update local entry to reset sync status only
-          // Keep current timer values (don't restore to original)
+          // Get original values before restoring
+          const { data: originalValues, error: fetchError } = await supabase
+            .from('vakt_timer')
+            .select('original_timer, original_aktivitet_id, original_notat, original_status')
+            .eq('id', deleteVaktTimerId)
+            .single();
+
+          if (fetchError) {
+            console.error('Failed to fetch original values:', fetchError);
+            return { 
+              success: true,
+              warning: 'Entry deleted from Tripletex but could not restore original values'
+            };
+          }
+
+          // Update local entry to mark as deleted/reset sync status and restore original values
           const { error: updateError } = await supabase
             .from('vakt_timer')
             .update({
               tripletex_entry_id: null,
               tripletex_synced_at: null,
               sync_error: null,
-              status: 'utkast'  // Always set to draft after recall (must be re-approved)
-              // Keep current timer, aktivitet_id, notat values as-is
+              status: originalValues?.original_status || 'utkast',
+              timer: originalValues?.original_timer || null,
+              aktivitet_id: originalValues?.original_aktivitet_id || null,
+              notat: originalValues?.original_notat || null
             })
             .eq('id', deleteVaktTimerId);
 

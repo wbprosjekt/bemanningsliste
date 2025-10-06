@@ -5,19 +5,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Clock, MessageSquare, Paperclip, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
+import { Clock, MessageSquare, Paperclip, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, validateTimeStep } from '@/lib/displayNames';
 import { validateHours, validateUUID, validateStatus, validateFreeLineText, ValidationError } from '@/lib/validation';
 import { useCSRFToken } from '@/lib/csrf';
 import { useTimeEntryMutation, useDeleteTimeEntry } from '@/hooks/useStaffingData';
-import { useQueryClient } from '@tanstack/react-query';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 interface TimeEntryProps {
   vaktId: string;
   orgId: string;
   onSave?: () => void;
+  onClose?: () => void;
   defaultTimer?: number;
   existingEntry?: {
     id: string;
@@ -25,6 +26,7 @@ interface TimeEntryProps {
     aktivitet_id: string;
     notat: string;
     status: string;
+    tripletex_synced_at?: string | null;
     original_timer?: number;
     original_aktivitet_id?: string;
     original_notat?: string;
@@ -37,7 +39,7 @@ interface Activity {
   navn: string;
 }
 
-const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }: TimeEntryProps) => {
+const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existingEntry }: TimeEntryProps) => {
   const [hours, setHours] = useState(Math.floor(existingEntry?.timer || defaultTimer));
   const [minutes, setMinutes] = useState(Math.round(((existingEntry?.timer || defaultTimer) % 1) * 60));
   const [aktivitetId, setAktivitetId] = useState(existingEntry?.aktivitet_id || '');
@@ -47,7 +49,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { addCSRFHeader } = useCSRFToken();
-  const queryClient = useQueryClient();
+  const isOnline = useOnlineStatus();
   
   // React Query mutations
   const timeEntryMutation = useTimeEntryMutation();
@@ -62,8 +64,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
   const [overtime50Hours, setOvertime50Hours] = useState(0);
   const [overtime50Minutes, setOvertime50Minutes] = useState(0);
   const [showOvertime, setShowOvertime] = useState(false); // Collapsed by default
-  const [isLocked, setIsLocked] = useState(false);
-  const [tripletexSynced, setTripletexSynced] = useState(false);
+  const [isLocked, setIsLocked] = useState(false); // Will be set based on loaded data
 
   // Calculate total timer value from hours and minutes
   const timer = hours + (minutes / 60);
@@ -180,20 +181,29 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
       try {
         const { data, error } = await supabase
           .from('vakt_timer')
-          .select('timer, is_overtime, lonnstype, aktivitet_id, notat, status, original_timer, original_aktivitet_id, original_notat, original_status, tripletex_synced_at')
+          .select('timer, is_overtime, lonnstype, aktivitet_id, notat, status, tripletex_synced_at, tripletex_entry_id, original_timer, original_aktivitet_id, original_notat, original_status')
           .eq('vakt_id', vaktId);
 
         if (error) throw error;
 
         if (data && data.length > 0) {
-          // Check if ANY entry is locked (godkjent, sendt, or synced to Tripletex)
-          const anyLocked = data.some(entry => 
-            entry.status === 'godkjent' || 
-            entry.status === 'sendt' || 
-            entry.tripletex_synced_at !== null
-          );
-          setIsLocked(anyLocked);
-          setTripletexSynced(data.some(entry => entry.tripletex_synced_at !== null));
+          // Check if any timer is locked (godkjent, sendt, or synced to Tripletex)
+          const hasGodkjent = data.some(entry => entry.status === 'godkjent');
+          const hasSendt = data.some(entry => entry.status === 'sendt');
+          const hasTripletexSync = data.some(entry => entry.tripletex_synced_at);
+          const locked = hasGodkjent || hasSendt || hasTripletexSync;
+          
+          setIsLocked(locked);
+          
+          console.log('TimeEntry loaded data - locking check:', {
+            dataCount: data.length,
+            hasGodkjent,
+            hasSendt,
+            hasTripletexSync,
+            isLocked: locked,
+            statuses: data.map(e => e.status),
+            tripletexSyncs: data.map(e => e.tripletex_synced_at)
+          });
           
           // Separate regular time and overtime
           let totalRegularTime = 0;
@@ -245,12 +255,14 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
             setShowOvertime(true);
           }
 
-          // Set activity, note, and status from first entry (use original values if available)
-          setAktivitetId((firstEntry.original_aktivitet_id ?? firstEntry.aktivitet_id) || '');
-          setNotat((firstEntry.original_notat ?? firstEntry.notat) || '');
-          setStatus(((firstEntry.original_status ?? firstEntry.status) || 'utkast') as 'utkast' | 'sendt' | 'godkjent');
+          // Set activity, note, and status from first entry
+          // Note: Use current values, not original (original_status causes issues after recall)
+          setAktivitetId(firstEntry.aktivitet_id || '');
+          setNotat(firstEntry.notat || '');
+          setStatus((firstEntry.status || 'utkast') as 'utkast' | 'sendt' | 'godkjent');
         } else {
-          // For new entries, reset to default values
+          // For new entries, reset to default values and unlock
+          setIsLocked(false);
           setHours(Math.floor(defaultTimer));
           setMinutes(Math.max(0, Math.min(45, Math.round((defaultTimer % 1) * 60 / 15) * 15)));
           setAktivitetId('');
@@ -261,15 +273,22 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         console.error('Error loading existing timer entries:', error);
         // Fallback to existingEntry if database load fails
         if (existingEntry) {
-          const baseTimer = existingEntry.original_timer ?? existingEntry.timer ?? defaultTimer;
+          const baseTimer = existingEntry.timer ?? defaultTimer;
           const baseHours = Math.floor(baseTimer);
           const baseMinutes = Math.round((baseTimer % 1) * 60);
 
           setHours(Math.max(0, Math.min(8, baseHours)));
           setMinutes(Math.max(0, Math.min(45, Math.round(baseMinutes / 15) * 15)));
-          setAktivitetId((existingEntry.original_aktivitet_id ?? existingEntry.aktivitet_id) || '');
-          setNotat((existingEntry.original_notat ?? existingEntry.notat) || '');
-          setStatus(((existingEntry.original_status ?? existingEntry.status) || 'utkast') as 'utkast' | 'sendt' | 'godkjent');
+          setAktivitetId(existingEntry.aktivitet_id || '');
+          setNotat(existingEntry.notat || '');
+          setStatus((existingEntry.status || 'utkast') as 'utkast' | 'sendt' | 'godkjent');
+          
+          // Set locked state based on current status
+          setIsLocked(
+            existingEntry.status === 'godkjent' || 
+            existingEntry.status === 'sendt' ||
+            !!existingEntry.tripletex_synced_at
+          );
         }
       }
     };
@@ -315,6 +334,26 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
     console.log('handleSave called with:', { aktivitetId, timer, nextStatus, activities: activities.length });
     
     try {
+      // Check online status first
+      if (!isOnline) {
+        toast({
+          title: "Du er offline",
+          description: "Koble til internett for å lagre timer.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Check required fields FIRST before validation
+      if (!aktivitetId) {
+        toast({
+          title: "Aktivitet påkrevd",
+          description: "Du må velge en aktivitet før du kan lagre.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       // Validate all inputs
       const validatedData = {
         vaktId: validateUUID(vaktId),
@@ -326,15 +365,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         status: validateStatus(nextStatus),
         notat: validateFreeLineText(notat)
       };
-      
-      if (!aktivitetId) {
-        toast({
-          title: "Aktivitet påkrevd",
-          description: "Du må velge en aktivitet før du kan lagre.",
-          variant: "destructive"
-        });
-        return;
-      }
 
       if (activities.length === 0) {
         toast({
@@ -490,13 +520,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
       },
       {
         onSuccess: () => {
-          // Optimistic update: Invalidate ALL staffing queries immediately
-          // This ensures admin/bemanningsliste gets fresh data when navigating from min/uke
-          queryClient.invalidateQueries({ queryKey: ['staffing'] });
-          
-          // Force immediate refetch for instant cross-page updates
-          queryClient.refetchQueries({ queryKey: ['staffing', orgId] });
-          
           toast({
             title: "Lagret",
             description: `Timeføring lagret${totalOvertimeTimer > 0 ? ` med ${formatTimeValue(totalOvertimeTimer)} overtid` : ''}.`
@@ -540,23 +563,17 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Locked Message */}
         {isLocked && (
-          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center gap-2 text-yellow-800">
-              <AlertCircle className="h-5 w-5" />
-              <div>
-                <p className="font-semibold">Timer er godkjent og kan ikke endres</p>
-                <p className="text-sm mt-1">
-                  {tripletexSynced 
-                    ? 'Timene er sendt til Tripletex og kan ikke redigeres.' 
-                    : 'Timene er godkjent av admin og kan ikke redigeres.'}
-                </p>
-              </div>
-            </div>
+          <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
+            <p className="text-sm font-medium text-yellow-800 mb-1">
+              ⚠️ Timene er {existingEntry?.status === 'godkjent' ? 'godkjent' : existingEntry?.status === 'sendt' ? 'sendt til godkjenning' : 'synkronisert med Tripletex'}
+            </p>
+            <p className="text-xs text-yellow-700">
+              Du kan ikke endre timene. Kontakt din leder hvis du trenger å gjøre endringer.
+            </p>
           </div>
         )}
-
+        
         <div className="space-y-3">
           <Label>Timer</Label>
           <div className="flex items-center justify-center gap-6 p-4 border rounded-lg bg-muted/20">
@@ -618,35 +635,34 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
           </div>
 
           {/* Quick Select Buttons */}
-          {!isLocked && (
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground text-center">Hurtigvalg:</div>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {[
-                  { label: '0.5t', hours: 0, minutes: 30 },
-                  { label: '1t', hours: 1, minutes: 0 },
-                  { label: '2t', hours: 2, minutes: 0 },
-                  { label: '4t', hours: 4, minutes: 0 },
-                  { label: '7.5t', hours: 7, minutes: 30 },
-                  { label: '8t', hours: 8, minutes: 0 },
-                ].map((quick) => (
-                  <Button
-                    key={quick.label}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setHours(quick.hours);
-                      setMinutes(quick.minutes);
-                    }}
-                    className="bg-blue-600 text-white hover:bg-blue-700 border-0 min-w-[60px]"
-                  >
-                    {quick.label}
-                  </Button>
-                ))}
-              </div>
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground text-center">Hurtigvalg:</div>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {[
+                { label: '0.5t', hours: 0, minutes: 30 },
+                { label: '1t', hours: 1, minutes: 0 },
+                { label: '2t', hours: 2, minutes: 0 },
+                { label: '4t', hours: 4, minutes: 0 },
+                { label: '7.5t', hours: 7, minutes: 30 },
+                { label: '8t', hours: 8, minutes: 0 },
+              ].map((quick) => (
+                <Button
+                  key={quick.label}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setHours(quick.hours);
+                    setMinutes(quick.minutes);
+                  }}
+                  disabled={isLocked}
+                  className="bg-blue-600 text-white hover:bg-blue-700 border-0 min-w-[60px]"
+                >
+                  {quick.label}
+                </Button>
+              ))}
             </div>
-          )}
+          </div>
 
           <div className="text-center text-sm text-muted-foreground">
             Total: {formatTimeValue(timer)} timer
@@ -659,7 +675,9 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="aktivitet">Aktivitet *</Label>
+          <Label htmlFor="aktivitet" className={!aktivitetId ? "text-red-600" : ""}>
+            Aktivitet * {!aktivitetId && <span className="text-sm font-normal">(påkrevd)</span>}
+          </Label>
           <Select 
             value={aktivitetId} 
             onValueChange={(value) => {
@@ -668,7 +686,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
             }}
             disabled={activities.length === 0 || isLocked}
           >
-            <SelectTrigger>
+            <SelectTrigger className={!aktivitetId ? "border-red-300 focus:border-red-500" : ""}>
               <SelectValue placeholder={activities.length === 0 ? "Ingen aktiviteter tilgjengelig" : "Velg aktivitet"} />
             </SelectTrigger>
             <SelectContent className="bg-background border z-50">
@@ -698,8 +716,8 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
             type="button"
             variant="ghost"
             onClick={() => setShowOvertime(!showOvertime)}
-            className="w-full h-12 justify-between px-4 hover:bg-gray-100 rounded-lg"
             disabled={isLocked}
+            className="w-full h-12 justify-between px-4 hover:bg-gray-100 rounded-lg"
           >
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
@@ -856,24 +874,37 @@ const TimeEntry = ({ vaktId, orgId, onSave, defaultTimer = 0.0, existingEntry }:
           />
         </div>
 
-        <div className="flex gap-2 justify-between">
-          {!isLocked && (
-            <div className="flex gap-2">
-              <Button
-                onClick={() => handleSave('utkast')}
-                disabled={isLoading}
-                variant="outline"
-              >
-                {isLoading && status === 'utkast' ? 'Lagrer...' : 'Lagre utkast'}
-              </Button>
-              <Button
-                onClick={() => handleSave('sendt')}
-                disabled={isLoading}
-              >
-                {isLoading && status === 'sendt' ? 'Sender...' : 'Send til godkjenning'}
-              </Button>
-            </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex gap-2 flex-1">
+            <Button
+              onClick={() => handleSave('utkast')}
+              disabled={isLoading || !aktivitetId || isLocked || !isOnline}
+              variant="outline"
+              title={!isOnline ? "Du er offline" : isLocked ? "Timene er låst - kontakt leder" : !aktivitetId ? "Velg en aktivitet først" : ""}
+              className="flex-1 sm:flex-initial"
+            >
+              {isLoading && status === 'utkast' ? 'Lagrer...' : 'Lagre utkast'}
+            </Button>
+            <Button
+              onClick={() => handleSave('sendt')}
+              disabled={isLoading || !aktivitetId || isLocked || !isOnline}
+              title={!isOnline ? "Du er offline" : isLocked ? "Timene er låst - kontakt leder" : !aktivitetId ? "Velg en aktivitet først" : ""}
+              className="flex-1 sm:flex-initial"
+            >
+              {isLoading && status === 'sendt' ? 'Sender...' : 'Send til godkjenning'}
+            </Button>
+          </div>
+          
+          {onClose && (
+            <Button
+              onClick={onClose}
+              variant="outline"
+              className="w-full sm:w-auto md:hidden"
+            >
+              Lukk
+            </Button>
           )}
+          
           {existingEntry && (
             <div className="flex gap-1">
               <Button variant="outline" size="icon">
