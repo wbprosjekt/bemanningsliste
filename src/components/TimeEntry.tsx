@@ -187,11 +187,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
         if (error) throw error;
 
         if (data && data.length > 0) {
-          // Check if any timer is locked (godkjent, sendt, or synced to Tripletex)
+          // Check if any timer is locked (godkjent or synced to Tripletex)
+          // Note: 'sendt' status does NOT lock - employees can still edit before leader approval
           const hasGodkjent = data.some(entry => entry.status === 'godkjent');
           const hasSendt = data.some(entry => entry.status === 'sendt');
           const hasTripletexSync = data.some(entry => entry.tripletex_synced_at);
-          const locked = hasGodkjent || hasSendt || hasTripletexSync;
+          const locked = hasGodkjent || hasTripletexSync;
           
           setIsLocked(locked);
           
@@ -566,7 +567,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
         {isLocked && (
           <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
             <p className="text-sm font-medium text-yellow-800 mb-1">
-              ⚠️ Timene er {existingEntry?.status === 'godkjent' ? 'godkjent' : existingEntry?.status === 'sendt' ? 'sendt til godkjenning' : 'synkronisert med Tripletex'}
+              ⚠️ Timene er {existingEntry?.tripletex_synced_at ? 'sendt til Tripletex' : 'godkjent av leder'}
             </p>
             <p className="text-xs text-yellow-700">
               Du kan ikke endre timene. Kontakt din leder hvis du trenger å gjøre endringer.
