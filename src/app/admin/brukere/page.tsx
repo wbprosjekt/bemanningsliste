@@ -266,8 +266,14 @@ const AdminBrukerePage = () => {
 
   const resetUserPassword = async (email: string, userName: string) => {
     try {
+      // Use production URL for redirect, or current origin if not localhost
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const redirectUrl = isLocalhost 
+        ? 'https://bemanningsliste.vercel.app/auth/reset-password'  // Production URL
+        : `${window.location.origin}/auth/reset-password`;           // Current domain
+      
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`
+        redirectTo: redirectUrl
       });
 
       if (error) throw error;
