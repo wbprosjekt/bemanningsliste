@@ -2,6 +2,7 @@
   "/admin/bemanningsliste/[year]/[week]/page": "app/admin/bemanningsliste/[year]/[week]/page.js",
   "/admin/brukere/page": "app/admin/brukere/page.js",
   "/admin/integrasjoner/tripletex/page": "app/admin/integrasjoner/tripletex/page.js",
+  "/auth/page": "app/auth/page.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
   "/min/uke/[year]/[week]/oversikt/page": "app/min/uke/[year]/[week]/oversikt/page.js",
   "/min/uke/[year]/[week]/page": "app/min/uke/[year]/[week]/page.js"

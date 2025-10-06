@@ -37,6 +37,7 @@ import {
 import { getWeekNumber } from "@/lib/displayNames";
 import OnboardingDialog from "@/components/OnboardingDialog";
 import UserInviteSystem from "@/components/UserInviteSystem";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface Profile {
   id: string;
@@ -402,8 +403,9 @@ const AdminBrukerePage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <ProtectedRoute requiredRole="admin">
+      <div className="min-h-screen bg-background p-6">
+        <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Brukerhåndtering</h1>
@@ -655,6 +657,7 @@ const AdminBrukerePage = () => {
         </Card>
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 

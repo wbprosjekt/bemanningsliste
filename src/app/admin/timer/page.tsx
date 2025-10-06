@@ -29,6 +29,7 @@ import {
   Paperclip,
 } from "lucide-react";
 import { formatTimeValue, getPersonDisplayName } from "@/lib/displayNames";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface Profile {
   id: string;
@@ -564,8 +565,9 @@ const AdminTimerPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <ProtectedRoute requiredRole="any-admin">
+      <div className="min-h-screen bg-background p-6">
+        <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Timer - Godkjenning</h1>
@@ -820,6 +822,7 @@ const AdminTimerPage = () => {
         </Card>
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 

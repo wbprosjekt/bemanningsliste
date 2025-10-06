@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Calendar, User, FileText } from "lucide-react";
 import { getPersonDisplayName, formatTimeValue } from "@/lib/displayNames";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 type PersonRow = Database['public']['Tables']['person']['Row'];
 
@@ -480,8 +481,9 @@ const MonthlyReportPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <ProtectedRoute requiredRole="any-admin">
+      <div className="min-h-screen bg-background p-4">
+        <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -710,6 +712,7 @@ const MonthlyReportPage = () => {
         )}
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import StaffingList from "@/components/StaffingList";
 import { getWeekNumber } from "@/lib/displayNames";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 const getWeeksInYear = (targetYear: number) => {
   const dec28 = new Date(targetYear, 11, 28);
@@ -61,24 +62,26 @@ export default function BemanningslisteWeekPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="border-b bg-card p-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-center gap-4">
-          <Button variant="outline" onClick={() => navigateWeeks(-6)}>
-            <ChevronLeft className="h-4 w-4" />
-            Forrige 6 uker
-          </Button>
-          <div className="text-lg font-medium">
-            Fra uke {currentWeek}, {currentYear}
+    <ProtectedRoute requiredRole="any-admin">
+      <div className="min-h-screen bg-background">
+        <div className="border-b bg-card p-4">
+          <div className="mx-auto flex max-w-7xl items-center justify-center gap-4">
+            <Button variant="outline" onClick={() => navigateWeeks(-6)}>
+              <ChevronLeft className="h-4 w-4" />
+              Forrige 6 uker
+            </Button>
+            <div className="text-lg font-medium">
+              Fra uke {currentWeek}, {currentYear}
+            </div>
+            <Button variant="outline" onClick={() => navigateWeeks(6)}>
+              Neste 6 uker
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
-          <Button variant="outline" onClick={() => navigateWeeks(6)}>
-            Neste 6 uker
-            <ChevronRight className="h-4 w-4" />
-          </Button>
         </div>
-      </div>
 
-      <StaffingList startWeek={currentWeek} startYear={currentYear} weeksToShow={6} />
-    </div>
+        <StaffingList startWeek={currentWeek} startYear={currentYear} weeksToShow={6} />
+      </div>
+    </ProtectedRoute>
   );
 }

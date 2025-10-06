@@ -24,6 +24,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import OnboardingDialog from "@/components/OnboardingDialog";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface Profile {
   id: string;
@@ -420,8 +421,9 @@ const TripletexIntegrationPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-4xl space-y-6">
+    <ProtectedRoute requiredRole="admin">
+      <div className="min-h-screen bg-background p-6">
+        <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Tripletex-integrasjon</h1>
@@ -658,6 +660,7 @@ const TripletexIntegrationPage = () => {
         </Card>
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 
