@@ -176,7 +176,7 @@ const ProjectSelector = ({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
+      <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[500px] p-0" align="start">
         <Command>
           <div className="flex items-center border-b px-3">
             <CommandInput placeholder="Søk prosjekter..." className="flex-1" />
@@ -232,17 +232,17 @@ const ProjectSelector = ({
                       value === project.id ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{project.project_name}</span>
+                  <div className="flex flex-col gap-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-medium truncate">{project.project_name}</span>
                       {project.project_number && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-xs shrink-0">
                           #{project.project_number}
                         </Badge>
                       )}
                     </div>
                     {project.customer_name && (
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-sm text-muted-foreground truncate">
                         {project.customer_name}
                       </span>
                     )}
