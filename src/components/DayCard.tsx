@@ -373,7 +373,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
           {getStatusChip()}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2 text-sm">
+      <CardContent className="space-y-3 text-sm p-4 sm:p-5">
         <div className="text-center text-xs">
           <div className="flex justify-center items-center gap-2">
             <span className="text-muted-foreground">Timer ført:</span>
@@ -399,7 +399,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                 {vakt.ttx_project_cache ? (
                   <Button
                     variant="ghost"
-                    className="w-full h-auto p-3 justify-start text-left relative"
+                    className="w-full h-auto p-4 md:p-3 justify-start text-left relative min-h-[90px] md:min-h-[80px]"
                     style={{ backgroundColor: getProjectColor(vakt.ttx_project_cache.tripletex_project_id || 0) }}
                     onClick={() => setSelectedProject(vakt.ttx_project_cache)}
                   >
@@ -408,7 +408,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className="font-semibold text-base leading-tight truncate cursor-help">
+                            <div className="font-semibold text-lg md:text-base leading-tight truncate cursor-help">
                               {(() => {
                                 const projectNumber = vakt.ttx_project_cache.project_number;
                                 const projectName = vakt.ttx_project_cache.project_name || `Prosjekt ${projectNumber}`;
@@ -442,7 +442,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                         </Tooltip>
                       </TooltipProvider>
                       {/* Compact time summary with status */}
-                      <div className="text-sm text-white opacity-95 mt-0.5 flex items-center justify-between">
+                      <div className="text-base md:text-sm text-white opacity-95 mt-1 flex items-center justify-between">
                         <span className="font-semibold">
                           {(() => {
                             // Smart time formatting function
@@ -491,7 +491,7 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                           })()}
                         </span>
                         {/* Status indicator */}
-                        <span className={`text-xs px-2 py-1 rounded-full ${
+                        <span className={`text-sm md:text-xs px-2.5 py-1.5 md:px-2 md:py-1 rounded-full ${
                           vakt.vakt_timer.length > 0 && vakt.vakt_timer.every(timer => 
                             timer.status === 'godkjent' || timer.tripletex_synced_at
                           ) ? 'bg-green-500 text-white' : 'bg-yellow-500 text-black'
@@ -518,16 +518,16 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
                   }}
                 >
                   <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
+                    <Button 
+                      variant="outline" 
                       size="sm"
-                      className="w-full text-xs"
+                      className="w-full h-12 md:h-10 text-base md:text-sm"
                       onClick={() => {
                         setActiveVaktId(vakt.id);
                         setSelectedTimer(null);
                       }}
                     >
-                      <Plus className="h-3 w-3 mr-1" />
+                      <Plus className="h-5 w-5 md:h-4 md:w-4 mr-1" />
                       {vakt.vakt_timer.length > 0 ? 'Legg til / Rediger timer' : 'Legg til timer'}
                     </Button>
                   </DialogTrigger>
@@ -594,10 +594,10 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
             <Button 
               variant="outline" 
               size="sm" 
-              className="w-full text-xs"
+              className="w-full h-12 md:h-10 text-base md:text-sm"
               onClick={() => setShowProjectDialog(true)}
             >
-              <Plus className="h-3 w-3 mr-1" />
+              <Plus className="h-5 w-5 md:h-4 md:w-4 mr-1" />
               {vakter.length === 0 ? 'Finn prosjekt' : 'Legg til prosjekt'}
             </Button>
             <ProjectSearchDialog

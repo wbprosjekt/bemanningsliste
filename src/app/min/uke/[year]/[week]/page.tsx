@@ -525,7 +525,7 @@ const MinUke = () => {
   const missingPersonRecord = !person;
 
   return (
-    <div className="min-h-screen bg-background p-2">
+    <div className="min-h-screen bg-background px-2 py-2 sm:px-4 sm:py-4">
       <div className="max-w-md mx-auto space-y-3">
         {/* Simulation Badge */}
         {isSimulation && simulatedPersonName && (
@@ -675,7 +675,7 @@ const MinUke = () => {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="text-xs h-10"
+                className="text-sm md:text-xs h-12 md:h-10"
                 onClick={() => {
                   const today = new Date();
                   const weekDays = getWeekDays();
@@ -687,16 +687,16 @@ const MinUke = () => {
                   }
                 }}
               >
-                <Calendar className="h-3 w-3 mr-1" />
+                <Calendar className="h-4 w-4 md:h-3 md:w-3 mr-1" />
                 Gå til i dag
               </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="text-xs h-10"
+                className="text-sm md:text-xs h-12 md:h-10"
                 onClick={() => router.push(`/min/uke/${currentYear}/${currentWeek}/oversikt`)}
               >
-                <BarChart3 className="h-3 w-3 mr-1" />
+                <BarChart3 className="h-4 w-4 md:h-3 md:w-3 mr-1" />
                 Ukeoversikt
               </Button>
             </div>
