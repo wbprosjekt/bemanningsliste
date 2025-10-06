@@ -2,24 +2,64 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getWeekNumber } from "@/lib/displayNames";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function IndexPage() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
+  const [profile, setProfile] = useState<{ role: string } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/auth");
+    } else if (!loading && user) {
+      loadProfile();
     }
   }, [user, loading, router]);
 
-  if (loading) {
+  const loadProfile = async () => {
+    if (!user) return;
+    
+    try {
+      setProfileLoading(true);
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error loading profile:', error);
+        setProfile(null);
+      } else {
+        const userRole = profileData?.role || 'user';
+        setProfile({ role: userRole });
+
+        // Auto-redirect based on role
+        if (userRole === 'user') {
+          // Regular users go straight to their week view
+          const currentYear = new Date().getFullYear();
+          const currentWeek = getWeekNumber(new Date());
+          router.replace(`/min/uke/${currentYear}/${currentWeek.toString().padStart(2, "0")}`);
+        }
+        // Admin/leder stay on dashboard (this page)
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      setProfile(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  if (loading || profileLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
@@ -29,7 +69,12 @@ export default function IndexPage() {
     );
   }
 
-  if (!user) {
+  if (!user || !profile) {
+    return null;
+  }
+
+  // If user role, they will be redirected - show nothing
+  if (profile.role === 'user') {
     return null;
   }
 

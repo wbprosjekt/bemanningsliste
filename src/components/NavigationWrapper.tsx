@@ -87,7 +87,15 @@ export default function NavigationWrapper() {
   }
 
   // Determine if user is admin based on profile role or access to admin pages
-  const isAdmin = profile.role === "admin" || profile.role === "manager";
+  const isAdmin = profile.role === "admin" || profile.role === "manager" || profile.role === "leder";
+
+  // Debug logging
+  console.log('🧭 NavigationWrapper:', {
+    email: user.email,
+    role: profile.role,
+    isAdmin,
+    navigation: isAdmin ? 'AdminNavigation' : 'EmployeeNavigation'
+  });
 
   // Render appropriate navigation based on role
   if (isAdmin) {

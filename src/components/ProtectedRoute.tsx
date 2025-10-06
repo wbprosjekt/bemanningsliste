@@ -35,6 +35,14 @@ export default function ProtectedRoute({
 
   useEffect(() => {
     if (!authLoading) {
+      // If user just logged out, immediately redirect without checking profile
+      if (!user) {
+        console.log('🔒 ProtectedRoute: User logged out, redirecting to /auth');
+        router.replace('/auth');
+        setChecking(false);
+        setProfileLoading(false);
+        return;
+      }
       loadProfileAndCheck();
     }
   }, [user, authLoading]);
@@ -43,6 +51,8 @@ export default function ProtectedRoute({
     if (!user) {
       // Ikke innlogget → redirect til auth
       console.log('🔒 ProtectedRoute: No user, redirecting to /auth');
+      setChecking(false);
+      setProfileLoading(false);
       router.replace('/auth');
       return;
     }
@@ -57,6 +67,8 @@ export default function ProtectedRoute({
 
       if (error) {
         console.error('Error loading profile:', error);
+        setChecking(false);
+        setProfileLoading(false);
         router.replace('/auth');
         return;
       }
@@ -82,6 +94,8 @@ export default function ProtectedRoute({
       }
     } catch (error) {
       console.error('Error in ProtectedRoute:', error);
+      setChecking(false);
+      setProfileLoading(false);
       router.replace('/auth');
     } finally {
       setProfileLoading(false);
