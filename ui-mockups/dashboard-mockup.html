@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bemanningsliste - Admin Dashboard (Mockup)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        /* Navigation Bar */
+        .navbar {
+            background: linear-gradient(135deg, #1e3a8a 0%, #4c1d95 100%);
+            padding: 0 2rem;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .navbar-menu {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-item {
+            color: rgba(255,255,255,0.9);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-1px);
+        }
+
+        .nav-item.active {
+            background: rgba(255,255,255,0.15);
+            border-bottom: 2px solid #60a5fa;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: white;
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .user-menu:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #60a5fa 0%, #a855f7 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            font-size: 1.125rem;
+            color: #6b7280;
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border: 1px solid rgba(0,0,0,0.06);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--card-color);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.15);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 12px;
+            background: var(--card-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 12px var(--card-shadow);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover .card-icon {
+            transform: scale(1.05);
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-description {
+            color: #6b7280;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+
+        .card-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Specific card colors */
+        .card-green {
+            --card-color: #10b981;
+            --card-gradient: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            --card-shadow: rgba(16, 185, 129, 0.3);
+        }
+
+        .card-blue {
+            --card-color: #3b82f6;
+            --card-gradient: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            --card-shadow: rgba(59, 130, 246, 0.3);
+        }
+
+        .card-purple {
+            --card-color: #a855f7;
+            --card-gradient: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            --card-shadow: rgba(168, 85, 247, 0.3);
+        }
+
+        .card-orange {
+            --card-color: #f97316;
+            --card-gradient: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
+            --card-shadow: rgba(249, 115, 22, 0.3);
+        }
+
+        .card-teal {
+            --card-color: #06b6d4;
+            --card-gradient: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+            --card-shadow: rgba(6, 182, 212, 0.3);
+        }
+
+        .card-gray {
+            --card-color: #6b7280;
+            --card-gradient: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+            --card-shadow: rgba(107, 114, 128, 0.3);
+            opacity: 0.6;
+        }
+
+        /* Icons (using simple emoji for now) */
+        .icon {
+            font-size: 2rem;
+        }
+
+        /* Stats */
+        .card-stats {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #f3f4f6;
+        }
+
+        .stat {
+            flex: 1;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 0.25rem;
+        }
+
+        /* Note */
+        .mockup-note {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            border-left: 4px solid #3b82f6;
+            max-width: 300px;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .mockup-note strong {
+            color: #1f2937;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-brand">⚡ Bemanningsliste</div>
+        <div class="navbar-menu">
+            <a href="#" class="nav-item active">
+                <span>🏠</span> Hjem
+            </a>
+            <a href="#" class="nav-item">
+                <span>📋</span> Bemanningsliste
+            </a>
+            <a href="#" class="nav-item">
+                <span>📊</span> Rapporter
+            </a>
+            <a href="#" class="nav-item">
+                <span>⚙️</span> Admin
+            </a>
+        </div>
+        <div class="user-menu">
+            <div class="avatar">KW</div>
+            <span>Kristian W.</span>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="page-header">
+            <h1 class="page-title">Admin Dashboard</h1>
+            <p class="page-subtitle">Velkommen tilbake! Her er en oversikt over systemet.</p>
+        </div>
+
+        <!-- Cards Grid -->
+        <div class="cards-grid">
+            <!-- Card 1: Min Uke -->
+            <div class="card card-green">
+                <div class="card-icon">
+                    <span class="icon">📅</span>
+                </div>
+                <h3 class="card-title">Min Uke</h3>
+                <p class="card-description">
+                    Timeføring og ukeoversikt for denne uken. Rask tilgang til timeregistrering.
+                </p>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-value">37.5</div>
+                        <div class="stat-label">Timer denne uke</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Bemanningsliste -->
+            <div class="card card-blue">
+                <div class="card-icon">
+                    <span class="icon">📋</span>
+                </div>
+                <h3 class="card-title">Bemanningsliste</h3>
+                <p class="card-description">
+                    Planlegg prosjekter for alle ansatte i Excel-lignende visning med full oversikt.
+                </p>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-value">24</div>
+                        <div class="stat-label">Aktive ansatte</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Brukerhåndtering -->
+            <div class="card card-purple">
+                <div class="card-icon">
+                    <span class="icon">👥</span>
+                </div>
+                <h3 class="card-title">Brukerhåndtering</h3>
+                <p class="card-description">
+                    Administrer brukere, roller og tilganger. Synkroniser ansatte fra Tripletex.
+                </p>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-value">32</div>
+                        <div class="stat-label">Totale brukere</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4: Tripletex-integrasjon -->
+            <div class="card card-orange">
+                <div class="card-icon">
+                    <span class="icon">🔧</span>
+                </div>
+                <h3 class="card-title">Tripletex-integrasjon</h3>
+                <p class="card-description">
+                    Administrer API-tilkobling og synkronisering med Tripletex. Status: Aktiv.
+                </p>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-value">
+                            <span style="color: #10b981;">●</span> Tilkoblet
+                        </div>
+                        <div class="stat-label">API Status</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 5: Rapporter -->
+            <div class="card card-teal">
+                <div class="card-icon">
+                    <span class="icon">📊</span>
+                </div>
+                <h3 class="card-title">Rapporter</h3>
+                <p class="card-description">
+                    Månedlige rapporter for lønnsgrunnlag og timeføring. Eksporter til CSV.
+                </p>
+                <div class="card-stats">
+                    <div class="stat">
+                        <div class="stat-value">385</div>
+                        <div class="stat-label">Timer siste måned</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 6: Innstillinger (Coming Soon) -->
+            <div class="card card-gray">
+                <div class="card-icon">
+                    <span class="icon">⚙️</span>
+                </div>
+                <h3 class="card-title">Innstillinger</h3>
+                <p class="card-description">
+                    Brukerinnstillinger og organisasjonsoppsett. Kommer snart.
+                </p>
+                <span class="card-badge" style="background: #f3f4f6; color: #6b7280;">
+                    🚧 Kommer snart
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mockup Note -->
+    <div class="mockup-note">
+        <strong>🎨 UI Mockup</strong>
+        Dette er en HTML-mockup av det nye designforslaget. 
+        Moderne gradients, shadows og hover-effekter for en mer levende opplevelse.
+    </div>
+</body>
+</html>
+

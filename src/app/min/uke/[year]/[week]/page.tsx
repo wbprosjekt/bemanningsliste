@@ -7,7 +7,6 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,20 +15,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar,
-  Eye,
-  Users,
   BarChart3,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Download,
-  Send,
-  Copy,
+  Users,
 } from "lucide-react";
 import { getDateFromWeek, getWeekNumber, getPersonDisplayName, formatTimeValue } from "@/lib/displayNames";
 import { toLocalDateString } from "@/lib/utils";
 import DayCard from "@/components/DayCard";
 import OnboardingDialog from "@/components/OnboardingDialog";
+import WeatherDayPills from "@/components/WeatherDayPills";
 
 type PersonRow = Database['public']['Tables']['person']['Row'];
 
@@ -64,62 +57,7 @@ interface WeeklySummary {
   }>;
 }
 
-// Day Navigator Component
-const DayNavigator = ({ 
-  weekDays, 
-  selectedIndex, 
-  onDayClick, 
-  todayIndex 
-}: { 
-  weekDays: Date[]; 
-  selectedIndex: number; 
-  onDayClick: (index: number) => void; 
-  todayIndex: number;
-}) => {
-  const dayNames = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
-  const dayNamesShort = ['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø'];
-  
-  return (
-    <div className="sticky top-0 bg-white z-20 border-b shadow-sm">
-      <div className="px-4 py-3">
-        <div className="grid grid-cols-7 gap-2">
-          {weekDays.map((date, index) => {
-            const isSelected = selectedIndex === index;
-            const isToday = todayIndex === index;
-            const dayNumber = date.getDate();
-            
-            return (
-              <button
-                key={index}
-                onClick={() => onDayClick(index)}
-                className={`
-                  flex flex-col items-center py-2 px-1 rounded-lg border-2 transition-all
-                  ${isSelected 
-                    ? 'border-blue-600 bg-blue-50' 
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                  }
-                `}
-              >
-                <span className={`text-xs font-medium mb-1 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`}>
-                  <span className="hidden sm:inline">{dayNames[index]}</span>
-                  <span className="sm:hidden">{dayNamesShort[index]}</span>
-                </span>
-                <div className="flex items-center gap-1">
-                  <span className={`text-lg font-bold ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
-                    {dayNumber}
-                  </span>
-                  {isToday && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-};
+// Day Navigator replaced by WeatherDayPills component
 
 const MinUke = () => {
   const params = useParams<{ year: string; week: string }>();
@@ -450,6 +388,36 @@ const MinUke = () => {
     }
   }, [profile?.org_id, currentYear, currentWeek]);
 
+  // Realtime subscription for auto-updating weekly summary
+  useEffect(() => {
+    if (!person?.id || !profile?.org_id) return;
+
+    console.log('🔄 Setting up Realtime subscription for vakt_timer');
+
+    const channel = supabase
+      .channel(`vakt_timer_changes_${person.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'vakt_timer',
+          filter: `org_id=eq.${profile.org_id}`
+        },
+        (payload) => {
+          console.log('🔔 Realtime update received:', payload);
+          // Reload weekly summary when timer changes
+          loadWeeklySummary();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔌 Unsubscribing from Realtime');
+      supabase.removeChannel(channel);
+    };
+  }, [person?.id, profile?.org_id, loadWeeklySummary]);
+
   useEffect(() => {
     if (user) {
       loadUserData();
@@ -619,24 +587,23 @@ const MinUke = () => {
               {/* Compact Summary Line */}
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">Timer:</span>
-                <span className={`font-semibold ${
-                  weeklySummary.totalHours >= weeklySummary.totalExpected 
-                    ? 'text-emerald-600' 
-                    : 'text-red-600'
-                }`}>
+                <span className="font-semibold text-gray-900">
                   {formatTimeValue(weeklySummary.totalHours)}/{formatTimeValue(weeklySummary.totalExpected)}t
                 </span>
                 <span className="text-muted-foreground text-xs">
                   {weeklySummary.completionPercentage}%
                 </span>
-                <Progress 
-                  value={Math.min(weeklySummary.completionPercentage, 100)} 
-                  className={`h-2 flex-1 ${
-                    weeklySummary.totalHours >= weeklySummary.totalExpected
-                      ? '[&>div]:bg-emerald-500'
-                      : '[&>div]:bg-red-500'
-                  }`}
-                />
+                <div className="h-2 flex-1 rounded-full overflow-hidden bg-gray-200">
+                  <div 
+                    className="h-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(weeklySummary.completionPercentage, 100)}%`,
+                      background: weeklySummary.totalHours >= weeklySummary.totalExpected
+                        ? 'linear-gradient(to right, #34d399, #22d3ee, #3b82f6)'
+                        : 'linear-gradient(to right, #f87171, #fb923c, #fbbf24)'
+                    }}
+                  />
+                </div>
                 {weeklySummary.totalOvertime > 0 && (
                   <span className="text-yellow-600 text-xs font-medium whitespace-nowrap">
                     +{formatTimeValue(weeklySummary.totalOvertime)}t OT
@@ -647,16 +614,20 @@ const MinUke = () => {
           </Card>
         )}
 
-        {/* Day Navigator */}
+        {/* Weather Day Pills Navigator */}
         {person && (
-          <DayNavigator
-            weekDays={getWeekDays()}
-            selectedIndex={selectedDayIndex}
-            onDayClick={setSelectedDayIndex}
-            todayIndex={getWeekDays().findIndex(d => 
-              toLocalDateString(d) === toLocalDateString(new Date())
-            )}
-          />
+          <div className="mb-4">
+            <WeatherDayPills
+              selectedDate={getWeekDays()[selectedDayIndex]}
+              onSelectDate={(date) => {
+                const index = getWeekDays().findIndex(
+                  (d) => toLocalDateString(d) === toLocalDateString(date)
+                );
+                if (index !== -1) setSelectedDayIndex(index);
+              }}
+              weekDates={getWeekDays()}
+            />
+          </div>
         )}
 
         {/* Single Day View with Fade-in */}
@@ -727,48 +698,6 @@ const MinUke = () => {
               >
                 <BarChart3 className="h-3 w-3 mr-1" />
                 Ukeoversikt
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-xs h-10"
-                onClick={() => {
-                  toast({
-                    title: "Kopier uke",
-                    description: "Funksjonen kommer snart!",
-                  });
-                }}
-              >
-                <Copy className="h-3 w-3 mr-1" />
-                Kopier uka
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-xs h-10"
-                onClick={() => {
-                  toast({
-                    title: "Send til godkjenning",
-                    description: "Funksjonen kommer snart!",
-                  });
-                }}
-              >
-                <Send className="h-3 w-3 mr-1" />
-                Send til godkjenning
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-xs h-10"
-                onClick={() => {
-                  toast({
-                    title: "Eksporter",
-                    description: "Funksjonen kommer snart!",
-                  });
-                }}
-              >
-                <Download className="h-3 w-3 mr-1" />
-                Eksporter
               </Button>
             </div>
           </CardContent>

@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Værmelding i Dagnavigator - Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 3rem;
+        }
+
+        .mockup-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .comparison-note {
+            background: #fef3c7;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #f59e0b;
+            color: #92400e;
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Week Header */
+        .week-header {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            margin-bottom: 2rem;
+        }
+
+        .week-title {
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            color: #1f2937;
+            margin-bottom: 1rem;
+        }
+
+        .week-stats {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            font-size: 1rem;
+            color: #6b7280;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            color: #ef4444;
+        }
+
+        .stat-total {
+            color: #6b7280;
+        }
+
+        .stat-percent {
+            color: #6b7280;
+        }
+
+        .progress-bar {
+            width: 200px;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #ef4444;
+            width: 39%;
+        }
+
+        .overtime-badge {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        /* Day Navigator */
+        .day-navigator {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .day-button {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 0.75rem;
+            min-width: 90px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .day-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-color: #3b82f6;
+        }
+
+        .day-button.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .day-button.active .day-name,
+        .day-button.active .day-number {
+            color: white;
+        }
+
+        .day-button.active .weather-temp {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Weather Icon Styles */
+        .weather-icon {
+            font-size: 1.75rem;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+        }
+
+        .weather-temp {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #6b7280;
+            line-height: 1;
+        }
+
+        .day-name {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #1f2937;
+            text-transform: capitalize;
+        }
+
+        .day-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .day-dot {
+            width: 6px;
+            height: 6px;
+            background: #3b82f6;
+            border-radius: 50%;
+            margin-top: 0.25rem;
+        }
+
+        /* Tooltip */
+        .weather-tooltip {
+            position: absolute;
+            background: #1f2937;
+            color: white;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 100;
+            min-width: 150px;
+            display: none;
+        }
+
+        .day-button:hover .weather-tooltip {
+            display: block;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+        }
+
+        .tooltip-row:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Size Variations */
+        .size-comparison {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .size-variant {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .variant-title {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        /* Small Size */
+        .day-button-small {
+            min-width: 70px;
+            padding: 0.5rem;
+        }
+
+        .day-button-small .weather-icon {
+            font-size: 1.25rem;
+        }
+
+        .day-button-small .weather-temp {
+            font-size: 0.625rem;
+        }
+
+        .day-button-small .day-name {
+            font-size: 0.75rem;
+        }
+
+        .day-button-small .day-number {
+            font-size: 1.25rem;
+        }
+
+        /* Large Size */
+        .day-button-large {
+            min-width: 110px;
+            padding: 1rem;
+        }
+
+        .day-button-large .weather-icon {
+            font-size: 2.5rem;
+        }
+
+        .day-button-large .weather-temp {
+            font-size: 0.875rem;
+        }
+
+        .day-button-large .day-name {
+            font-size: 1rem;
+        }
+
+        .day-button-large .day-number {
+            font-size: 1.75rem;
+        }
+
+        /* Recommendation Badge */
+        .recommendation {
+            background: #10b981;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .notes {
+            background: #f3f4f6;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            color: #4b5563;
+            margin-top: 1rem;
+        }
+
+        .notes strong {
+            color: #1f2937;
+        }
+
+        /* Weather Only (No Temp) */
+        .day-button-no-temp .weather-icon {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Original Design (Current) -->
+    <div class="mockup-section">
+        <h2 class="section-title">📅 Original (uten værmelding)</h2>
+        <div class="comparison-note">
+            <strong>Current:</strong> Slik det ser ut nå - uten værinformasjon
+        </div>
+        
+        <div class="week-header">
+            <div class="week-title">Uke 41, 2025</div>
+            <div class="week-stats">
+                <span class="stat-item">Timer: <span class="stat-value">14,50</span><span class="stat-total">/37,50t</span></span>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <span class="stat-percent">39%</span>
+                <span class="overtime-badge">+2,00t OT</span>
+            </div>
+        </div>
+
+        <div class="day-navigator">
+            <div class="day-button active day-button-no-temp">
+                <span class="day-name">Man</span>
+                <span class="day-number">6</span>
+                <div class="day-dot"></div>
+            </div>
+            <div class="day-button day-button-no-temp">
+                <span class="day-name">Tir</span>
+                <span class="day-number">7</span>
+            </div>
+            <div class="day-button day-button-no-temp">
+                <span class="day-name">Ons</span>
+                <span class="day-number">8</span>
+            </div>
+            <div class="day-button day-button-no-temp">
+                <span class="day-name">Tor</span>
+                <span class="day-number">9</span>
+            </div>
+            <div class="day-button day-button-no-temp">
+                <span class="day-name">Fre</span>
+                <span class="day-number">10</span>
+            </div>
+            <div class="day-button day-button-no-temp">
+                <span class="day-name">Lør</span>
+                <span class="day-number">11</span>
+            </div>
+            <div class="day-button day-button-no-temp">
+                <span class="day-name">Søn</span>
+                <span class="day-number">12</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- OPTION 1: Medium Size (RECOMMENDED) -->
+    <div class="mockup-section">
+        <h2 class="section-title">⭐ ANBEFALT: Medium størrelse med temperatur</h2>
+        <div class="comparison-note">
+            <strong>Anbefalt:</strong> Balansert størrelse - ikke for stor, ikke for liten. Væikon + temperatur gir komplett info.
+        </div>
+        
+        <div class="week-header">
+            <div class="week-title">Uke 41, 2025</div>
+            <div class="week-stats">
+                <span class="stat-item">Timer: <span class="stat-value">14,50</span><span class="stat-total">/37,50t</span></span>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <span class="stat-percent">39%</span>
+                <span class="overtime-badge">+2,00t OT</span>
+            </div>
+        </div>
+
+        <div class="day-navigator">
+            <div class="day-button active">
+                <span class="weather-icon">☀️</span>
+                <span class="weather-temp">18°</span>
+                <span class="day-name">Man</span>
+                <span class="day-number">6</span>
+                <div class="day-dot"></div>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">🌧️</span>
+                <span class="weather-temp">16°</span>
+                <span class="day-name">Tir</span>
+                <span class="day-number">7</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">⛅</span>
+                <span class="weather-temp">15°</span>
+                <span class="day-name">Ons</span>
+                <span class="day-number">8</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">☁️</span>
+                <span class="weather-temp">14°</span>
+                <span class="day-name">Tor</span>
+                <span class="day-number">9</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">🌤️</span>
+                <span class="weather-temp">16°</span>
+                <span class="day-name">Fre</span>
+                <span class="day-number">10</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">☀️</span>
+                <span class="weather-temp">17°</span>
+                <span class="day-name">Lør</span>
+                <span class="day-number">11</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">☀️</span>
+                <span class="weather-temp">18°</span>
+                <span class="day-name">Søn</span>
+                <span class="day-number">12</span>
+            </div>
+        </div>
+
+        <div class="recommendation">
+            ✅ BEST BALANCE: Tydelig værikon (1.75rem) + temperatur + ikke for stort
+        </div>
+        <div class="notes">
+            <strong>Fordeler:</strong><br>
+            • Værikonet er lett å se (1.75rem = ~28px)<br>
+            • Temperatur gir nyttig kontekst<br>
+            • Ikke for stort - passer bra på mobil<br>
+            • Profesjonelt og moderne utseende
+        </div>
+    </div>
+
+    <!-- Size Comparison -->
+    <div class="mockup-section">
+        <h2 class="section-title">📏 Størrelsessammenligning</h2>
+        <div class="size-comparison">
+            <!-- Small -->
+            <div class="size-variant">
+                <div class="variant-title">Liten (compact)</div>
+                <div class="day-navigator">
+                    <div class="day-button day-button-small active">
+                        <span class="weather-icon">☀️</span>
+                        <span class="weather-temp">18°</span>
+                        <span class="day-name">Man</span>
+                        <span class="day-number">6</span>
+                        <div class="day-dot"></div>
+                    </div>
+                    <div class="day-button day-button-small">
+                        <span class="weather-icon">🌧️</span>
+                        <span class="weather-temp">16°</span>
+                        <span class="day-name">Tir</span>
+                        <span class="day-number">7</span>
+                    </div>
+                    <div class="day-button day-button-small">
+                        <span class="weather-icon">⛅</span>
+                        <span class="weather-temp">15°</span>
+                        <span class="day-name">Ons</span>
+                        <span class="day-number">8</span>
+                    </div>
+                </div>
+                <div class="notes">
+                    <strong>Værikon:</strong> 1.25rem (~20px)<br>
+                    ⚠️ Kanskje litt for lite
+                </div>
+            </div>
+
+            <!-- Large -->
+            <div class="size-variant">
+                <div class="variant-title">Stor (spacious)</div>
+                <div class="day-navigator">
+                    <div class="day-button day-button-large active">
+                        <span class="weather-icon">☀️</span>
+                        <span class="weather-temp">18°</span>
+                        <span class="day-name">Man</span>
+                        <span class="day-number">6</span>
+                        <div class="day-dot"></div>
+                    </div>
+                    <div class="day-button day-button-large">
+                        <span class="weather-icon">🌧️</span>
+                        <span class="weather-temp">16°</span>
+                        <span class="day-name">Tir</span>
+                        <span class="day-number">7</span>
+                    </div>
+                    <div class="day-button day-button-large">
+                        <span class="weather-icon">⛅</span>
+                        <span class="weather-temp">15°</span>
+                        <span class="day-name">Ons</span>
+                        <span class="day-number">8</span>
+                    </div>
+                </div>
+                <div class="notes">
+                    <strong>Værikon:</strong> 2.5rem (~40px)<br>
+                    ⚠️ Kanskje litt for stort
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Option: Uten temperatur -->
+    <div class="mockup-section">
+        <h2 class="section-title">🌤️ Alternativ: Kun værikon (uten temp)</h2>
+        <div class="comparison-note">
+            <strong>Enklere:</strong> Kun værikonet - mer minimalistisk, men mindre informasjon
+        </div>
+
+        <div class="day-navigator">
+            <div class="day-button active">
+                <span class="weather-icon">☀️</span>
+                <span class="day-name">Man</span>
+                <span class="day-number">6</span>
+                <div class="day-dot"></div>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">🌧️</span>
+                <span class="day-name">Tir</span>
+                <span class="day-number">7</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">⛅</span>
+                <span class="day-name">Ons</span>
+                <span class="day-number">8</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">☁️</span>
+                <span class="day-name">Tor</span>
+                <span class="day-number">9</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">🌤️</span>
+                <span class="day-name">Fre</span>
+                <span class="day-number">10</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">☀️</span>
+                <span class="day-name">Lør</span>
+                <span class="day-number">11</span>
+            </div>
+            <div class="day-button">
+                <span class="weather-icon">☀️</span>
+                <span class="day-name">Søn</span>
+                <span class="day-number">12</span>
+            </div>
+        </div>
+
+        <div class="notes">
+            <strong>Fordeler:</strong> Mer minimalistisk, raskere å scanne<br>
+            <strong>Ulemper:</strong> Ingen temperatur info (må hovere for detaljer)
+        </div>
+    </div>
+
+    <!-- Mockup Note -->
+    <div style="position: fixed; bottom: 2rem; right: 2rem; background: white; padding: 1rem 1.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); border-left: 4px solid #3b82f6; max-width: 320px; font-size: 0.875rem; color: #6b7280;">
+        <strong style="color: #1f2937; display: block; margin-bottom: 0.5rem;">🌤️ Værmelding Mockup</strong>
+        Sammenligning av forskjellige størrelser og layouts.
+        <br><br>
+        <strong style="color: #10b981;">⭐ Anbefaling:</strong> Medium størrelse med temperatur (option 1)
+    </div>
+</body>
+</html>
+
