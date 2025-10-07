@@ -168,13 +168,16 @@ export default function IndexPage() {
             </CardContent>
           </Card>
 
-          <Card className="opacity-60">
+          <Card
+            className="cursor-pointer transition-shadow hover:shadow-lg"
+            onClick={() => router.push("/admin/settings")}
+          >
             <CardHeader>
               <CardTitle>⚙️ Innstillinger</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="mb-4 text-muted-foreground">Kommer snart</p>
-              <p className="text-sm">Brukerinnstillinger og organisasjonsoppsett.</p>
+              <p className="mb-4 text-muted-foreground">Admin-verktøy</p>
+              <p className="text-sm">Konfigurer påminnelser og systeminnstillinger.</p>
             </CardContent>
           </Card>
         </div>

@@ -23,7 +23,7 @@ file_size_limit = "50MiB"
 
 
 [functions.tripletex-api]
-verify_jwt = true
+verify_jwt = false
 
 [functions.nightly-sync]
 verify_jwt = true

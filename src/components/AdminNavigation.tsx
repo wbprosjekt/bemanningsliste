@@ -36,6 +36,7 @@ import {
   LogOut,
   ChevronDown,
   Menu,
+  Bell,
 } from "lucide-react";
 
 interface AdminNavigationProps {
@@ -126,6 +127,18 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               >
                 <BarChart3 className="h-4 w-4" />
                 <span>Rapporter</span>
+              </button>
+
+              <button
+                onClick={() => router.push("/admin/settings")}
+                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive("/admin/settings")
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                <Bell className="h-4 w-4" />
+                <span>Innstillinger</span>
               </button>
 
               <DropdownMenu>
@@ -271,6 +284,18 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
             >
               <BarChart3 className="h-4 w-4 mr-2" />
               Rapporter
+            </Button>
+
+            <Button
+              variant={isActive("/admin/settings") ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                router.push("/admin/settings");
+                setMobileMenuOpen(false);
+              }}
+            >
+              <Bell className="h-4 w-4 mr-2" />
+              Innstillinger
             </Button>
 
             {/* Admin submenu */}
