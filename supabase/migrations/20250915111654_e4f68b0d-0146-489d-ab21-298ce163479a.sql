@@ -33,7 +33,7 @@ SELECT cron.schedule(
   SELECT
     net.http_post(
         url:='https://jlndohflirfixbinqdwe.supabase.co/functions/v1/nightly-sync',
-        headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpsbmRvaGZsaXJmaXhiaW5xZHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MzM2MDksImV4cCI6MjA3MzUwOTYwOX0.BWu2LjkwGTMEOVe5HQZyYEGPtsomVX7Vs7MzACzyxSU"}'::jsonb,
+        headers:='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
         body:='{"triggered_by": "cron", "time": "' || now()::text || '"}'::jsonb
     ) as request_id;
   $$

@@ -9,7 +9,7 @@ SELECT cron.schedule(
   SELECT
     net.http_post(
         url:='https://jlndohflirfixbinqdwe.supabase.co/functions/v1/email-reminders',
-        headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpsbmRvaGZsaXJmaXhiaW5xZHdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzkzMzYwOSwiZXhwIjoyMDczNTA5NjA5fQ.placeholder"}'::jsonb,
+        headers:='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
         body:='{"action": "send-weekly-reminder", "orgId": "all", "triggered_by": "cron", "time": "' || now()::text || '"}'::jsonb
     ) as request_id;
   $$
@@ -23,7 +23,7 @@ SELECT cron.schedule(
   SELECT
     net.http_post(
         url:='https://jlndohflirfixbinqdwe.supabase.co/functions/v1/email-reminders',
-        headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpsbmRvaGZsaXJmaXhiaW5xZHdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzkzMzYwOSwiZXhwIjoyMDczNTA5NjA5fQ.placeholder"}'::jsonb,
+        headers:='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
         body:='{"action": "send-payroll-reminder", "orgId": "all", "triggered_by": "cron", "time": "' || now()::text || '"}'::jsonb
     ) as request_id;
   $$

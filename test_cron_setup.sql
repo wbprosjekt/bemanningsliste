@@ -13,6 +13,6 @@ SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
 -- 4. Test if we can call the Edge Function manually
 SELECT net.http_post(
     url:='https://jlndohflirfixbinqdwe.supabase.co/functions/v1/email-reminders',
-    headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpsbmRvaGZsaXJmaXhiaW5xZHdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzkzMzYwOSwiZXhwIjoyMDczNTA5NjA5fQ.placeholder"}'::jsonb,
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
     body:='{"action": "send-test", "orgId": "test", "testEmail": "test@example.com"}'::jsonb
 ) as test_result;
