@@ -58,6 +58,183 @@ export type Database = {
           },
         ]
       }
+      email_logs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          message_id: string | null
+          org_id: string
+          provider: string
+          provider_response: Json | null
+          recipient_email: string
+          recipient_name: string | null
+          reminder_type: string | null
+          sent_at: string
+          status: string
+          subject: string
+          template_type: string
+          triggered_by: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          org_id: string
+          provider?: string
+          provider_response?: Json | null
+          recipient_email: string
+          recipient_name?: string | null
+          reminder_type?: string | null
+          sent_at?: string
+          status: string
+          subject: string
+          template_type: string
+          triggered_by: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          org_id?: string
+          provider?: string
+          provider_response?: Json | null
+          recipient_email?: string
+          recipient_name?: string | null
+          reminder_type?: string | null
+          sent_at?: string
+          status?: string
+          subject?: string
+          template_type?: string
+          triggered_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_settings: {
+        Row: {
+          api_key: string
+          created_at: string
+          from_email: string
+          from_name: string
+          id: string
+          is_active: boolean
+          last_tested_at: string | null
+          org_id: string
+          provider: string
+          site_url: string
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: number | null
+          smtp_secure: boolean | null
+          smtp_username: string | null
+          test_error_message: string | null
+          test_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_key: string
+          created_at?: string
+          from_email: string
+          from_name?: string
+          id?: string
+          is_active?: boolean
+          last_tested_at?: string | null
+          org_id: string
+          provider?: string
+          site_url?: string
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_secure?: boolean | null
+          smtp_username?: string | null
+          test_error_message?: string | null
+          test_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          from_email?: string
+          from_name?: string
+          id?: string
+          is_active?: boolean
+          last_tested_at?: string | null
+          org_id?: string
+          provider?: string
+          site_url?: string
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_secure?: boolean | null
+          smtp_username?: string | null
+          test_error_message?: string | null
+          test_status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          body_html: string
+          body_text: string
+          created_at: string
+          id: string
+          org_id: string
+          subject: string
+          template_type: string
+          updated_at: string
+          variables: string[]
+        }
+        Insert: {
+          body_html: string
+          body_text: string
+          created_at?: string
+          id?: string
+          org_id: string
+          subject: string
+          template_type: string
+          updated_at?: string
+          variables?: string[]
+        }
+        Update: {
+          body_html?: string
+          body_text?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          subject?: string
+          template_type?: string
+          updated_at?: string
+          variables?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["org_id"]
+          },
+        ]
+      }
       frie_bobler: {
         Row: {
           color: string
@@ -417,6 +594,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "project_color_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reminder_settings: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          payroll_day_of_month: number
+          payroll_days_before: number
+          payroll_enabled: boolean
+          send_to_all: boolean
+          updated_at: string
+          weekly_day: number
+          weekly_enabled: boolean
+          weekly_time: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          payroll_day_of_month?: number
+          payroll_days_before?: number
+          payroll_enabled?: boolean
+          send_to_all?: boolean
+          updated_at?: string
+          weekly_day?: number
+          weekly_enabled?: boolean
+          weekly_time?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          payroll_day_of_month?: number
+          payroll_days_before?: number
+          payroll_enabled?: boolean
+          send_to_all?: boolean
+          updated_at?: string
+          weekly_day?: number
+          weekly_enabled?: boolean
+          weekly_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_settings_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "org"

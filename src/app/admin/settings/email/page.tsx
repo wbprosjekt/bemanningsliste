@@ -16,20 +16,22 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 interface EmailSettings {
   id?: string;
   org_id: string;
-  provider: 'resend' | 'sendgrid' | 'smtp';
+  provider: string;
   api_key: string;
   from_email: string;
   from_name: string;
   site_url: string;
-  smtp_host?: string;
-  smtp_port?: number;
-  smtp_username?: string;
-  smtp_password?: string;
-  smtp_secure?: boolean;
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_username?: string | null;
+  smtp_password?: string | null;
+  smtp_secure?: boolean | null;
   is_active: boolean;
-  last_tested_at?: string;
-  test_status?: 'success' | 'failed' | 'pending';
-  test_error_message?: string;
+  last_tested_at?: string | null;
+  test_status?: string | null;
+  test_error_message?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export default function EmailSettingsPage() {

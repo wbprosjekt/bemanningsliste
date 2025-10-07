@@ -19,16 +19,18 @@ interface EmailLog {
   id: string;
   org_id: string;
   recipient_email: string;
-  recipient_name: string;
+  recipient_name: string | null;
   subject: string;
-  template_type: 'payroll' | 'weekly' | 'test';
+  template_type: string;
   sent_at: string;
-  status: 'sent' | 'failed' | 'pending';
-  error_message?: string;
-  message_id?: string;
+  status: string;
+  error_message?: string | null;
+  message_id?: string | null;
   provider: string;
-  triggered_by: 'manual' | 'cron' | 'test';
-  reminder_type?: 'payroll' | 'weekly' | 'test';
+  triggered_by: string;
+  reminder_type?: string | null;
+  created_at: string;
+  provider_response?: any;
 }
 
 export default function EmailLogsPage() {

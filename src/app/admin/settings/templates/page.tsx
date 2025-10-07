@@ -16,11 +16,13 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 interface EmailTemplate {
   id?: string;
   org_id: string;
-  template_type: 'payroll' | 'weekly' | 'test';
+  template_type: string;
   subject: string;
   body_html: string;
   body_text: string;
   variables: string[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 const DEFAULT_TEMPLATES = {
