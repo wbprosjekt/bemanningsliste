@@ -35,11 +35,12 @@ function validateEnvironment(): EnvConfig {
   }
 
   // Validate Supabase key format (should be a JWT-like string)
-  if (requiredEnvVars.NEXT_PUBLIC_SUPABASE_ANON_KEY && 
-      (!requiredEnvVars.NEXT_PUBLIC_SUPABASE_ANON_KEY.startsWith('eyJ') || 
-       requiredEnvVars.NEXT_PUBLIC_SUPABASE_ANON_KEY.length < 50)) {
-    invalidVars.push('NEXT_PUBLIC_SUPABASE_ANON_KEY (invalid format)');
-  }
+  // Temporarily disabled for new Supabase API key format
+  // if (requiredEnvVars.NEXT_PUBLIC_SUPABASE_ANON_KEY && 
+  //     (!requiredEnvVars.NEXT_PUBLIC_SUPABASE_ANON_KEY.startsWith('eyJ') || 
+  //      requiredEnvVars.NEXT_PUBLIC_SUPABASE_ANON_KEY.length < 50)) {
+  //   invalidVars.push('NEXT_PUBLIC_SUPABASE_ANON_KEY (invalid format)');
+  // }
 
   // Report errors
   if (missingVars.length > 0 || invalidVars.length > 0) {
