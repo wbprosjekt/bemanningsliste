@@ -41,18 +41,23 @@ export default function NavigationWrapper() {
         .from('profiles')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) {
+      // Ignore PGRST116 (no rows) - it means user has no profile yet
+      if (error && error.code !== 'PGRST116') {
         console.error('Error loading profile:', error);
         setProfile(null);
-      } else {
+      } else if (profileData) {
         setProfile({
           ...profileData,
           role: profileData.role || 'user',
           fornavn: profileData.display_name?.split(' ')[0] || '',
           etternavn: profileData.display_name?.split(' ').slice(1).join(' ') || ''
         });
+      } else {
+        // No profile found - this is OK, user needs onboarding
+        console.log('No profile found for user - onboarding required');
+        setProfile(null);
       }
     } catch (error) {
       console.error('Error loading profile:', error);

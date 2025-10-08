@@ -21,8 +21,8 @@ import {
 import { getDateFromWeek, getWeekNumber, getPersonDisplayName, formatTimeValue } from "@/lib/displayNames";
 import { toLocalDateString } from "@/lib/utils";
 import DayCard from "@/components/DayCard";
-import OnboardingDialog from "@/components/OnboardingDialog";
 import WeatherDayPills from "@/components/WeatherDayPills";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 type PersonRow = Database['public']['Tables']['person']['Row'];
 
@@ -68,7 +68,6 @@ const MinUke = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [isSimulation, setIsSimulation] = useState(false);
   const [simulatedPersonName, setSimulatedPersonName] = useState<string | null>(null);
   const [weeklySummary, setWeeklySummary] = useState<WeeklySummary | null>(null);
@@ -144,8 +143,7 @@ const MinUke = () => {
       }
 
       if (!profileData) {
-        console.warn('No profile found for user');
-        setShowOnboarding(true);
+        console.warn('No profile found for user - ProtectedRoute should have caught this');
         setLoading(false);
         return;
       }
@@ -436,10 +434,6 @@ const MinUke = () => {
     }
   }, [profile, loadCalendarDays]);
 
-  const handleOnboardingComplete = () => {
-    setShowOnboarding(false);
-    loadUserData();
-  };
 
   const navigateWeek = (delta: number) => {
     let newYear = currentYear;
@@ -488,10 +482,6 @@ const MinUke = () => {
       }
     }
   }, [loading, person, weeklySummary]);
-
-  if (showOnboarding) {
-    return <OnboardingDialog onComplete={handleOnboardingComplete} />;
-  }
 
   if (loading) {
     return (
@@ -707,4 +697,12 @@ const MinUke = () => {
   );
 };
 
-export default MinUke;
+function MinUkeWithProtection() {
+  return (
+    <ProtectedRoute requireProfile={true}>
+      <MinUke />
+    </ProtectedRoute>
+  );
+}
+
+export default MinUkeWithProtection;

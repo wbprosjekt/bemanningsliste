@@ -5,8 +5,10 @@
   "/admin/integrasjoner/tripletex/page": "app/admin/integrasjoner/tripletex/page.js",
   "/admin/rapporter/maanedlig/page": "app/admin/rapporter/maanedlig/page.js",
   "/admin/settings/page": "app/admin/settings/page.js",
+  "/admin/timer/page": "app/admin/timer/page.js",
   "/api/current-weather/route": "app/api/current-weather/route.js",
   "/api/forecast/route": "app/api/forecast/route.js",
+  "/auth/page": "app/auth/page.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
   "/min/uke/[year]/[week]/page": "app/min/uke/[year]/[week]/page.js",
   "/page": "app/page.js"

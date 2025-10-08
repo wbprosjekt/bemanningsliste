@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { codeToWeather } from "@/lib/weather";
+import { useWeatherForecast, useCurrentTemperature } from "@/hooks/useWeather";
 
 interface WeatherDay {
   date: string;
@@ -31,52 +32,47 @@ export default function WeatherDayPills({
   onSelectDate,
   weekDates,
 }: WeatherDayPillsProps) {
-  const [weatherDays, setWeatherDays] = useState<WeatherDay[] | null>(null);
-  const [currentTemp, setCurrentTemp] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null);
 
+  // Get coordinates on mount
   useEffect(() => {
-    async function loadWeather(lat: number, lon: number) {
-      try {
-        // Load forecast data (future days)
-        const forecastRes = await fetch(`/api/forecast?lat=${lat}&lon=${lon}`);
-        let forecastData = null;
-        if (forecastRes.ok) {
-          forecastData = await forecastRes.json();
-          setWeatherDays(forecastData?.days ?? null);
-        }
-
-        // Load current temperature for today
-        const currentTemp = await getCurrentTemperature(lat, lon);
-        setCurrentTemp(currentTemp);
-
-        // Save today's weather to history (if we have data)
-        if (forecastData?.days?.length > 0) {
-          saveDailyWeatherToHistory(forecastData.days[0]);
-        }
-
-        // Clean up old historical data (older than 7 days)
-        cleanupOldWeatherHistory();
-      } catch (error) {
-        console.error("Weather fetch error:", error);
-        setWeatherDays(null);
-        setCurrentTemp(null);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    // Try geolocation, fallback to Nittedal
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => loadWeather(pos.coords.latitude, pos.coords.longitude),
-        () => loadWeather(60.0, 10.85), // Nittedal fallback
+        (pos) => setCoordinates({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        () => setCoordinates({ lat: 60.0, lon: 10.85 }), // Nittedal fallback
         { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 } // 10 min cache
       );
     } else {
-      loadWeather(60.0, 10.85); // Nittedal fallback
+      setCoordinates({ lat: 60.0, lon: 10.85 }); // Nittedal fallback
     }
   }, []);
+
+  // Use React Query hooks for weather data
+  const { data: forecastData, isLoading: forecastLoading } = useWeatherForecast(
+    coordinates?.lat ?? 0, 
+    coordinates?.lon ?? 0
+  );
+  
+  const { data: currentTemp, isLoading: currentLoading } = useCurrentTemperature(
+    coordinates?.lat ?? 0, 
+    coordinates?.lon ?? 0
+  );
+
+  // Save today's weather to history when forecast data is available
+  useEffect(() => {
+    if (forecastData?.days?.length > 0) {
+      saveDailyWeatherToHistory(forecastData.days[0]);
+    }
+  }, [forecastData]);
+
+  // Clean up old historical data on mount
+  useEffect(() => {
+    cleanupOldWeatherHistory();
+  }, []);
+
+  // Determine overall loading state
+  const isLoading = loading || forecastLoading || currentLoading;
 
   // Save today's weather to history
   function saveDailyWeatherToHistory(weatherDay: WeatherDay) {
@@ -162,51 +158,12 @@ export default function WeatherDayPills({
     return 'future';
   }
 
-  // Get current temperature for today with caching
-  async function getCurrentTemperature(lat: number, lon: number): Promise<number | null> {
-    const cacheKey = `current-temp-${lat}-${lon}`;
-    const today = new Date().toISOString().split('T')[0];
-    
-    try {
-      // Check cache first
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const { temperature, date, timestamp } = JSON.parse(cached);
-        // Use cache if it's from today and less than 1 hour old
-        if (date === today && Date.now() - timestamp < 3600000) {
-          return temperature;
-        }
-      }
-
-      // Fetch fresh data
-      const res = await fetch(`/api/current-weather?lat=${lat}&lon=${lon}`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      const temperature = data?.currentWeather?.temperature ?? null;
-      
-      console.log('Current weather API response:', { data, temperature });
-
-      // Cache the result
-      if (temperature !== null) {
-        localStorage.setItem(cacheKey, JSON.stringify({
-          temperature,
-          date: today,
-          timestamp: Date.now()
-        }));
-      }
-
-      return temperature;
-    } catch (error) {
-      console.error("Current weather fetch error:", error);
-      return null;
-    }
-  }
 
   // Find weather for a specific date
   function getWeatherForDate(date: Date): WeatherDay | null {
-    if (!weatherDays) return null;
+    if (!forecastData?.days) return null;
     const dateStr = date.toISOString().split("T")[0];
-    return weatherDays.find((d) => d.date === dateStr) ?? null;
+    return forecastData.days.find((d) => d.date === dateStr) ?? null;
   }
 
   // Get display data for a date
@@ -312,17 +269,17 @@ export default function WeatherDayPills({
               title={displayData.weather ? `${codeToWeather(displayData.weather.code)?.label} • ${Math.round(displayData.weather.tmax)}° / ${Math.round(displayData.weather.tmin)}°` : undefined}
             >
               {/* Weather emoji */}
-              {!loading && displayData.icon && (
+              {!isLoading && displayData.icon && (
                 <span className="text-lg sm:text-xl leading-none">
                   {displayData.icon}
                 </span>
               )}
-              {loading && (
+              {isLoading && (
                 <span className="text-lg sm:text-xl leading-none opacity-30">⏳</span>
               )}
 
               {/* Temperature */}
-              {!loading && displayData.showTemp && displayData.temperature && (
+              {!isLoading && displayData.showTemp && displayData.temperature && (
                 <span
                   className={`text-[10px] sm:text-xs font-semibold leading-none ${
                     isActive ? "text-white/90" : "text-gray-600"
