@@ -428,12 +428,22 @@ const MonthlyReportPage = () => {
     }
   }, [profile?.org_id, selectedEmployee, selectedMonth, selectedYear, employees, months, toast]);
 
-  const generatePDF = () => {
-    // TODO: Implement PDF generation
-    toast({
-      title: "PDF-generering",
-      description: "PDF-funksjonen kommer snart!",
-    });
+  const printReport = () => {
+    // Hide the print button and other UI elements during print
+    const printButton = document.querySelector('[data-print-button]') as HTMLElement;
+    const filterCard = document.querySelector('[data-filter-card]') as HTMLElement;
+    
+    if (printButton) printButton.style.display = 'none';
+    if (filterCard) filterCard.style.display = 'none';
+    
+    // Trigger print dialog
+    window.print();
+    
+    // Restore elements after print dialog closes
+    setTimeout(() => {
+      if (printButton) printButton.style.display = '';
+      if (filterCard) filterCard.style.display = '';
+    }, 1000);
   };
 
   useEffect(() => {
@@ -495,7 +505,7 @@ const MonthlyReportPage = () => {
         </div>
 
         {/* Filter Panel */}
-        <Card>
+        <Card data-filter-card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
@@ -566,24 +576,31 @@ const MonthlyReportPage = () => {
             </CardContent>
           </Card>
         ) : reportData ? (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    {reportData.employee.name}
-                  </CardTitle>
-                  <p className="text-muted-foreground mt-1">
-                    {reportData.period.month} {reportData.period.year}
-                  </p>
+          <div className="print-report">
+            {/* Print Header - only visible when printing */}
+            <div className="print-header hidden">
+              <h1>Månedlig Lønnsrapport</h1>
+              <h2>{reportData.employee.name} - {reportData.period.month} {reportData.period.year}</h2>
+            </div>
+            
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 print-employee">
+                      <User className="h-5 w-5" />
+                      {reportData.employee.name}
+                    </CardTitle>
+                    <p className="text-muted-foreground mt-1">
+                      {reportData.period.month} {reportData.period.year}
+                    </p>
+                  </div>
+                  <Button onClick={printReport} className="flex items-center gap-2" data-print-button>
+                    <Download className="h-4 w-4" />
+                    Skriv ut / Lagre som PDF
+                  </Button>
                 </div>
-                <Button onClick={generatePDF} className="flex items-center gap-2">
-                  <Download className="h-4 w-4" />
-                  Generer PDF
-                </Button>
-              </div>
-            </CardHeader>
+              </CardHeader>
             <CardContent>
               {/* Report Content - Different layouts for monthly vs yearly */}
               <div className="space-y-6">
@@ -621,9 +638,9 @@ const MonthlyReportPage = () => {
                     </h3>
                     <div className="space-y-4">
                       {reportData.projects?.map((project, index) => (
-                        <div key={index} className="border border-gray-200 rounded-lg p-4">
+                        <div key={index} className="print-project border border-gray-200 rounded-lg p-4">
                           {/* Project Header */}
-                          <div className="flex justify-between items-center mb-3">
+                          <div className="print-project-header flex justify-between items-center mb-3">
                             <div className="font-medium">
                               {project.project_number} {project.project_name}
                             </div>
@@ -638,9 +655,9 @@ const MonthlyReportPage = () => {
                           </div>
                           
                           {/* Date Entries */}
-                          <div className="ml-4 space-y-1">
+                          <div className="print-project-entries ml-4 space-y-1">
                             {project.entries.map((entry, entryIndex) => (
-                              <div key={entryIndex} className="flex justify-between items-center text-sm">
+                              <div key={entryIndex} className="print-entry flex justify-between items-center text-sm">
                                 <div className="flex items-center gap-2">
                                   <span className="text-muted-foreground">
                                     {entry.date.split('-').reverse().join('.')} ({entry.day}):
@@ -675,23 +692,23 @@ const MonthlyReportPage = () => {
                 )}
 
                 {/* Totals */}
-                <div className="pt-4 border-t-2 border-gray-300 space-y-2">
-                  <div className="flex justify-between items-center font-semibold">
+                <div className="print-totals pt-4 border-t-2 border-gray-300 space-y-2">
+                  <div className="print-total-row flex justify-between items-center font-semibold">
                     <span>TOTALT VANLIGE TIMER:</span>
                     <span>{formatTimeValue(reportData.totals.regularTotal)}</span>
                   </div>
-                  <div className="flex justify-between items-center font-semibold">
+                  <div className="print-total-row flex justify-between items-center font-semibold">
                     <span>TOTALT OVERTID 100%:</span>
                     <span>{formatTimeValue(reportData.totals.overtimeTotal_100)}</span>
                   </div>
-                  <div className="flex justify-between items-center font-semibold">
+                  <div className="print-total-row flex justify-between items-center font-semibold">
                     <span>TOTALT OVERTID 50%:</span>
                     <span>{formatTimeValue(reportData.totals.overtimeTotal_50)}</span>
                   </div>
                 </div>
 
                 {/* Grand Total */}
-                <div className="pt-4 border-t-2 border-gray-400">
+                <div className="print-grand-total pt-4 border-t-2 border-gray-400">
                   <div className="text-center">
                     <div className="text-xl font-bold">
                       {reportData.period.isYearly ? 'TOTALT ÅRET' : 'TOTALT LØNNSGRUNNLAG'}: {formatTimeValue(reportData.totals.grandTotal)}
@@ -701,6 +718,7 @@ const MonthlyReportPage = () => {
               </div>
             </CardContent>
           </Card>
+          </div>
         ) : (
           <Card>
             <CardContent className="p-6 text-center">
