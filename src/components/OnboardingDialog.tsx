@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Building2, User, CheckCircle } from 'lucide-react';
+import { Building2, User, CheckCircle, KeyRound } from 'lucide-react';
 
 interface OnboardingDialogProps {
   onComplete: () => void;
@@ -16,14 +17,16 @@ const OnboardingDialog = ({ onComplete }: OnboardingDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'create' | 'join'>('create');
   const [formData, setFormData] = useState({
     orgName: '',
     orgNumber: '',
     displayName: '',
     role: 'admin'
   });
+  const [inviteCode, setInviteCode] = useState('');
 
-  const handleSetup = async () => {
+  const handleCreateOrg = async () => {
     if (!user || !formData.orgName.trim() || !formData.displayName.trim()) {
       toast({
         title: "Manglende informasjon",
@@ -68,6 +71,48 @@ const OnboardingDialog = ({ onComplete }: OnboardingDialogProps) => {
     }
   };
 
+  const handleJoinOrg = async () => {
+    if (!user || !inviteCode.trim()) {
+      toast({
+        title: "Manglende informasjon",
+        description: "Vennligst skriv inn invitasjonskoden.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-invite-code', {
+        body: {
+          code: inviteCode.trim(),
+        },
+      });
+
+      if (error) throw error;
+
+      if (!data?.valid) {
+        throw new Error(data?.error_message || 'Ugyldig invitasjonskode');
+      }
+
+      toast({
+        title: 'Velkommen!',
+        description: `Du er nå medlem av ${data.org_name}.`,
+      });
+
+      onComplete();
+    } catch (error: unknown) {
+      console.error('Join error:', error);
+      toast({
+        title: 'Feil ved innmelding',
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -77,10 +122,23 @@ const OnboardingDialog = ({ onComplete }: OnboardingDialogProps) => {
             Velkommen!
           </CardTitle>
           <p className="text-muted-foreground">
-            La oss sette opp din organisasjon og profil
+            Opprett ny organisasjon eller bli med i eksisterende
           </p>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'create' | 'join')}>
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="create">
+                <Building2 className="h-4 w-4 mr-2" />
+                Opprett ny
+              </TabsTrigger>
+              <TabsTrigger value="join">
+                <KeyRound className="h-4 w-4 mr-2" />
+                Bli med
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="create" className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="orgName" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
@@ -125,13 +183,43 @@ const OnboardingDialog = ({ onComplete }: OnboardingDialogProps) => {
             </p>
           </div>
 
-          <Button 
-            onClick={handleSetup} 
-            disabled={loading}
-            className="w-full"
-          >
-            {loading ? "Oppretter..." : "Opprett organisasjon"}
-          </Button>
+              <Button 
+                onClick={handleCreateOrg} 
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? "Oppretter..." : "Opprett organisasjon"}
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="join" className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="inviteCode" className="flex items-center gap-2">
+                  <KeyRound className="h-4 w-4" />
+                  Invitasjonskode
+                </Label>
+                <Input
+                  id="inviteCode"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  placeholder="Skriv inn 8-siffret kode"
+                  maxLength={8}
+                  className="font-mono"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Få invitasjonskoden fra din organisasjons administrator
+                </p>
+              </div>
+
+              <Button
+                onClick={handleJoinOrg}
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? "Kobler til..." : "Bli med i organisasjon"}
+              </Button>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>

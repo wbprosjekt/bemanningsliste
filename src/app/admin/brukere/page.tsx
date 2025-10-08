@@ -37,6 +37,7 @@ import {
 import { getWeekNumber } from "@/lib/displayNames";
 import OnboardingDialog from "@/components/OnboardingDialog";
 import UserInviteSystem from "@/components/UserInviteSystem";
+import InviteCodeManager from "@/components/InviteCodeManager";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface Profile {
@@ -529,6 +530,8 @@ const AdminBrukerePage = () => {
         </div>
 
         <UserInviteSystem orgId={profile.org_id} onUsersUpdated={loadUsers} />
+
+        <InviteCodeManager orgId={profile.org_id} />
 
         <Card>
           <CardHeader>
