@@ -10,6 +10,16 @@ interface WeatherDay {
   tmin: number;
 }
 
+interface HistoricalWeather {
+  icon: string;
+  weathercode: number;
+  lastUpdated: string;
+}
+
+interface WeatherHistory {
+  [date: string]: HistoricalWeather;
+}
+
 interface WeatherDayPillsProps {
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
@@ -22,22 +32,35 @@ export default function WeatherDayPills({
   weekDates,
 }: WeatherDayPillsProps) {
   const [weatherDays, setWeatherDays] = useState<WeatherDay[] | null>(null);
+  const [currentTemp, setCurrentTemp] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadWeather(lat: number, lon: number) {
       try {
-        const res = await fetch(`/api/forecast?lat=${lat}&lon=${lon}`);
-        if (!res.ok) {
-          console.error("Weather API failed:", res.status);
-          setWeatherDays(null);
-          return;
+        // Load forecast data (future days)
+        const forecastRes = await fetch(`/api/forecast?lat=${lat}&lon=${lon}`);
+        let forecastData = null;
+        if (forecastRes.ok) {
+          forecastData = await forecastRes.json();
+          setWeatherDays(forecastData?.days ?? null);
         }
-        const data = await res.json();
-        setWeatherDays(data?.days ?? null);
+
+        // Load current temperature for today
+        const currentTemp = await getCurrentTemperature(lat, lon);
+        setCurrentTemp(currentTemp);
+
+        // Save today's weather to history (if we have data)
+        if (forecastData?.days?.length > 0) {
+          saveDailyWeatherToHistory(forecastData.days[0]);
+        }
+
+        // Clean up old historical data (older than 7 days)
+        cleanupOldWeatherHistory();
       } catch (error) {
         console.error("Weather fetch error:", error);
         setWeatherDays(null);
+        setCurrentTemp(null);
       } finally {
         setLoading(false);
       }
@@ -55,6 +78,67 @@ export default function WeatherDayPills({
     }
   }, []);
 
+  // Save today's weather to history
+  function saveDailyWeatherToHistory(weatherDay: WeatherDay) {
+    try {
+      const historyKey = 'weather-history';
+      const history: WeatherHistory = JSON.parse(localStorage.getItem(historyKey) || '{}');
+      
+      const weatherInfo = codeToWeather(weatherDay.code);
+      if (!weatherInfo) return;
+
+      history[weatherDay.date] = {
+        icon: weatherInfo.emoji,
+        weathercode: weatherDay.code,
+        lastUpdated: new Date().toISOString()
+      };
+
+      localStorage.setItem(historyKey, JSON.stringify(history));
+      console.log('Saved weather to history:', weatherDay.date, weatherInfo.emoji);
+    } catch (error) {
+      console.error('Failed to save weather history:', error);
+    }
+  }
+
+  // Get historical weather for a date
+  function getHistoricalWeather(date: Date): HistoricalWeather | null {
+    try {
+      const historyKey = 'weather-history';
+      const history: WeatherHistory = JSON.parse(localStorage.getItem(historyKey) || '{}');
+      const dateStr = date.toISOString().split('T')[0];
+      return history[dateStr] || null;
+    } catch (error) {
+      console.error('Failed to get weather history:', error);
+      return null;
+    }
+  }
+
+  // Clean up old historical data (older than 7 days)
+  function cleanupOldWeatherHistory() {
+    try {
+      const historyKey = 'weather-history';
+      const history: WeatherHistory = JSON.parse(localStorage.getItem(historyKey) || '{}');
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      let cleaned = false;
+      Object.keys(history).forEach(dateStr => {
+        const date = new Date(dateStr);
+        if (date < sevenDaysAgo) {
+          delete history[dateStr];
+          cleaned = true;
+        }
+      });
+
+      if (cleaned) {
+        localStorage.setItem(historyKey, JSON.stringify(history));
+        console.log('Cleaned up old weather history');
+      }
+    } catch (error) {
+      console.error('Failed to cleanup weather history:', error);
+    }
+  }
+
   // Get day label (Man, Tir, etc.)
   function getDayLabel(date: Date): string {
     return date
@@ -67,11 +151,135 @@ export default function WeatherDayPills({
       .slice(1);
   }
 
+  // Get day type: past, today, or future
+  function getDayType(date: Date): 'past' | 'today' | 'future' {
+    const today = new Date();
+    const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    
+    if (date < dayStart) return 'past';
+    if (date >= dayStart && date < dayEnd) return 'today';
+    return 'future';
+  }
+
+  // Get current temperature for today with caching
+  async function getCurrentTemperature(lat: number, lon: number): Promise<number | null> {
+    const cacheKey = `current-temp-${lat}-${lon}`;
+    const today = new Date().toISOString().split('T')[0];
+    
+    try {
+      // Check cache first
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { temperature, date, timestamp } = JSON.parse(cached);
+        // Use cache if it's from today and less than 1 hour old
+        if (date === today && Date.now() - timestamp < 3600000) {
+          return temperature;
+        }
+      }
+
+      // Fetch fresh data
+      const res = await fetch(`/api/current-weather?lat=${lat}&lon=${lon}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const temperature = data?.currentWeather?.temperature ?? null;
+      
+      console.log('Current weather API response:', { data, temperature });
+
+      // Cache the result
+      if (temperature !== null) {
+        localStorage.setItem(cacheKey, JSON.stringify({
+          temperature,
+          date: today,
+          timestamp: Date.now()
+        }));
+      }
+
+      return temperature;
+    } catch (error) {
+      console.error("Current weather fetch error:", error);
+      return null;
+    }
+  }
+
   // Find weather for a specific date
   function getWeatherForDate(date: Date): WeatherDay | null {
     if (!weatherDays) return null;
     const dateStr = date.toISOString().split("T")[0];
     return weatherDays.find((d) => d.date === dateStr) ?? null;
+  }
+
+  // Get display data for a date
+  function getDisplayData(date: Date): { 
+    weather: WeatherDay | null; 
+    temperature: number | null; 
+    icon: string; 
+    showTemp: boolean;
+  } {
+    const dayType = getDayType(date);
+    const weather = getWeatherForDate(date);
+    const weatherInfo = weather ? codeToWeather(weather.code) : null;
+    const historicalWeather = getHistoricalWeather(date);
+
+    console.log('getDisplayData:', { 
+      date: date.toISOString().split('T')[0], 
+      dayType, 
+      weather, 
+      currentTemp,
+      historicalWeather 
+    });
+
+    switch (dayType) {
+      case 'past':
+        // Use historical data if available, otherwise generic icon
+        if (historicalWeather) {
+          return {
+            weather: null,
+            temperature: null,
+            icon: historicalWeather.icon,
+            showTemp: false
+          };
+        }
+        return {
+          weather: null,
+          temperature: null,
+          icon: '🌡️', // Generic thermometer for past days without history
+          showTemp: false
+        };
+      
+      case 'today':
+        // For today, use current weather if available, otherwise forecast
+        const todayWeather = weather || (currentTemp ? { 
+          date: date.toISOString().split('T')[0], 
+          code: 1, // Default sunny weather
+          tmax: currentTemp, 
+          tmin: currentTemp 
+        } : null);
+        const todayWeatherInfo = todayWeather ? codeToWeather(todayWeather.code) : null;
+        
+        return {
+          weather: todayWeather,
+          temperature: currentTemp,
+          icon: todayWeatherInfo?.emoji ?? '🌡️',
+          showTemp: currentTemp !== null
+        };
+      
+      case 'future':
+        return {
+          weather: weather,
+          temperature: weather?.tmax ?? null,
+          icon: weatherInfo?.emoji ?? '🌡️',
+          showTemp: weather !== null
+        };
+      
+      default:
+        return {
+          weather: null,
+          temperature: null,
+          icon: '🌡️',
+          showTemp: false
+        };
+    }
   }
 
   return (
@@ -80,8 +288,7 @@ export default function WeatherDayPills({
         {weekDates.map((date, index) => {
           const isActive =
             date.toDateString() === selectedDate.toDateString();
-          const weather = getWeatherForDate(date);
-          const weatherInfo = weather ? codeToWeather(weather.code) : null;
+          const displayData = getDisplayData(date);
           const dayNumber = date.getDate();
 
           return (
@@ -102,29 +309,26 @@ export default function WeatherDayPills({
                     : "bg-white border-gray-200 text-gray-900 hover:border-blue-300 hover:shadow-md hover:-translate-y-0.5"
                 }
               `}
-              title={weatherInfo ? `${weatherInfo.label} • ${Math.round(weather!.tmax)}° / ${Math.round(weather!.tmin)}°` : undefined}
+              title={displayData.weather ? `${codeToWeather(displayData.weather.code)?.label} • ${Math.round(displayData.weather.tmax)}° / ${Math.round(displayData.weather.tmin)}°` : undefined}
             >
               {/* Weather emoji */}
-              {!loading && weatherInfo && (
+              {!loading && displayData.icon && (
                 <span className="text-lg sm:text-xl leading-none">
-                  {weatherInfo.emoji}
+                  {displayData.icon}
                 </span>
               )}
               {loading && (
                 <span className="text-lg sm:text-xl leading-none opacity-30">⏳</span>
               )}
-              {!loading && !weatherInfo && (
-                <span className="text-lg sm:text-xl leading-none opacity-30">🌡️</span>
-              )}
 
               {/* Temperature */}
-              {!loading && weather && (
+              {!loading && displayData.showTemp && displayData.temperature && (
                 <span
                   className={`text-[10px] sm:text-xs font-semibold leading-none ${
                     isActive ? "text-white/90" : "text-gray-600"
                   }`}
                 >
-                  {Math.round(weather.tmax)}°
+                  {Math.round(displayData.temperature)}°
                 </span>
               )}
 
