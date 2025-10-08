@@ -82,6 +82,12 @@ export default function InviteCodeManager({ orgId }: InviteCodeManagerProps) {
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + newCodeParams.expiresInDays);
 
+      // Get current user
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user?.id) {
+        throw new Error('Kunne ikke hente bruker-ID');
+      }
+
       // Insert invite code
       const { error: insertError } = await supabase
         .from('invite_codes')
@@ -91,7 +97,7 @@ export default function InviteCodeManager({ orgId }: InviteCodeManagerProps) {
           role: newCodeParams.role,
           max_uses: newCodeParams.maxUses,
           expires_at: expiresAt.toISOString(),
-          created_by: (await supabase.auth.getUser()).data.user?.id
+          created_by: userData.user.id
         });
 
       if (insertError) throw insertError;

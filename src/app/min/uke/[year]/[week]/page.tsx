@@ -201,7 +201,7 @@ const MinUke = () => {
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      setShowOnboarding(true);
+      // ProtectedRoute handles onboarding - no need to show dialog here
     } finally {
       setLoading(false);
     }
@@ -503,9 +503,9 @@ const MinUke = () => {
               <p className="text-muted-foreground">
                 Du må opprette en profil og være tilknyttet en organisasjon for å bruke &quot;Min uke&quot;.
               </p>
-              <Button onClick={() => setShowOnboarding(true)}>
-                Sett opp organisasjon
-              </Button>
+              <p className="text-sm text-muted-foreground">
+                ProtectedRoute vil automatisk vise onboarding-dialogen.
+              </p>
             </CardContent>
           </Card>
         </div>

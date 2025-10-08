@@ -61,7 +61,7 @@ export default function WeatherDayPills({
 
   // Save today's weather to history when forecast data is available
   useEffect(() => {
-    if (forecastData?.days?.length > 0) {
+    if (forecastData?.days && forecastData.days.length > 0) {
       saveDailyWeatherToHistory(forecastData.days[0]);
     }
   }, [forecastData]);

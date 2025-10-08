@@ -282,6 +282,101 @@ export type Database = {
           },
         ]
       }
+      invite_code_uses: {
+        Row: {
+          id: string
+          invite_code_id: string
+          ip_address: string | null
+          used_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          invite_code_id: string
+          ip_address?: string | null
+          used_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          invite_code_id?: string
+          ip_address?: string | null
+          used_at?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invite_code_uses_invite_code_id_fkey"
+            columns: ["invite_code_id"]
+            isOneToOne: false
+            referencedRelation: "invite_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invite_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string
+          current_uses: number
+          expires_at: string
+          id: string
+          is_active: boolean
+          max_uses: number
+          metadata: Json | null
+          org_id: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by: string
+          current_uses?: number
+          expires_at: string
+          id?: string
+          is_active?: boolean
+          max_uses?: number
+          metadata?: Json | null
+          org_id: string
+          role?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string
+          current_uses?: number
+          expires_at?: string
+          id?: string
+          is_active?: boolean
+          max_uses?: number
+          metadata?: Json | null
+          org_id?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invite_codes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invite_codes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       frie_linjer: {
         Row: {
           created_at: string | null
@@ -1169,9 +1264,23 @@ export type Database = {
         Args: { org_uuid: string; timer_uuid: string }
         Returns: string
       }
+      generate_invite_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_user_org_id: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      validate_and_use_invite_code: {
+        Args: { p_code: string; p_user_id: string }
+        Returns: {
+          valid: boolean
+          org_id: string | null
+          org_name: string | null
+          role: string | null
+          error_message: string | null
+        }[]
       }
     }
     Enums: {

@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
@@ -21,6 +23,7 @@ import {
   Eye,
   EyeOff,
   UserCheck,
+  Key,
 } from "lucide-react";
 import { getWeekNumber } from "@/lib/displayNames";
 import OnboardingDialog from "@/components/OnboardingDialog";
