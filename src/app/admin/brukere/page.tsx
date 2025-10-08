@@ -7,23 +7,12 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Users,
-  UserPlus,
   Search,
   Mail,
   Calendar,
@@ -32,7 +21,6 @@ import {
   Eye,
   EyeOff,
   UserCheck,
-  Key,
 } from "lucide-react";
 import { getWeekNumber } from "@/lib/displayNames";
 import OnboardingDialog from "@/components/OnboardingDialog";
@@ -89,12 +77,6 @@ const AdminBrukerePage = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
-  const [inviteForm, setInviteForm] = useState({
-    email: "",
-    role: "user",
-    display_name: "",
-  });
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   const loadUserProfile = useCallback(async () => {
@@ -223,25 +205,6 @@ const AdminBrukerePage = () => {
     }
   }, [profile, loadUsers]);
 
-  const handleInviteUser = async () => {
-    if (!profile?.org_id) return;
-
-    try {
-      toast({
-        title: "Invitasjon sendt",
-        description: `Invitasjon er sendt til ${inviteForm.email}`,
-      });
-
-      setShowInviteDialog(false);
-      setInviteForm({ email: "", role: "user", display_name: "" });
-    } catch (error: unknown) {
-      toast({
-        title: "Feil ved sending av invitasjon",
-        description: error instanceof Error ? error.message : "En uventet feil oppstod",
-        variant: "destructive",
-      });
-    }
-  };
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
@@ -419,59 +382,6 @@ const AdminBrukerePage = () => {
               <RefreshCw className="mr-2 h-4 w-4" />
               Oppdater
             </Button>
-            <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
-              <DialogTrigger asChild>
-                <Button>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Inviter bruker
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Inviter ny bruker</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">E-postadresse</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={inviteForm.email}
-                      onChange={(event) => setInviteForm({ ...inviteForm, email: event.target.value })}
-                      placeholder="bruker@example.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="display_name">Visningsnavn</Label>
-                    <Input
-                      id="display_name"
-                      value={inviteForm.display_name}
-                      onChange={(event) => setInviteForm({ ...inviteForm, display_name: event.target.value })}
-                      placeholder="Fornavn Etternavn"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Rolle</Label>
-                    <Select
-                      value={inviteForm.role}
-                      onValueChange={(value) => setInviteForm({ ...inviteForm, role: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="z-50 border bg-background">
-                        <SelectItem value="user">Bruker</SelectItem>
-                        <SelectItem value="manager">Leder</SelectItem>
-                        <SelectItem value="admin">Administrator</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button onClick={handleInviteUser} className="w-full">
-                    Send invitasjon
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
         </div>
 
