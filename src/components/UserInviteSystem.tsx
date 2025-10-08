@@ -29,6 +29,7 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
   const [loadingTripletexSync, setLoadingTripletexSync] = useState(false);
   const [creatingUserId, setCreatingUserId] = useState<string | null>(null);
   const [showTripletexDialog, setShowTripletexDialog] = useState(false);
+  const [employeesWithProfiles, setEmployeesWithProfiles] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const syncTripletexEmployees = async () => {
@@ -44,9 +45,14 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
       if (error) throw error;
 
       if (data?.success) {
+        const linkedCount = data.data?.profilesLinked || 0;
+        const employeeCount = data.data?.employees || 0;
+        
         toast({
           title: "Tripletex synkronisering fullført",
-          description: `${data.data?.employees || 0} ansatte synkronisert, ${data.data?.profilesCreated || 0} nye profiler opprettet`
+          description: linkedCount > 0 
+            ? `${employeeCount} ansatte synkronisert, ${linkedCount} brukere automatisk koblet`
+            : `${employeeCount} ansatte synkronisert`
         });
         
         // Load the synced employees for display
@@ -77,6 +83,31 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
 
       if (error) throw error;
       setTripletexEmployees(data || []);
+
+      // Check which employees already have profiles
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('org_id', orgId);
+
+      if (profiles) {
+        // Get emails for these user_ids
+        const { data: authData } = await supabase.auth.admin.listUsers();
+        const profileEmails = new Set(
+          authData.users
+            .filter(u => profiles.some(p => p.user_id === u.id))
+            .map(u => u.email?.toLowerCase())
+            .filter(Boolean)
+        );
+
+        // Find employee IDs that match these emails
+        const employeesWithProfileIds = new Set(
+          data?.filter(emp => emp.epost && profileEmails.has(emp.epost.toLowerCase()))
+            .map(emp => emp.id) || []
+        );
+
+        setEmployeesWithProfiles(employeesWithProfileIds);
+      }
     } catch (error) {
       console.error('Error loading Tripletex employees:', error);
     }
@@ -239,33 +270,48 @@ const UserInviteSystem = ({ orgId, onUsersUpdated }: UserInviteSystemProps) => {
                   </p>
                   
                   <div className="max-h-96 overflow-y-auto space-y-2">
-                    {tripletexEmployees.map(employee => (
-                      <div 
-                        key={employee.id}
-                        className="flex items-center justify-between p-3 border rounded"
-                      >
-                        <div>
-                          <div className="font-medium">
-                            {employee.fornavn} {employee.etternavn}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {employee.epost || 'Ingen e-post'}
-                          </div>
-                          <Badge variant={employee.aktiv ? 'default' : 'secondary'}>
-                            {employee.aktiv ? 'Aktiv' : 'Inaktiv'}
-                          </Badge>
-                        </div>
-                        
-                        <Button
-                          size="sm"
-                          onClick={() => createUserFromEmployee(employee)}
-                          disabled={!employee.epost || !employee.aktiv || creatingUserId === employee.id}
+                    {tripletexEmployees.map(employee => {
+                      const hasProfile = employeesWithProfiles.has(employee.id);
+                      
+                      return (
+                        <div 
+                          key={employee.id}
+                          className="flex items-center justify-between p-3 border rounded"
                         >
-                          <UserPlus className="h-4 w-4 mr-1" />
-                          {creatingUserId === employee.id ? 'Oppretter...' : 'Opprett bruker'}
-                        </Button>
-                      </div>
-                    ))}
+                          <div className="space-y-1">
+                            <div className="font-medium">
+                              {employee.fornavn} {employee.etternavn}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {employee.epost || 'Ingen e-post'}
+                            </div>
+                            <div className="flex gap-2">
+                              <Badge variant={employee.aktiv ? 'default' : 'secondary'}>
+                                {employee.aktiv ? 'Aktiv' : 'Inaktiv'}
+                              </Badge>
+                              {hasProfile && (
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                                  ✓ Har brukerprofil
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <Button
+                            size="sm"
+                            onClick={() => createUserFromEmployee(employee)}
+                            disabled={!employee.epost || !employee.aktiv || creatingUserId === employee.id || hasProfile}
+                          >
+                            <UserPlus className="h-4 w-4 mr-1" />
+                            {creatingUserId === employee.id 
+                              ? 'Oppretter...' 
+                              : hasProfile 
+                                ? 'Allerede opprettet' 
+                                : 'Opprett bruker'}
+                          </Button>
+                        </div>
+                      );
+                    })}
                     
                     {tripletexEmployees.length === 0 && (
                       <div className="text-center py-8 text-muted-foreground">

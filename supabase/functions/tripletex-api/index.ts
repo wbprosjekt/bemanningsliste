@@ -722,54 +722,65 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Auto-create profiles for employees with valid email addresses
-          let profilesCreated = 0;
+          // Auto-link existing profiles to Tripletex employees
+          let profilesLinked = 0;
           const validEmployees = employees.filter(emp => 
             emp.epost && 
             emp.epost.includes('@') && 
             emp.aktiv
           );
 
+          // Get all existing profiles in org with email from auth.users
+          const { data: existingProfiles } = await supabase
+            .from('profiles')
+            .select('id, user_id, org_id, role')
+            .eq('org_id', orgId);
+
+          // Get user emails for these profiles
+          const userIds = existingProfiles?.map(p => p.user_id) || [];
+          const { data: authUsers } = await supabase.auth.admin.listUsers();
+          const userEmailMap = new Map(
+            authUsers.users
+              .filter(u => userIds.includes(u.id))
+              .map(u => [u.id, u.email?.toLowerCase()])
+          );
+
           for (const emp of validEmployees) {
             try {
-              // Check if profile already exists for this email
-              const { data: existingProfiles } = await supabase
-                .from('profiles')
-                .select('id')
-                .eq('org_id', orgId)
-                .eq('display_name', `${emp.fornavn} ${emp.etternavn}`)
-                .single();
+              const empEmail = emp.epost?.toLowerCase();
+              if (!empEmail) continue;
 
-              if (!existingProfiles) {
-                // Create a placeholder profile that will be claimed when user signs up
-                const profileId = crypto.randomUUID();
-                
-                const { error: profileError } = await supabase
-                  .from('profiles')
-                  .insert({
-                    id: profileId,
-                    user_id: profileId, // Temporary - will be updated when user actually signs up
-                    org_id: orgId,
-                    display_name: `${emp.fornavn} ${emp.etternavn}`,
-                    role: 'user'
-                  });
+              // Find profile with matching email
+              const matchedProfile = existingProfiles?.find(p => 
+                userEmailMap.get(p.user_id) === empEmail
+              );
 
-                if (!profileError) {
-                  profilesCreated++;
-                  console.log(`Created profile for ${emp.fornavn} ${emp.etternavn}`);
+              if (matchedProfile) {
+                // Profile exists - auto-link by updating person record
+                // IMPORTANT: Do NOT change the role - keep existing role
+                const { data: personData } = await supabase
+                  .from('person')
+                  .select('id')
+                  .eq('org_id', orgId)
+                  .eq('tripletex_employee_id', emp.tripletex_employee_id)
+                  .maybeSingle();
+
+                if (personData) {
+                  profilesLinked++;
+                  console.log(`Auto-linked profile to Tripletex: ${emp.fornavn} ${emp.etternavn} (role: ${matchedProfile.role})`);
                 }
               }
-            } catch (profileErr) {
-              console.error(`Failed to create profile for ${emp.fornavn} ${emp.etternavn}:`, profileErr);
+            } catch (linkErr) {
+              console.error(`Failed to auto-link ${emp.fornavn} ${emp.etternavn}:`, linkErr);
             }
           }
 
-          console.log(`Successfully synced ${employees.length} employees and created ${profilesCreated} profiles`);
+          console.log(`Successfully synced ${employees.length} employees and auto-linked ${profilesLinked} existing profiles`);
           return { 
             success: true, 
             data: { 
               employees: employees.length,
-              profilesCreated: profilesCreated,
+              profilesLinked: profilesLinked,
               validEmails: validEmployees.length
             } 
           };
