@@ -10,6 +10,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import NavigationWrapper from "@/components/NavigationWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import OfflineBanner from "@/components/OfflineBanner";
+import CookieConsentBanner from "@/components/CookieConsentBanner";
 
 interface RootProvidersProps {
   children: React.ReactNode;
@@ -53,6 +54,7 @@ export default function RootProviders({ children }: RootProvidersProps) {
           <TooltipProvider>
             <NavigationWrapper />
             <OfflineBanner />
+            <CookieConsentBanner />
             <ShadcnToaster />
             <Sonner />
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
