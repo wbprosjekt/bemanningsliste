@@ -4,11 +4,15 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, Users, Building, Settings, ArrowRight, Clock, Mail } from "lucide-react";
+import { Bell, Users, Building, Settings, ArrowRight, Clock, Mail, Info, GitBranch, Calendar, Code } from "lucide-react";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { getVersionInfo, getShortCommitHash, getFormattedBuildTime } from "@/lib/version";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const versionInfo = getVersionInfo();
+  const shortCommit = getShortCommitHash();
+  const buildTime = getFormattedBuildTime();
 
   return (
     <ProtectedRoute requiredRole="any-admin">
@@ -220,6 +224,80 @@ export default function SettingsPage() {
                   Du kan nå konfigurere påminnelser for timeføring og lønnskjøring. 
                   Klikk på "Gå til" for å komme i gang.
                 </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Versjonsinformasjon */}
+        <Card className="bg-slate-50 border-slate-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Info className="h-5 w-5 text-slate-600" />
+              Om systemet
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Version */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Code className="h-4 w-4" />
+                  <span className="font-medium">Versjon</span>
+                </div>
+                <p className="text-lg font-semibold text-slate-900">{versionInfo.version}</p>
+              </div>
+
+              {/* Git Commit */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <GitBranch className="h-4 w-4" />
+                  <span className="font-medium">Git Commit</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="text-sm font-mono bg-slate-200 px-2 py-1 rounded">
+                    {shortCommit}
+                  </code>
+                  {versionInfo.gitCommit !== 'unknown' && (
+                    <Badge variant="outline" className="text-xs">
+                      {versionInfo.gitBranch}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Build Time */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <span className="font-medium">Build</span>
+                </div>
+                <p className="text-sm text-slate-700">{buildTime}</p>
+              </div>
+
+              {/* Environment */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Settings className="h-4 w-4" />
+                  <span className="font-medium">Miljø</span>
+                </div>
+                <Badge 
+                  variant={versionInfo.environment === 'production' ? 'default' : 'secondary'}
+                  className={versionInfo.environment === 'production' 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-yellow-100 text-yellow-800'
+                  }
+                >
+                  {versionInfo.environment === 'production' ? 'Produksjon' : 'Utvikling'}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Additional Info */}
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Next.js {versionInfo.nextVersion}</span>
+                <span>Bemanningsliste © 2025</span>
               </div>
             </div>
           </CardContent>

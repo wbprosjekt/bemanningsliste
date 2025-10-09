@@ -210,3 +210,5 @@ COMMENT ON COLUMN public.email_templates.template_type IS 'Type of template: pay
 COMMENT ON COLUMN public.email_templates.variables IS 'JSON array of available variables for template';
 
 
+
+

@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   compress: true, // Enable gzip compression
   generateEtags: true, // Enable ETags for caching
 
+  // Environment variables
+  env: {
+    NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
+  },
+
   // Disable ESLint and TypeScript checking during builds for faster deployment
   eslint: {
     ignoreDuringBuilds: true,
