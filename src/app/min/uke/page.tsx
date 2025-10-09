@@ -23,8 +23,18 @@ export default function MinUkeRedirect() {
     const currentYear = getCurrentYear();
     const currentWeek = getCurrentWeek();
     
-    // Redirect to current week
+    console.log('🔄 MinUkeRedirect: Redirecting to', currentYear, currentWeek);
+    
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ MinUkeRedirect: Timeout reached, forcing redirect');
+      router.replace(`/min/uke/${currentYear}/${currentWeek}`);
+    }, 2000);
+    
+    // Immediate redirect
     router.replace(`/min/uke/${currentYear}/${currentWeek}`);
+    
+    return () => clearTimeout(timeoutId);
   }, [router]);
 
   // Show loading while redirecting

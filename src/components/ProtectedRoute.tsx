@@ -38,6 +38,7 @@ export default function ProtectedRoute({
   const [profileLoading, setProfileLoading] = useState(true);
   const [checking, setChecking] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [timeoutReached, setTimeoutReached] = useState(false);
 
   useEffect(() => {
     if (!authLoading) {
@@ -52,6 +53,20 @@ export default function ProtectedRoute({
       loadProfileAndCheck();
     }
   }, [user, authLoading]);
+
+  // Timeout to prevent infinite loading
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (authLoading || profileLoading || checking) {
+        console.warn('⚠️ ProtectedRoute: Timeout reached, forcing completion');
+        setTimeoutReached(true);
+        setChecking(false);
+        setProfileLoading(false);
+      }
+    }, 10000); // 10 second timeout
+
+    return () => clearTimeout(timeoutId);
+  }, [authLoading, profileLoading, checking]);
 
   const loadProfileAndCheck = async () => {
     if (!user) {
@@ -169,11 +184,18 @@ export default function ProtectedRoute({
 
   // Vis loading mens vi sjekker
   if (authLoading || profileLoading || checking) {
+    console.log('🔒 ProtectedRoute: Loading state', { authLoading, profileLoading, checking });
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Verifiserer tilgang...</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Auth: {authLoading ? 'Loading' : 'Done'} | 
+            Profile: {profileLoading ? 'Loading' : 'Done'} | 
+            Check: {checking ? 'Checking' : 'Done'}
+            {timeoutReached && ' | ⚠️ Timeout'}
+          </p>
         </div>
       </div>
     );
