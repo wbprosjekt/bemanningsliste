@@ -18,48 +18,72 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
+    try {
+      // Set up auth state listener FIRST
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (event, session) => {
+          try {
+            setSession(session);
+            setUser(session?.user ?? null);
+            setLoading(false);
 
-        // Log authentication events
-        const context = getRequestContext();
-        if (event === 'SIGNED_IN' && session?.user) {
-          logAuthEvent('LOGIN_SUCCESS', {
-            userId: session.user.id,
-            email: session.user.email,
-            event,
-          }, {
-            userId: session.user.id,
-            ...context,
-          });
-        } else if (event === 'SIGNED_OUT') {
-          logAuthEvent('LOGOUT', {
-            event,
-          }, context);
-        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          logAuthEvent('TOKEN_REFRESH', {
-            userId: session.user.id,
-            event,
-          }, {
-            userId: session.user.id,
-            ...context,
-          });
+            // Log authentication events
+            const context = getRequestContext();
+            if (event === 'SIGNED_IN' && session?.user) {
+              logAuthEvent('LOGIN_SUCCESS', {
+                userId: session.user.id,
+                email: session.user.email,
+                event,
+              }, {
+                userId: session.user.id,
+                ...context,
+              });
+            } else if (event === 'SIGNED_OUT') {
+              logAuthEvent('LOGOUT', {
+                event,
+              }, context);
+            } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+              logAuthEvent('TOKEN_REFRESH', {
+                userId: session.user.id,
+                event,
+              }, {
+                userId: session.user.id,
+                ...context,
+              });
+            }
+          } catch (error) {
+            console.error('useAuth: Error in auth state change handler:', error);
+            setLoading(false);
+          }
         }
-      }
-    );
+      );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+      // THEN check for existing session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        try {
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+        } catch (error) {
+          console.error('useAuth: Error in getSession handler:', error);
+          setLoading(false);
+        }
+      }).catch((error) => {
+        console.error('useAuth: Error getting session:', error);
+        setLoading(false);
+      });
+
+      return () => {
+        try {
+          subscription.unsubscribe();
+        } catch (error) {
+          console.error('useAuth: Error unsubscribing:', error);
+        }
+      };
+    } catch (error) {
+      console.error('useAuth: Error setting up auth listener:', error);
       setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    }
   }, []);
 
   const signOut = async () => {

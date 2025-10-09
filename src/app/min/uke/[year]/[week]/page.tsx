@@ -24,6 +24,7 @@ import { toLocalDateString } from "@/lib/utils";
 import DayCard from "@/components/DayCard";
 import WeatherDayPills from "@/components/WeatherDayPills";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 type PersonRow = Database['public']['Tables']['person']['Row'];
 
@@ -66,7 +67,15 @@ const MinUke = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const isMobile = useIsMobile();
+  
+  // Safe mobile detection with fallback
+  let isMobile = false;
+  try {
+    isMobile = useIsMobile();
+  } catch (error) {
+    console.warn('MinUke: Error detecting mobile, defaulting to false:', error);
+    isMobile = false;
+  }
   const [profile, setProfile] = useState<Profile | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
@@ -719,9 +728,11 @@ const MinUke = () => {
 
 function MinUkeWithProtection() {
   return (
-    <ProtectedRoute requireProfile={true}>
-      <MinUke />
-    </ProtectedRoute>
+    <ErrorBoundary>
+      <ProtectedRoute requireProfile={true}>
+        <MinUke />
+      </ProtectedRoute>
+    </ErrorBoundary>
   );
 }
 
