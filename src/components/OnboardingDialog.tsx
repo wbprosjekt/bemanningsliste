@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Building2, User, CheckCircle, KeyRound } from 'lucide-react';
+import { Building2, User, CheckCircle, KeyRound, LogOut } from 'lucide-react';
 
 interface OnboardingDialogProps {
   onComplete: () => void;
@@ -25,6 +25,20 @@ const OnboardingDialog = ({ onComplete }: OnboardingDialogProps) => {
     role: 'admin'
   });
   const [inviteCode, setInviteCode] = useState('');
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      window.location.href = '/auth';
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast({
+        title: 'Feil ved utlogging',
+        description: 'Kunne ikke logge ut. Prøv igjen.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleCreateOrg = async () => {
     if (!user || !formData.orgName.trim() || !formData.displayName.trim()) {
@@ -115,7 +129,21 @@ const OnboardingDialog = ({ onComplete }: OnboardingDialogProps) => {
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md relative">
+        {/* Logout button - escape hatch for users */}
+        <div className="absolute top-4 right-4 z-10">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleLogout}
+            className="text-muted-foreground hover:text-foreground"
+            title="Logg ut og bruk en annen bruker"
+          >
+            <LogOut className="h-4 w-4 mr-1" />
+            Logg ut
+          </Button>
+        </div>
+
         <CardHeader className="text-center">
           <CardTitle className="flex items-center justify-center gap-2 text-2xl">
             <CheckCircle className="h-6 w-6 text-primary" />

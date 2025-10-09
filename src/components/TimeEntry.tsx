@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -57,6 +57,11 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
   
   // Use React Query loading state instead of local loading
   const isLoading = timeEntryMutation.isPending || deleteTimeEntryMutation.isPending || loading;
+  
+  // Track if we've loaded data for this vaktId to prevent unnecessary reloads
+  const lastLoadedVaktId = useRef<string | null>(null);
+  const hasLoadedActivities = useRef(false);
+  const lastOrgId = useRef<string | null>(null);
 
   // Separate overtime time entries for 100% and 50%
   const [overtime100Hours, setOvertime100Hours] = useState(0);
@@ -163,13 +168,33 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
   }, [orgId, toast]);
 
   useEffect(() => {
-    // Load activities when component mounts
-    loadActivities();
-  }, [loadActivities]);
+    // Load activities only once per orgId - prevents unnecessary reloads during parent re-renders
+    if (!hasLoadedActivities.current || orgId !== lastOrgId.current) {
+      console.log('Loading activities (first time or new org)');
+      loadActivities();
+      hasLoadedActivities.current = true;
+      lastOrgId.current = orgId;
+    } else {
+      console.log('Skipping activity reload - already loaded for this orgId');
+    }
+    
+    // Cleanup: reset when component unmounts
+    return () => {
+      hasLoadedActivities.current = false;
+      lastOrgId.current = null;
+    };
+  }, [orgId, loadActivities]);
 
   useEffect(() => {
-    // Load all existing timer entries and update state when existingEntry changes
+    // Load all existing timer entries and update state when vaktId changes
     const loadData = async () => {
+      // Only reload if vaktId has changed - prevents unnecessary reloads during parent re-renders
+      if (lastLoadedVaktId.current === vaktId) {
+        return; // Data already loaded for this vaktId - skip reload
+      }
+      
+      lastLoadedVaktId.current = vaktId;
+      
       // Reset all state before loading
       setOvertime100Hours(0);
       setOvertime100Minutes(0);
@@ -295,6 +320,11 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
     };
 
     loadData();
+    
+    // Cleanup: reset ref when component unmounts
+    return () => {
+      lastLoadedVaktId.current = null;
+    };
   }, [vaktId, existingEntry, defaultTimer]);
 
   const adjustHours = (delta: number) => {
@@ -922,4 +952,5 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
   );
 };
 
-export default TimeEntry;
+// Wrap in memo to prevent unnecessary re-renders
+export default memo(TimeEntry);

@@ -435,94 +435,10 @@ export async function loadUserProfileOptimized(userId: string): Promise<any> {
 }
 
 /**
- * Cache management utilities
+ * NOTE: Custom caching removed - React Query handles all caching now!
+ * - React Query provides better cache management
+ * - Automatic invalidation on mutations
+ * - Better developer experience
+ * - Prevents cache inconsistency issues
  */
-export class QueryCache {
-  private static cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
-
-  static set(key: string, data: any, ttlMs: number = 300000): void { // 5 minutes default
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      ttl: ttlMs,
-    });
-  }
-
-  static get(key: string): any | null {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-
-    if (Date.now() - entry.timestamp > entry.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return entry.data;
-  }
-
-  static clear(pattern?: string): void {
-    if (pattern) {
-      const keys = Array.from(this.cache.keys()).filter(key => key.includes(pattern));
-      keys.forEach(key => this.cache.delete(key));
-    } else {
-      this.cache.clear();
-    }
-  }
-
-  static size(): number {
-    return this.cache.size;
-  }
-}
-
-/**
- * Cached version of loadStaffingDataOptimized
- */
-export async function loadStaffingDataCached(
-  orgId: string,
-  dateRange: { start: string; end: string },
-  personIds?: string[]
-): Promise<OptimizedStaffingEntry[]> {
-  const cacheKey = `staffing:${orgId}:${dateRange.start}:${dateRange.end}:${personIds?.join(',') || 'all'}`;
-  
-  const cached = QueryCache.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  const data = await loadStaffingDataOptimized(orgId, dateRange, personIds);
-  QueryCache.set(cacheKey, data, 60000); // 1 minute cache
-  return data;
-}
-
-/**
- * Cached version of loadEmployeesOptimized
- */
-export async function loadEmployeesCached(orgId: string): Promise<any[]> {
-  const cacheKey = `employees:${orgId}`;
-  
-  const cached = QueryCache.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  const data = await loadEmployeesOptimized(orgId);
-  QueryCache.set(cacheKey, data, 300000); // 5 minutes cache
-  return data;
-}
-
-/**
- * Cached version of loadProjectsOptimized
- */
-export async function loadProjectsCached(orgId: string): Promise<any[]> {
-  const cacheKey = `projects:${orgId}`;
-  
-  const cached = QueryCache.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  const data = await loadProjectsOptimized(orgId);
-  QueryCache.set(cacheKey, data, 600000); // 10 minutes cache
-  return data;
-}
 

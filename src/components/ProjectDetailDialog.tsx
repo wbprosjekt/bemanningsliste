@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building, User, Phone, Mail, FileText, Calendar } from 'lucide-react';
@@ -95,6 +95,9 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
             <FileText className="h-5 w-5" />
             Prosjektdetaljer
           </DialogTitle>
+          <DialogDescription>
+            Vis detaljert informasjon om prosjektet
+          </DialogDescription>
         </DialogHeader>
 
         {loading ? (

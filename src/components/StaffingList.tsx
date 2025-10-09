@@ -17,12 +17,9 @@ import TimeEntry from './TimeEntry';
 import { startOfISOWeek, addWeeks, addDays, isValid as isValidDate } from 'date-fns';
 import { toLocalDateString, toLocalDateTimeString } from '@/lib/utils';
 import { 
-  loadStaffingDataCached, 
-  loadEmployeesCached, 
   loadFreeLinesOptimized, 
   loadCalendarDaysOptimized,
-  batchUpdateTimeEntries,
-  QueryCache
+  batchUpdateTimeEntries
 } from '@/lib/databaseOptimized';
 
 interface StaffingEntry {

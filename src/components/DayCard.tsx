@@ -635,5 +635,6 @@ const DayCard = ({ date, orgId, personId, forventetTimer = 8.0, calendarDays }: 
   );
 };
 
-export default DayCard;
+// Wrap in memo to prevent unnecessary re-renders when parent updates
+export default memo(DayCard);
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Calendar, User, Building } from 'lucide-react';
@@ -149,6 +149,9 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
             <Calendar className="h-5 w-5" />
             Finn prosjekt
           </DialogTitle>
+          <DialogDescription>
+            Søk etter prosjekt og tilordne det til denne dagen
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

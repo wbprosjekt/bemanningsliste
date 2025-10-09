@@ -78,6 +78,7 @@ const MinUke = () => {
     holiday_name: string | null;
   }>>([]);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
+  const [hasScrolledToToday, setHasScrolledToToday] = useState(false);
 
   const currentYear = parseInt(params?.year || new Date().getFullYear().toString(), 10);
   const currentWeek = parseInt(params?.week || getWeekNumber(new Date()).toString(), 10);
@@ -392,6 +393,9 @@ const MinUke = () => {
 
     console.log('🔄 Setting up Realtime subscription for vakt_timer');
 
+    // Debounce timer to prevent UI jumping on rapid updates
+    let debounceTimer: NodeJS.Timeout | null = null;
+
     const channel = supabase
       .channel(`vakt_timer_changes_${person.id}`)
       .on(
@@ -404,14 +408,24 @@ const MinUke = () => {
         },
         (payload) => {
           console.log('🔔 Realtime update received:', payload);
-          // Reload weekly summary when timer changes
-          loadWeeklySummary();
+          
+          // Debounce reload to prevent UI jumping during rapid saves
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+          }
+          
+          debounceTimer = setTimeout(() => {
+            loadWeeklySummary();
+          }, 500); // Wait 500ms after last change before reloading
         }
       )
       .subscribe();
 
     return () => {
       console.log('🔌 Unsubscribing from Realtime');
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
       supabase.removeChannel(channel);
     };
   }, [person?.id, profile?.org_id, loadWeeklySummary]);
@@ -464,9 +478,9 @@ const MinUke = () => {
     return date.toDateString() === today.toDateString();
   };
 
-  // Auto-scroll to today's date when the component loads
+  // Auto-scroll to today's date when the component loads (only once)
   useEffect(() => {
-    if (!loading && person && weeklySummary) {
+    if (!loading && person && weeklySummary && !hasScrolledToToday) {
       const today = new Date();
       const todayElement = document.getElementById(`day-${today.toISOString().split('T')[0]}`);
       
@@ -478,10 +492,11 @@ const MinUke = () => {
             block: 'center',
             inline: 'nearest'
           });
+          setHasScrolledToToday(true); // Mark as scrolled - prevent future auto-scrolls
         }, 100);
       }
     }
-  }, [loading, person, weeklySummary]);
+  }, [loading, person, weeklySummary, hasScrolledToToday]);
 
   if (loading) {
     return (

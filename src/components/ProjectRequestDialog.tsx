@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -95,6 +95,9 @@ const ProjectRequestDialog = ({ date, orgId, personId, onRequestSent }: ProjectR
           <DialogTitle>
             Be om prosjekttilordning - {date.toLocaleDateString('no-NO')}
           </DialogTitle>
+          <DialogDescription>
+            Send en forespørsel til administrator om å få tilordnet et prosjekt
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
