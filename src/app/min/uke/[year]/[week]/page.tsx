@@ -24,7 +24,7 @@ import { toLocalDateString } from "@/lib/utils";
 import DayCard from "@/components/DayCard";
 import WeatherDayPills from "@/components/WeatherDayPills";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import ErrorBoundary from "@/components/ErrorBoundary";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 type PersonRow = Database['public']['Tables']['person']['Row'];
 
