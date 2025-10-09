@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,6 +66,7 @@ const MinUke = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const searchParams = useSearchParams();
+  const isMobile = useIsMobile();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,8 +97,8 @@ const MinUke = () => {
     return getWeekNumber(dec28);
   };
 
-  // Define getWeekDays early to avoid initialization issues
-  const getWeekDays = useCallback(() => {
+  // Stabilize getWeekDays to prevent mobile re-render loops
+  const getWeekDays = useMemo(() => {
     const startDate = getDateFromWeek(currentYear, currentWeek);
     const days = [];
     
@@ -483,8 +485,9 @@ const MinUke = () => {
   };
 
   // Auto-scroll to today's date when the component loads (only once)
+  // Disabled on mobile to prevent iOS Safari loops
   useEffect(() => {
-    if (!loading && person && weeklySummary && !hasScrolledToToday) {
+    if (!loading && person && weeklySummary && !hasScrolledToToday && !isMobile) {
       const today = new Date();
       const todayElement = document.getElementById(`day-${today.toISOString().split('T')[0]}`);
       
@@ -500,7 +503,7 @@ const MinUke = () => {
         }, 100);
       }
     }
-  }, [loading, person, weeklySummary, hasScrolledToToday]);
+  }, [loading, person, weeklySummary, hasScrolledToToday, isMobile]);
 
   if (loading) {
     return (
