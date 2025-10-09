@@ -10,7 +10,8 @@ interface EnvConfig {
 
 /**
  * Validates Supabase API key format
- * Supports both JWT format (old) and new Supabase key formats
+ * Supports all Supabase key formats (JWT, supabase_*, sbp_*, and others)
+ * Focuses on security validation (preventing service_role exposure)
  * 
  * @param key - The API key to validate
  * @param keyType - Type of key ('anon' or 'service_role')
@@ -21,7 +22,7 @@ function validateSupabaseKey(key: string, keyType: 'anon' | 'service_role'): { v
     return { valid: false, error: 'Key is empty or not a string' };
   }
 
-  // Minimum length check
+  // Minimum length check (20 chars is reasonable for any key)
   if (key.length < 20) {
     return { valid: false, error: 'Key is too short (minimum 20 characters)' };
   }
@@ -32,64 +33,35 @@ function validateSupabaseKey(key: string, keyType: 'anon' | 'service_role'): { v
     return { valid: false, error: 'Key appears to be a placeholder' };
   }
 
-  // OLD FORMAT: JWT (eyJ...)
-  if (key.startsWith('eyJ')) {
-    const segments = key.split('.');
-    
-    // JWT must have 3 segments (header.payload.signature)
-    if (segments.length !== 3) {
-      return { valid: false, error: 'Invalid JWT format (must have 3 segments)' };
+  // CRITICAL SECURITY CHECK: Prevent service_role key in anon slot
+  // This check works for all key formats
+  if (keyType === 'anon') {
+    // Check if key contains service_role indicators
+    if (key.includes('service_role') || key.includes('service-role')) {
+      return { valid: false, error: '🚨 CRITICAL: Service role key in anon key slot!' };
     }
 
-    // Validate minimum length for JWT
-    if (key.length < 100) {
-      return { valid: false, error: 'JWT is too short (minimum 100 characters)' };
-    }
-
-    // Decode and verify JWT payload
-    try {
-      const payloadBase64 = segments[1];
-      const payload = JSON.parse(atob(payloadBase64));
-      
-      // Check role in JWT
-      if (keyType === 'anon' && payload.role === 'service_role') {
-        return { valid: false, error: '🚨 CRITICAL: Service role key in anon key slot!' };
+    // For JWT format, decode and check role
+    if (key.startsWith('eyJ')) {
+      const segments = key.split('.');
+      if (segments.length === 3) {
+        try {
+          const payloadBase64 = segments[1];
+          const payload = JSON.parse(atob(payloadBase64));
+          
+          if (payload.role === 'service_role') {
+            return { valid: false, error: '🚨 CRITICAL: Service role key in anon key slot!' };
+          }
+        } catch (error) {
+          // If we can't decode, just continue - it might be a valid key
+          console.warn('Could not decode JWT payload, assuming valid');
+        }
       }
-      
-      if (keyType === 'service_role' && payload.role !== 'service_role') {
-        return { valid: false, error: 'Service role key does not have service_role in JWT' };
-      }
-
-      return { valid: true };
-    } catch (error) {
-      return { valid: false, error: 'Failed to decode JWT payload' };
     }
   }
 
-  // NEW FORMAT: supabase_* or sbp_*
-  if (key.startsWith('supabase_') || key.startsWith('sbp_')) {
-    // Check for key type in string
-    if (keyType === 'anon' && key.includes('service')) {
-      return { valid: false, error: '🚨 CRITICAL: Service key in anon key slot!' };
-    }
-    
-    if (keyType === 'service_role' && !key.includes('service')) {
-      return { valid: false, error: 'Service role key does not contain "service"' };
-    }
-
-    // Check minimum length for new format
-    if (key.length < 50) {
-      return { valid: false, error: 'Key is too short for new format (minimum 50 characters)' };
-    }
-
-    return { valid: true };
-  }
-
-  // UNKNOWN FORMAT - Be conservative
-  return { 
-    valid: false, 
-    error: `Unknown key format (must start with "eyJ" for JWT or "supabase_"/"sbp_" for new format)` 
-  };
+  // If we got here, the key passed all security checks
+  return { valid: true };
 }
 
 /**
