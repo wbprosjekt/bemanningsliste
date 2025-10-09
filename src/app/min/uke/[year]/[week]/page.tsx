@@ -114,8 +114,7 @@ const MinUke = () => {
   // Auto-select today's day on mount
   useEffect(() => {
     const today = new Date();
-    const weekDays = getWeekDays();
-    const todayIndex = weekDays.findIndex(d => 
+    const todayIndex = getWeekDays.findIndex(d => 
       toLocalDateString(d) === toLocalDateString(today)
     );
     
@@ -630,14 +629,14 @@ const MinUke = () => {
         {person && (
           <div className="mb-4">
             <WeatherDayPills
-              selectedDate={getWeekDays()[selectedDayIndex]}
+              selectedDate={getWeekDays[selectedDayIndex]}
               onSelectDate={(date) => {
-                const index = getWeekDays().findIndex(
+                const index = getWeekDays.findIndex(
                   (d) => toLocalDateString(d) === toLocalDateString(date)
                 );
                 if (index !== -1) setSelectedDayIndex(index);
               }}
-              weekDates={getWeekDays()}
+              weekDates={getWeekDays}
             />
           </div>
         )}
@@ -671,7 +670,7 @@ const MinUke = () => {
               }
             `}</style>
             <DayCard
-              date={getWeekDays()[selectedDayIndex]}
+              date={getWeekDays[selectedDayIndex]}
               orgId={profile.org_id}
               personId={person?.id}
               forventetTimer={person?.forventet_dagstimer || 8.0}
@@ -690,8 +689,7 @@ const MinUke = () => {
                 className="text-sm md:text-xs h-12 md:h-10"
                 onClick={() => {
                   const today = new Date();
-                  const weekDays = getWeekDays();
-                  const todayIndex = weekDays.findIndex(d => 
+                  const todayIndex = getWeekDays.findIndex(d => 
                     toLocalDateString(d) === toLocalDateString(today)
                   );
                   if (todayIndex !== -1) {
