@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,7 +83,11 @@ const MinUke = () => {
   const currentYear = parseInt(params?.year || new Date().getFullYear().toString(), 10);
   const currentWeek = parseInt(params?.week || getWeekNumber(new Date()).toString(), 10);
   const formattedWeek = currentWeek.toString().padStart(2, '0');
-  const simulatePersonId = searchParams?.get('simulatePersonId') || null;
+  
+  // Stabilize simulatePersonId to prevent unnecessary re-renders
+  const simulatePersonId = useMemo(() => {
+    return searchParams?.get('simulatePersonId') || null;
+  }, [searchParams]);
 
   const getWeeksInYear = (targetYear: number) => {
     // Use ISO week calculation to get the correct number of weeks
@@ -428,7 +432,7 @@ const MinUke = () => {
       }
       supabase.removeChannel(channel);
     };
-  }, [person?.id, profile?.org_id, loadWeeklySummary]);
+  }, [person?.id, profile?.org_id]); // Removed loadWeeklySummary dependency to prevent loop
 
   useEffect(() => {
     if (user) {
