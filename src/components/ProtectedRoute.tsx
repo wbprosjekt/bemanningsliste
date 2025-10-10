@@ -8,7 +8,7 @@ import OnboardingDialog from "@/components/OnboardingDialog";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: "admin" | "leder" | "manager" | "any-admin";
+  requiredRole?: "admin" | "leder" | "manager" | "any-admin" | null;
   requireProfile?: boolean; // New: require profile check
 }
 
@@ -28,7 +28,7 @@ interface ProtectedRouteProps {
  */
 export default function ProtectedRoute({ 
   children, 
-  requiredRole = "any-admin",
+  requiredRole = null, // Default: no role requirement (all authenticated users)
   requireProfile = true
 }: ProtectedRouteProps) {
   const { user, loading: authLoading } = useAuth();
@@ -207,7 +207,10 @@ export default function ProtectedRoute({
   /**
    * Sjekker om brukerens rolle har tilgang
    */
-  const checkAccess = (userRole: string, required: string): boolean => {
+  const checkAccess = (userRole: string, required: string | null): boolean => {
+    // If no role requirement, allow all authenticated users
+    if (!required) return true;
+    
     // Admin har alltid full tilgang
     if (userRole === 'admin') return true;
 
