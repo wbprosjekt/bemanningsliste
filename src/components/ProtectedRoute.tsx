@@ -45,31 +45,39 @@ export default function ProtectedRoute({
   const hasLoadedOnce = useRef(false);
 
   useEffect(() => {
-    if (!authLoading) {
-      // If user just logged out, immediately redirect without checking profile
-      if (!user) {
-        console.log('🔒 ProtectedRoute: User logged out, redirecting to /auth');
-        router.replace('/auth');
-        setChecking(false);
-        setProfileLoading(false);
-        hasLoadedOnce.current = false;
-        return;
-      }
-      
-      // Prevent multiple simultaneous loads
-      if (isLoadingProfile.current) {
-        console.log('🔒 ProtectedRoute: Already loading profile, skipping');
-        return;
-      }
-      
-      // Only load once per user session unless forced
-      if (hasLoadedOnce.current && user) {
-        console.log('🔒 ProtectedRoute: Already loaded for this user, skipping');
-        return;
-      }
-      
-      loadProfileAndCheck();
+    // Wait for auth to finish loading
+    if (authLoading) {
+      console.log('🔒 ProtectedRoute: Auth still loading, waiting...');
+      return;
     }
+    
+    // If user just logged out, immediately redirect without checking profile
+    if (!user) {
+      console.log('🔒 ProtectedRoute: User logged out, redirecting to /auth');
+      router.replace('/auth');
+      setChecking(false);
+      setProfileLoading(false);
+      hasLoadedOnce.current = false;
+      isLoadingProfile.current = false;
+      return;
+    }
+    
+    // Prevent multiple simultaneous loads
+    if (isLoadingProfile.current) {
+      console.log('🔒 ProtectedRoute: Already loading profile, skipping');
+      return;
+    }
+    
+    // Only load once per user session unless forced
+    if (hasLoadedOnce.current) {
+      console.log('🔒 ProtectedRoute: Already loaded for this user, skipping');
+      setChecking(false);
+      setProfileLoading(false);
+      return;
+    }
+    
+    console.log('🔒 ProtectedRoute: Auth complete, user present, loading profile...');
+    loadProfileAndCheck();
   }, [user, authLoading]);
 
   // Timeout to prevent infinite loading
@@ -94,16 +102,16 @@ export default function ProtectedRoute({
   }, [authLoading, profileLoading, checking, user, router]);
 
   const loadProfileAndCheck = async () => {
-    console.log('🔒 ProtectedRoute: Starting loadProfileAndCheck for user:', user?.email);
-    
+    // CRITICAL: Check user FIRST before any logging or state changes
     if (!user) {
-      // Ikke innlogget → redirect til auth
       console.log('🔒 ProtectedRoute: No user, redirecting to /auth');
       setChecking(false);
       setProfileLoading(false);
       router.replace('/auth');
       return;
     }
+    
+    console.log('🔒 ProtectedRoute: Starting loadProfileAndCheck for user:', user.email);
 
     // Set loading flag to prevent concurrent calls
     if (isLoadingProfile.current) {

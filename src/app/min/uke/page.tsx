@@ -25,17 +25,11 @@ export default function MinUkeRedirect() {
     
     console.log('🔄 MinUkeRedirect: Redirecting to', currentYear, currentWeek);
     
-    // Add timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      console.warn('⚠️ MinUkeRedirect: Timeout reached, forcing redirect');
-      router.replace(`/min/uke/${currentYear}/${currentWeek}`);
-    }, 2000);
-    
-    // Immediate redirect
+    // Single redirect - no timeout needed
     router.replace(`/min/uke/${currentYear}/${currentWeek}`);
     
-    return () => clearTimeout(timeoutId);
-  }, [router]);
+    // Empty dependency array = only run once on mount
+  }, []);
 
   // Show loading while redirecting
   return (
