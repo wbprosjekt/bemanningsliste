@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +39,10 @@ export default function ProtectedRoute({
   const [checking, setChecking] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [timeoutReached, setTimeoutReached] = useState(false);
+  
+  // Use ref to prevent multiple simultaneous profile loads
+  const isLoadingProfile = useRef(false);
+  const hasLoadedOnce = useRef(false);
 
   useEffect(() => {
     if (!authLoading) {
@@ -48,8 +52,22 @@ export default function ProtectedRoute({
         router.replace('/auth');
         setChecking(false);
         setProfileLoading(false);
+        hasLoadedOnce.current = false;
         return;
       }
+      
+      // Prevent multiple simultaneous loads
+      if (isLoadingProfile.current) {
+        console.log('🔒 ProtectedRoute: Already loading profile, skipping');
+        return;
+      }
+      
+      // Only load once per user session unless forced
+      if (hasLoadedOnce.current && user) {
+        console.log('🔒 ProtectedRoute: Already loaded for this user, skipping');
+        return;
+      }
+      
       loadProfileAndCheck();
     }
   }, [user, authLoading]);
@@ -87,7 +105,14 @@ export default function ProtectedRoute({
       return;
     }
 
+    // Set loading flag to prevent concurrent calls
+    if (isLoadingProfile.current) {
+      console.log('🔒 ProtectedRoute: Already loading, aborting duplicate call');
+      return;
+    }
+
     try {
+      isLoadingProfile.current = true;
       setProfileLoading(true);
       console.log('🔒 ProtectedRoute: Loading profile for user:', user.id);
       
@@ -158,12 +183,16 @@ export default function ProtectedRoute({
         console.log(`✅ Access granted for role "${userRole}" on ${pathname}`);
         setChecking(false);
         setProfileLoading(false);
+        hasLoadedOnce.current = true; // Mark as successfully loaded
       }
     } catch (error) {
       console.error('Error in ProtectedRoute:', error);
       setChecking(false);
       setProfileLoading(false);
       router.replace('/auth');
+    } finally {
+      // Always reset loading flag
+      isLoadingProfile.current = false;
     }
   };
 

@@ -68,14 +68,8 @@ const MinUke = () => {
   const { toast } = useToast();
   const searchParams = useSearchParams();
   
-  // Safe mobile detection with fallback
-  let isMobile = false;
-  try {
-    isMobile = useIsMobile();
-  } catch (error) {
-    console.warn('MinUke: Error detecting mobile, defaulting to false:', error);
-    isMobile = false;
-  }
+  // Mobile detection (must be unconditional - React hooks requirement)
+  const isMobile = useIsMobile();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
@@ -442,7 +436,7 @@ const MinUke = () => {
       }
       supabase.removeChannel(channel);
     };
-  }, [person?.id, profile?.org_id]); // Removed loadWeeklySummary dependency to prevent loop
+  }, [person?.id, profile?.org_id, loadWeeklySummary]); // Include loadWeeklySummary - it's stable via useCallback
 
   useEffect(() => {
     if (user) {

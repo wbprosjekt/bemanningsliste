@@ -213,3 +213,6 @@ COMMENT ON COLUMN public.email_templates.variables IS 'JSON array of available v
 
 
 
+
+
+
