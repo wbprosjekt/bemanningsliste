@@ -222,9 +222,10 @@ export default function ProtectedRoute({
       return false;
     }
 
-    // User har IKKE tilgang til admin-sider
-    if (userRole === 'user') return false;
+    // User har IKKE tilgang til admin-sider (any-admin krever leder/manager/admin)
+    if (required === 'any-admin' && userRole === 'user') return false;
 
+    // Hvis ingen spesifikk rolle er påkrevd, eller brukeren har riktig rolle, gi tilgang
     return true;
   };
 

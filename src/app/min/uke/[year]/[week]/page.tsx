@@ -723,7 +723,7 @@ const MinUke = () => {
 function MinUkeWithProtection() {
   return (
     <ErrorBoundary>
-      <ProtectedRoute requireProfile={true}>
+      <ProtectedRoute requireProfile={true} requiredRole={undefined}>
         <MinUke />
       </ProtectedRoute>
     </ErrorBoundary>
