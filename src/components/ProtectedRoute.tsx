@@ -62,13 +62,22 @@ export default function ProtectedRoute({
         setTimeoutReached(true);
         setChecking(false);
         setProfileLoading(false);
+        
+        // Force redirect to prevent infinite loop
+        if (!user) {
+          router.replace('/auth');
+        } else {
+          router.replace('/min/uke');
+        }
       }
-    }, 10000); // 10 second timeout
+    }, 8000); // Reduced to 8 seconds for faster recovery
 
     return () => clearTimeout(timeoutId);
-  }, [authLoading, profileLoading, checking]);
+  }, [authLoading, profileLoading, checking, user, router]);
 
   const loadProfileAndCheck = async () => {
+    console.log('🔒 ProtectedRoute: Starting loadProfileAndCheck for user:', user?.email);
+    
     if (!user) {
       // Ikke innlogget → redirect til auth
       console.log('🔒 ProtectedRoute: No user, redirecting to /auth');
@@ -80,11 +89,22 @@ export default function ProtectedRoute({
 
     try {
       setProfileLoading(true);
-      const { data: profileData, error } = await supabase
+      console.log('🔒 ProtectedRoute: Loading profile for user:', user.id);
+      
+      // Add timeout to prevent hanging
+      const profilePromise = supabase
         .from('profiles')
         .select('role, org_id')
         .eq('user_id', user.id)
         .maybeSingle();
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile loading timeout')), 5000)
+      );
+      
+      const { data: profileData, error } = await Promise.race([profilePromise, timeoutPromise]) as any;
+
+      console.log('🔒 ProtectedRoute: Profile loaded:', { profileData, error });
 
       // CRITICAL: Check if profile exists
       if (error && error.code !== 'PGRST116') {
@@ -108,6 +128,8 @@ export default function ProtectedRoute({
         } else {
           // If profile not required, redirect to auth
           console.log('🔒 Profile not required, redirecting to auth');
+          setChecking(false);
+          setProfileLoading(false);
           router.replace('/auth');
           return;
         }
@@ -129,18 +151,19 @@ export default function ProtectedRoute({
 
       if (!hasAccess) {
         console.log(`🚫 Access denied for role "${userRole}" on ${pathname}`);
+        setChecking(false);
+        setProfileLoading(false);
         router.replace('/min/uke');
       } else {
         console.log(`✅ Access granted for role "${userRole}" on ${pathname}`);
+        setChecking(false);
+        setProfileLoading(false);
       }
     } catch (error) {
       console.error('Error in ProtectedRoute:', error);
       setChecking(false);
       setProfileLoading(false);
       router.replace('/auth');
-    } finally {
-      setProfileLoading(false);
-      setChecking(false);
     }
   };
 
