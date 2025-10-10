@@ -1,1 +1,9 @@
-{}
+{
+  "/api/current-weather/route": "app/api/current-weather/route.js",
+  "/api/forecast/route": "app/api/forecast/route.js",
+  "/api/historical-weather/route": "app/api/historical-weather/route.js",
+  "/auth/page": "app/auth/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/min/uke/[year]/[week]/page": "app/min/uke/[year]/[week]/page.js",
+  "/page": "app/page.js"
+}

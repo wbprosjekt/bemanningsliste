@@ -74,3 +74,24 @@ export function useCurrentTemperature(lat: number, lon: number) {
     data: data?.currentWeather?.temperature ?? null,
   };
 }
+
+/**
+ * Hook for fetching historical weather data
+ */
+export function useHistoricalWeather(lat: number, lon: number, days: number = 7) {
+  return useQuery({
+    queryKey: ['weather', 'historical', lat, lon, days],
+    queryFn: async (): Promise<WeatherData> => {
+      const res = await fetch(`/api/historical-weather?lat=${lat}&lon=${lon}&days=${days}`);
+      if (!res.ok) {
+        throw new Error(`Historical weather API failed: ${res.status}`);
+      }
+      return res.json();
+    },
+    enabled: !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0,
+    staleTime: 2 * 60 * 60 * 1000, // 2 hours - historical data doesn't change
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours garbage collection
+    retry: 2,
+    retryDelay: 1000,
+  });
+}

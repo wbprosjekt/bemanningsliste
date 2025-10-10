@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { codeToWeather } from "@/lib/weather";
-import { useWeatherForecast, useCurrentTemperature } from "@/hooks/useWeather";
+import { useWeatherForecast, useCurrentTemperature, useHistoricalWeather } from "@/hooks/useWeather";
 
 interface WeatherDay {
   date: string;
@@ -34,28 +34,26 @@ export default function WeatherDayPills({
 }: WeatherDayPillsProps) {
   const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null);
 
-  // Get coordinates on mount
+  // Set Slattum coordinates directly (no geolocation popup)
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => setCoordinates({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-        () => setCoordinates({ lat: 60.0, lon: 10.85 }), // Nittedal fallback
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 } // 10 min cache
-      );
-    } else {
-      setCoordinates({ lat: 60.0, lon: 10.85 }); // Nittedal fallback
-    }
+    setCoordinates({ lat: 59.917, lon: 10.917 }); // Slattum, Akershus
   }, []);
 
   // Use React Query hooks for weather data
   const { data: forecastData, isLoading: forecastLoading } = useWeatherForecast(
-    coordinates?.lat ?? 60.0, // Use Nittedal fallback instead of 0
-    coordinates?.lon ?? 10.85 // Use Nittedal fallback instead of 0
+    coordinates?.lat ?? 59.917, // Use Slattum fallback
+    coordinates?.lon ?? 10.917 // Use Slattum fallback
   );
   
   const { data: currentTemp, isLoading: currentLoading } = useCurrentTemperature(
-    coordinates?.lat ?? 60.0, // Use Nittedal fallback instead of 0
-    coordinates?.lon ?? 10.85 // Use Nittedal fallback instead of 0
+    coordinates?.lat ?? 59.917, // Use Slattum fallback
+    coordinates?.lon ?? 10.917 // Use Slattum fallback
+  );
+
+  const { data: historicalData, isLoading: historicalLoading } = useHistoricalWeather(
+    coordinates?.lat ?? 59.917, // Use Slattum fallback
+    coordinates?.lon ?? 10.917, // Use Slattum fallback
+    7 // Last 7 days
   );
 
   // Save today's weather to history when forecast data is available
@@ -71,7 +69,7 @@ export default function WeatherDayPills({
   }, []);
 
   // Determine overall loading state
-  const isLoading = forecastLoading || currentLoading || !coordinates;
+  const isLoading = forecastLoading || currentLoading || historicalLoading || !coordinates;
 
   // Save today's weather to history
   function saveDailyWeatherToHistory(weatherDay: WeatherDay) {
@@ -158,11 +156,23 @@ export default function WeatherDayPills({
   }
 
 
-  // Find weather for a specific date
+  // Find weather for a specific date (from forecast or historical data)
   function getWeatherForDate(date: Date): WeatherDay | null {
-    if (!forecastData?.days) return null;
     const dateStr = date.toISOString().split("T")[0];
-    return forecastData.days.find((d) => d.date === dateStr) ?? null;
+    
+    // Check forecast data first (for future dates)
+    if (forecastData?.days) {
+      const forecastDay = forecastData.days.find((d) => d.date === dateStr);
+      if (forecastDay) return forecastDay;
+    }
+    
+    // Check historical data (for past dates)
+    if (historicalData?.days) {
+      const historicalDay = historicalData.days.find((d) => d.date === dateStr);
+      if (historicalDay) return historicalDay;
+    }
+    
+    return null;
   }
 
   // Get display data for a date
@@ -187,7 +197,16 @@ export default function WeatherDayPills({
 
     switch (dayType) {
       case 'past':
-        // Use historical data if available, otherwise generic icon
+        // Use historical data from API if available
+        if (weather) {
+          return {
+            weather: weather,
+            temperature: weather.tmax,
+            icon: weatherInfo?.emoji ?? '🌡️',
+            showTemp: true
+          };
+        }
+        // Fallback to localStorage historical data
         if (historicalWeather) {
           return {
             weather: null,
