@@ -32,7 +32,6 @@ export default function WeatherDayPills({
   onSelectDate,
   weekDates,
 }: WeatherDayPillsProps) {
-  const [loading, setLoading] = useState(true);
   const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null);
 
   // Get coordinates on mount
@@ -50,13 +49,13 @@ export default function WeatherDayPills({
 
   // Use React Query hooks for weather data
   const { data: forecastData, isLoading: forecastLoading } = useWeatherForecast(
-    coordinates?.lat ?? 0, 
-    coordinates?.lon ?? 0
+    coordinates?.lat ?? 60.0, // Use Nittedal fallback instead of 0
+    coordinates?.lon ?? 10.85 // Use Nittedal fallback instead of 0
   );
   
   const { data: currentTemp, isLoading: currentLoading } = useCurrentTemperature(
-    coordinates?.lat ?? 0, 
-    coordinates?.lon ?? 0
+    coordinates?.lat ?? 60.0, // Use Nittedal fallback instead of 0
+    coordinates?.lon ?? 10.85 // Use Nittedal fallback instead of 0
   );
 
   // Save today's weather to history when forecast data is available
@@ -72,7 +71,7 @@ export default function WeatherDayPills({
   }, []);
 
   // Determine overall loading state
-  const isLoading = loading || forecastLoading || currentLoading;
+  const isLoading = forecastLoading || currentLoading || !coordinates;
 
   // Save today's weather to history
   function saveDailyWeatherToHistory(weatherDay: WeatherDay) {
