@@ -103,6 +103,18 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
                 <span>Min Uke</span>
               </button>
 
+              <button
+                onClick={() => router.push("/befaring")}
+                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive("/befaring")
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                <span>Befaring</span>
+              </button>
+
               {/* User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -123,10 +135,6 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
                   <DropdownMenuItem onClick={() => router.push("/min/statistikk")}>
                     <BarChart3 className="h-4 w-4 mr-2" />
                     <span>Mine timer</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push("/befaring")}>
-                    <ClipboardCheck className="h-4 w-4 mr-2" />
-                    <span>Befaring</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -195,6 +203,18 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
               Min Uke
             </Button>
 
+            <Button
+              variant={isActive("/befaring") ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                router.push("/befaring");
+                setMobileMenuOpen(false);
+              }}
+            >
+              <ClipboardCheck className="h-4 w-4 mr-2" />
+              Befaring
+            </Button>
+
             {/* User menu */}
             <div className="border-t pt-4 mt-2">
               <p className="text-sm font-semibold text-muted-foreground mb-2 px-2">
@@ -223,18 +243,6 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
               >
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Mine timer
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="w-full justify-start"
-                onClick={() => {
-                  router.push("/befaring");
-                  setMobileMenuOpen(false);
-                }}
-              >
-                <ClipboardCheck className="h-4 w-4 mr-2" />
-                Befaring
               </Button>
             </div>
 
