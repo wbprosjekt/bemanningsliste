@@ -2891,7 +2891,14 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
     {/* Confirmation Dialog for all operations */}
     <AlertDialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, isOpen: open }))}>
-      <AlertDialogContent>
+      <AlertDialogContent
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmDialog.onConfirm();
+          }
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
           <AlertDialogDescription>
