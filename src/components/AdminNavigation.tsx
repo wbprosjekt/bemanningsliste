@@ -37,6 +37,7 @@ import {
   ChevronDown,
   Menu,
   Bell,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface AdminNavigationProps {
@@ -115,6 +116,18 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               >
                 <Users className="h-4 w-4" />
                 <span>Bemanningsliste</span>
+              </button>
+
+              <button
+                onClick={() => router.push("/befaring")}
+                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive("/befaring")
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                <span>Befaring</span>
               </button>
 
               <button
@@ -272,6 +285,18 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
             >
               <Users className="h-4 w-4 mr-2" />
               Bemanningsliste
+            </Button>
+
+            <Button
+              variant={isActive("/befaring") ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                router.push("/befaring");
+                setMobileMenuOpen(false);
+              }}
+            >
+              <ClipboardCheck className="h-4 w-4 mr-2" />
+              Befaring
             </Button>
 
             <Button
