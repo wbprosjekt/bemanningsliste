@@ -569,7 +569,7 @@ Deno.serve(async (req) => {
     if (orgId === 'all') {
       // Only allow from service role or with valid trigger secret
       const isServiceRole = isServiceRoleRequest(req);
-      const hasValidSecret = validateTriggerSecret(req, 'EMAIL_REMINDERS_SECRET');
+      const hasValidSecret = await validateTriggerSecret(req, 'email_reminders_secret');
       
       if (!isServiceRole && !hasValidSecret) {
         console.warn('Access denied: orgId="all" requires service role or valid secret');

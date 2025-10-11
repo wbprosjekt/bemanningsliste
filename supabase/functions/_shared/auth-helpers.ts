@@ -163,17 +163,42 @@ export function isServiceRoleRequest(req: Request): boolean {
 }
 
 /**
+ * Get a secret from the secrets table
+ * @param secretKey - Key to look up in secrets table
+ * @returns Secret value or null if not found
+ */
+export async function getSecret(secretKey: string): Promise<string | null> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  
+  const { data, error } = await supabaseAdmin
+    .from('secrets')
+    .select('value')
+    .eq('key', secretKey)
+    .single();
+    
+  if (error || !data) {
+    console.error(`Failed to get secret ${secretKey}:`, error);
+    return null;
+  }
+  
+  return data.value;
+}
+
+/**
  * Validate a trigger secret for internal-only functions (like nightly-sync)
  * @param req - Request object
- * @param expectedSecretEnvVar - Name of the environment variable containing the expected secret
+ * @param secretKey - Key to look up in secrets table
  * @returns true if valid, false otherwise
  */
-export function validateTriggerSecret(req: Request, expectedSecretEnvVar: string): boolean {
+export async function validateTriggerSecret(req: Request, secretKey: string): Promise<boolean> {
   const triggerSecret = req.headers.get('X-Trigger-Secret');
-  const expectedSecret = Deno.env.get(expectedSecretEnvVar);
+  const expectedSecret = await getSecret(secretKey);
   
   if (!expectedSecret) {
-    console.error(`Expected secret not configured: ${expectedSecretEnvVar}`);
+    console.error(`Expected secret not found in database: ${secretKey}`);
     return false;
   }
   

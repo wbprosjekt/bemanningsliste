@@ -9,13 +9,12 @@ RETURNS TEXT AS $$
 DECLARE
   encryption_key TEXT;
 BEGIN
-  -- Get encryption key from database settings
-  BEGIN
-    encryption_key := current_setting('app.encryption_key');
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION 'Encryption key not configured. Set with: ALTER DATABASE postgres SET app.encryption_key = ''your-key''';
-  END;
+  -- Get encryption key from secrets table
+  SELECT value INTO encryption_key FROM secrets WHERE key = 'encryption_key';
+  
+  IF encryption_key IS NULL THEN
+    RAISE EXCEPTION 'Encryption key not found in secrets table';
+  END IF;
   
   -- Encrypt and encode to base64
   RETURN encode(
@@ -40,13 +39,12 @@ BEGIN
     RETURN NULL;
   END IF;
   
-  -- Get encryption key from database settings
-  BEGIN
-    encryption_key := current_setting('app.encryption_key');
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION 'Encryption key not configured. Set with: ALTER DATABASE postgres SET app.encryption_key = ''your-key''';
-  END;
+  -- Get encryption key from secrets table
+  SELECT value INTO encryption_key FROM secrets WHERE key = 'encryption_key';
+  
+  IF encryption_key IS NULL THEN
+    RAISE EXCEPTION 'Encryption key not found in secrets table';
+  END IF;
   
   -- Decode from base64 and decrypt
   RETURN convert_from(

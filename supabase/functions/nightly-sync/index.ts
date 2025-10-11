@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
 
   // ==================== SECURITY CHECK ====================
   // This function should ONLY be called by cron jobs with a valid secret
-  if (!validateTriggerSecret(req, 'NIGHTLY_SYNC_SECRET')) {
+  if (!(await validateTriggerSecret(req, 'nightly_sync_secret'))) {
     console.error('Unauthorized nightly sync attempt - invalid or missing secret');
     return new Response(
       JSON.stringify({ 

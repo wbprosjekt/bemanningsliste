@@ -44,8 +44,8 @@ SELECT cron.schedule(
       url:='https://jlndohflirfixbinqdwe.supabase.co/functions/v1/email-reminders',
       headers:=jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
-        'X-Trigger-Secret', current_setting('app.email_reminders_secret')
+        'Authorization', 'Bearer ' || (SELECT value FROM secrets WHERE key = 'service_role_key'),
+        'X-Trigger-Secret', (SELECT value FROM secrets WHERE key = 'email_reminders_secret')
       ),
       body:=jsonb_build_object(
         'action', 'send-weekly-reminder',
@@ -66,8 +66,8 @@ SELECT cron.schedule(
       url:='https://jlndohflirfixbinqdwe.supabase.co/functions/v1/email-reminders',
       headers:=jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
-        'X-Trigger-Secret', current_setting('app.email_reminders_secret')
+        'Authorization', 'Bearer ' || (SELECT value FROM secrets WHERE key = 'service_role_key'),
+        'X-Trigger-Secret', (SELECT value FROM secrets WHERE key = 'email_reminders_secret')
       ),
       body:=jsonb_build_object(
         'action', 'send-payroll-reminder',
@@ -88,7 +88,7 @@ SELECT cron.schedule(
       url:='https://jlndohflirfixbinqdwe.supabase.co/functions/v1/nightly-sync',
       headers:=jsonb_build_object(
         'Content-Type', 'application/json',
-        'X-Trigger-Secret', current_setting('app.nightly_sync_secret')
+        'X-Trigger-Secret', (SELECT value FROM secrets WHERE key = 'nightly_sync_secret')
       ),
       body:=jsonb_build_object(
         'triggered_by', 'cron',
