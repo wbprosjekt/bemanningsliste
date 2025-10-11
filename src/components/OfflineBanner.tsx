@@ -1,60 +1,66 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from 'react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { WifiOff, Wifi } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-export default function OfflineBanner() {
+/**
+ * Banner som vises når brukeren er offline
+ * Vises øverst på siden med varsel om at enkelte funksjoner ikke er tilgjengelige
+ */
+export const OfflineBanner = () => {
   const isOnline = useOnlineStatus();
-  const [showOnlineMessage, setShowOnlineMessage] = useState(false);
   const [wasOffline, setWasOffline] = useState(false);
+  const [showReconnected, setShowReconnected] = useState(false);
 
   useEffect(() => {
     if (!isOnline) {
       setWasOffline(true);
     }
-    
+
     if (isOnline && wasOffline) {
-      // Show "back online" message for 3 seconds
-      setShowOnlineMessage(true);
+      // Vis "Tilkoblet igjen" melding i 3 sekunder
+      setShowReconnected(true);
       const timer = setTimeout(() => {
-        setShowOnlineMessage(false);
+        setShowReconnected(false);
         setWasOffline(false);
       }, 3000);
-      
+
       return () => clearTimeout(timer);
     }
   }, [isOnline, wasOffline]);
 
-  // Show offline banner
+  // Vis "Tilkoblet igjen" melding
+  if (showReconnected) {
+    return (
+      <div className="fixed top-0 left-0 right-0 z-50 animate-in slide-in-from-top-2 duration-300">
+        <Alert className="rounded-none border-green-500 bg-green-50 text-green-900">
+          <Wifi className="h-4 w-4" />
+          <AlertDescription className="ml-2">
+            <strong>Tilkoblet igjen!</strong> Du er nå online.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  // Vis offline banner
   if (!isOnline) {
     return (
-      <div className="sticky top-0 z-50 bg-yellow-500 text-black px-4 py-3 shadow-md">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-2">
-          <WifiOff className="h-5 w-5 flex-shrink-0" />
-          <p className="text-sm font-medium text-center">
-            Du er offline - koble til internett for å lagre timer
-          </p>
-        </div>
+      <div className="fixed top-0 left-0 right-0 z-50 animate-in slide-in-from-top-2 duration-300">
+        <Alert 
+          variant="destructive" 
+          className="rounded-none border-amber-500 bg-amber-50 text-amber-900"
+        >
+          <WifiOff className="h-4 w-4" />
+          <AlertDescription className="ml-2">
+            <strong>Du er offline.</strong> Enkelte funksjoner er ikke tilgjengelige uten internett.
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
 
-  // Show "back online" message briefly
-  if (showOnlineMessage) {
-    return (
-      <div className="sticky top-0 z-50 bg-green-500 text-white px-4 py-3 shadow-md animate-in fade-in slide-in-from-top-2 duration-300">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-2">
-          <Wifi className="h-5 w-5 flex-shrink-0" />
-          <p className="text-sm font-medium text-center">
-            ✅ Du er online igjen!
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Don't render anything when online (after message fades)
   return null;
-}
-
+};
