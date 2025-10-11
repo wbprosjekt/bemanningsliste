@@ -9,7 +9,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/hooks/useAuth";
 import NavigationWrapper from "@/components/NavigationWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import OfflineBanner from "@/components/OfflineBanner";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 
 interface RootProvidersProps {
