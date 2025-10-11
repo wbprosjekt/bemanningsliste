@@ -28,8 +28,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { CalendarIcon, Plus } from 'lucide-react';
-import { format } from 'date-fns';
-import { nb } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -275,7 +273,11 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {formData.befaring_date ? (
-                    format(formData.befaring_date, 'dd. MMMM yyyy', { locale: nb })
+                    formData.befaring_date.toLocaleDateString('no-NO', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })
                   ) : (
                     'Velg dato'
                   )}
@@ -287,7 +289,6 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
                   selected={formData.befaring_date || undefined}
                   onSelect={(date) => handleInputChange('befaring_date', date)}
                   initialFocus
-                  locale={nb}
                 />
               </PopoverContent>
             </Popover>
