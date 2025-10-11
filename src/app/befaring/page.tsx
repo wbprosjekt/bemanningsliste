@@ -1,14 +1,26 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { useModuleAccess } from '@/hooks/useModuleAccess';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import BefaringList from '@/components/befaring/BefaringList';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Lock, Sparkles } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Profile {
+  id: string;
+  user_id: string;
+  role: string;
+  org_id: string;
+  org: {
+    id: string;
+    subscription_plan?: string;
+    modules?: string[];
+  };
+}
 
 /**
  * Hovedside for Befaringsverktøyet
@@ -16,8 +28,53 @@ import { Lock, Sparkles } from 'lucide-react';
  */
 export default function BefaringPage() {
   const router = useRouter();
-  const { user, profile, loading } = useAuth();
-  const { canAccessBefaring } = useModuleAccess();
+  const { user, loading } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  // Load profile data when user changes
+  useEffect(() => {
+    if (user) {
+      loadProfile();
+    } else {
+      setProfile(null);
+      setProfileLoading(false);
+    }
+  }, [user]);
+
+  const loadProfile = async () => {
+    if (!user) return;
+    
+    try {
+      setProfileLoading(true);
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select(`
+          *,
+          org:org_id (
+            id,
+            subscription_plan,
+            modules
+          )
+        `)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading profile:', error);
+        setProfile(null);
+      } else if (profileData) {
+        setProfile(profileData);
+      } else {
+        setProfile(null);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      setProfile(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
   // Redirect til login hvis ikke innlogget
   useEffect(() => {
@@ -27,7 +84,7 @@ export default function BefaringPage() {
   }, [user, loading, router]);
 
   // Loading state
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -42,6 +99,9 @@ export default function BefaringPage() {
   if (!user || !profile) {
     return null;
   }
+
+  // Sjekk tilgang til befaring-modul
+  const canAccessBefaring = profile.org?.modules?.includes('befaring') || profile.role === 'admin' || profile.role === 'manager';
 
   // Ingen tilgang til befaring-modul
   if (!canAccessBefaring) {
