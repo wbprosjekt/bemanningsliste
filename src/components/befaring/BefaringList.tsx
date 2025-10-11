@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import CreateBefaringDialog from './CreateBefaringDialog';
 import { 
-  Plus, 
   Search, 
   FileText, 
   Calendar,
@@ -108,12 +108,8 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
     }
   };
 
-  const handleCreateBefaring = () => {
-    // TODO: Åpne dialog for å opprette ny befaring
-    toast({
-      title: 'Kommer snart',
-      description: 'Funksjon for å opprette ny befaring kommer i neste versjon.',
-    });
+  const handleCreateBefaringSuccess = () => {
+    loadBefaringer(); // Reload the list
   };
 
   const filteredBefaringer = befaringer.filter(b =>
@@ -205,10 +201,11 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
                 ? 'Ingen befaringer matcher søket ditt.'
                 : 'Kom i gang ved å opprette din første befaring.'}
             </p>
-            <Button onClick={handleCreateBefaring}>
-              <Plus className="mr-2 h-4 w-4" />
-              Opprett befaring
-            </Button>
+            <CreateBefaringDialog 
+              orgId={orgId} 
+              userId={userId} 
+              onSuccess={handleCreateBefaringSuccess}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -346,15 +343,11 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
       )}
 
       {/* FAB for ny befaring */}
-      <Button
-        onClick={handleCreateBefaring}
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-xl 
-                   bg-gradient-to-r from-blue-600 to-blue-700 
-                   hover:scale-110 active:scale-95 transition-transform duration-200"
-        size="icon"
-      >
-        <Plus className="h-6 w-6" />
-      </Button>
+      <CreateBefaringDialog 
+        orgId={orgId} 
+        userId={userId} 
+        onSuccess={handleCreateBefaringSuccess}
+      />
     </div>
   );
 }
