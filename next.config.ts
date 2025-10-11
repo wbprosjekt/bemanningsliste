@@ -11,6 +11,19 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
   },
 
+  // Exclude backup directories and Deno files from build
+  webpack: (config) => {
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: [
+        '**/backups/**',
+        '**/supabase/functions/**',
+        '**/node_modules/**',
+      ],
+    };
+    return config;
+  },
+
   // Disable ESLint and TypeScript checking during builds for faster deployment
   eslint: {
     ignoreDuringBuilds: true,
