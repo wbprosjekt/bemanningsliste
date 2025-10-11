@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -226,6 +227,19 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     currentName: string;
   } | null>(null);
   const [isProcessingUpdate, setIsProcessingUpdate] = useState(false);
+
+  // Confirmation dialog states
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
 
   const toDateKey = useCallback((d: Date): string => {
     try {
@@ -1286,6 +1300,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  // Wrapper function to show confirmation before sending individual entry
+  const confirmSendToTripletex = (entry: StaffingEntry) => {
+    const totalHours = entry.activities.reduce((sum, activity) => sum + activity.timer, 0);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Send timer til Tripletex',
+      description: `Send ${formatTimeValue(totalHours)} timer for ${entry.project?.project_name || 'ukjent prosjekt'} til Tripletex?`,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        sendToTripletex(entry);
+      },
+    });
+  };
+
   const verifyTripletexStatus = async (entry: StaffingEntry) => {
     try {
       let verifiedActivities = 0;
@@ -1413,6 +1441,20 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         variant: "destructive"
       });
     }
+  };
+
+  // Wrapper function to show confirmation before recalling individual entry
+  const confirmRecallFromTripletex = (entry: StaffingEntry) => {
+    const totalHours = entry.activities.reduce((sum, activity) => sum + activity.timer, 0);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Tilbakekall timer fra Tripletex',
+      description: `Tilbakekall ${formatTimeValue(totalHours)} timer for ${entry.project?.project_name || 'ukjent prosjekt'} fra Tripletex? Timene vil bli satt til utkast-status og kan redigeres.`,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        recallFromTripletex(entry);
+      },
+    });
   };
 
   const unapproveSelectedEntries = async () => {
@@ -1868,6 +1910,55 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     }
   };
 
+  // Confirmation wrappers for bulk operations
+  const confirmSendAllToTripletexForWeek = (weekNumber: number, year: number) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Send alle timer til Tripletex',
+      description: `Send alle godkjente timer for uke ${weekNumber} til Tripletex?`,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        sendAllToTripletexForWeek(weekNumber, year);
+      },
+    });
+  };
+
+  const confirmRecallAllFromTripletexForWeek = (weekNumber: number, year: number) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Tilbakekall alle timer',
+      description: `Tilbakekall alle sendte timer for uke ${weekNumber} fra Tripletex?`,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        recallAllFromTripletexForWeek(weekNumber, year);
+      },
+    });
+  };
+
+  const confirmApproveAllEntriesForWeek = (weekNumber: number, year: number) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Godkjenn alle timer',
+      description: `Godkjenn alle timer for uke ${weekNumber}?`,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        approveAllEntriesForWeek(weekNumber, year);
+      },
+    });
+  };
+
+  const confirmUnapproveAllEntriesForWeek = (weekNumber: number, year: number) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Avgodkjenn alle timer',
+      description: `Avgodkjenn alle timer for uke ${weekNumber}?`,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        unapproveAllEntriesForWeek(weekNumber, year);
+      },
+    });
+  };
+
   // Show loading if any critical data is still loading
   const isLoadingCriticalData = profileLoading || employeesLoading || projectsLoading || projectColorsLoading || staffingDataLoading;
   
@@ -2004,7 +2095,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 size="sm" 
                                 variant="default" 
                                 className="bg-green-600 hover:bg-green-700 text-xs px-1.5 py-0.5 h-5"
-                                onClick={() => approveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
+                                onClick={() => confirmApproveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
                                 title="Godkjenn alle timer for uken"
                               >
                                 <Check className="h-3 w-3 mr-0.5" />
@@ -2014,7 +2105,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 size="sm" 
                                 variant="outline" 
                                 className="border-orange-500 text-orange-600 hover:bg-orange-50 text-xs px-1.5 py-0.5 h-5"
-                                onClick={() => unapproveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
+                                onClick={() => confirmUnapproveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
                                 title="Avgodkjenn alle timer for uken"
                               >
                                 <X className="h-3 w-3 mr-0.5" />
@@ -2026,7 +2117,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 size="sm" 
                                 variant="default" 
                                 className="bg-blue-600 hover:bg-blue-700 text-xs px-1.5 py-0.5 h-5"
-                                onClick={() => sendAllToTripletexForWeek(safeWeek.week, safeWeek.year)}
+                                onClick={() => confirmSendAllToTripletexForWeek(safeWeek.week, safeWeek.year)}
                                 title="Send alle godkjente timer til Tripletex"
                               >
                                 <Send className="h-3 w-3 mr-0.5" />
@@ -2036,7 +2127,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                 size="sm" 
                                 variant="outline" 
                                 className="border-purple-500 text-purple-600 hover:bg-purple-50 text-xs px-1.5 py-0.5 h-5"
-                                onClick={() => recallAllFromTripletexForWeek(safeWeek.week, safeWeek.year)}
+                                onClick={() => confirmRecallAllFromTripletexForWeek(safeWeek.week, safeWeek.year)}
                                 title="Tilbakekall alle sendte timer fra Tripletex"
                               >
                                 <RefreshCw className="h-3 w-3 mr-0.5" />
@@ -2267,13 +2358,33 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                                     </div>
                                     
                                     {/* Tripletex action buttons - positioned at bottom center, show on hover */}
+                                    {/* Send button - only show if approved and NOT sent */}
+                                    {entry.activities.length > 0 && 
+                                     entry.activities.every(a => a.status === 'godkjent') && 
+                                     !entry.activities.some(a => a.tripletex_synced_at) && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          confirmSendToTripletex(entry);
+                                        }}
+                                        disabled={sendingToTripletex.has(entry.id)}
+                                        className={`bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-md border border-white/20 opacity-0 group-hover/project:opacity-100 transition-opacity absolute bottom-1 left-1/2 transform -translate-x-1/2 ${
+                                          sendingToTripletex.has(entry.id) ? 'opacity-50 cursor-not-allowed' : ''
+                                        }`}
+                                        title="Send til Tripletex"
+                                      >
+                                        <Send className="h-2 w-2" />
+                                      </button>
+                                    )}
+                                    
+                                    {/* Recall and Verify buttons - only show if sent to Tripletex */}
                                     {entry.activities.some(a => a.tripletex_synced_at) && (
                                       <>
                                         {/* Recall button */}
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            recallFromTripletex(entry);
+                                            confirmRecallFromTripletex(entry);
                                           }}
                                           className="bg-orange-500 hover:bg-orange-600 text-white rounded-full p-1 shadow-md border border-white/20 opacity-0 group-hover/project:opacity-100 transition-opacity absolute bottom-1 left-1/2 transform -translate-x-1/2"
                                           title="Kall tilbake fra Tripletex"
@@ -2777,6 +2888,27 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Confirmation Dialog for all operations */}
+    <AlertDialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, isOpen: open }))}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {confirmDialog.description}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}>
+            Avbryt
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={confirmDialog.onConfirm}>
+            Bekreft
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
       </div>
     </>
   );

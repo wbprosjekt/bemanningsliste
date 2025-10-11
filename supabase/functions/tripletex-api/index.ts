@@ -7,7 +7,7 @@ import {
 } from '../_shared/auth-helpers.ts';
 
 // Database-backed rate limiting for persistence across cold starts
-async function checkRateLimit(identifier: string, maxRequests: number = 20, windowSeconds: number = 60): Promise<boolean> {
+async function checkRateLimit(identifier: string, maxRequests: number = 100, windowSeconds: number = 60): Promise<boolean> {
   try {
     const { data, error } = await supabase.rpc('check_rate_limit', {
       p_identifier: identifier,
@@ -552,7 +552,7 @@ Deno.serve(async (req) => {
   
   // Rate limiting check (database-backed for persistence)
   const clientId = getClientIdentifier(req);
-  const rateLimitAllowed = await checkRateLimit(clientId, 20, 60); // 20 requests per 60 seconds
+  const rateLimitAllowed = await checkRateLimit(clientId, 100, 60); // 100 requests per 60 seconds
   if (!rateLimitAllowed) {
     const corsHeaders = getCorsHeaders(req.headers.get('origin') || undefined);
     return new Response(
