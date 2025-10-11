@@ -34,6 +34,7 @@ import {
   ChevronDown,
   BarChart3,
   Menu,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface EmployeeNavigationProps {
@@ -122,6 +123,10 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
                   <DropdownMenuItem onClick={() => router.push("/min/statistikk")}>
                     <BarChart3 className="h-4 w-4 mr-2" />
                     <span>Mine timer</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push("/befaring")}>
+                    <ClipboardCheck className="h-4 w-4 mr-2" />
+                    <span>Befaring</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -218,6 +223,18 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
               >
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Mine timer
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => {
+                  router.push("/befaring");
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <ClipboardCheck className="h-4 w-4 mr-2" />
+                Befaring
               </Button>
             </div>
 
