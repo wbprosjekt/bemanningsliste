@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -47,6 +47,15 @@ interface BefaringFormData {
   sted: string;
   befaring_date: Date | null;
   befaring_type: string;
+  tripletex_project_id: number | null;
+}
+
+interface TripletexProject {
+  id: string;
+  tripletex_project_id: number;
+  project_name: string;
+  project_number: number;
+  customer_name: string | null;
 }
 
 const BEFARING_TYPES = [
@@ -61,6 +70,8 @@ const BEFARING_TYPES = [
 export default function CreateBefaringDialog({ orgId, userId, onSuccess }: CreateBefaringDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [projects, setProjects] = useState<TripletexProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState<BefaringFormData>({
@@ -71,15 +82,40 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
     sted: '',
     befaring_date: new Date(),
     befaring_type: 'forbefaring',
+    tripletex_project_id: null,
   });
+
+  const loadTripletexProjects = async () => {
+    setProjectsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('ttx_project_cache')
+        .select('id, tripletex_project_id, project_name, project_number, customer_name')
+        .eq('org_id', orgId)
+        .eq('is_active', true)
+        .order('project_name');
+
+      if (error) throw error;
+      setProjects(data || []);
+    } catch (error) {
+      console.error('Error loading projects:', error);
+      toast({
+        title: 'Feil ved lasting',
+        description: 'Kunne ikke laste Tripletex-prosjekter.',
+        variant: 'destructive',
+      });
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title.trim() || !formData.befaring_date) {
+    if (!formData.title.trim() || !formData.befaring_date || !formData.tripletex_project_id) {
       toast({
         title: 'Mangler påkrevde felt',
-        description: 'Tittel og befaring-dato er påkrevd.',
+        description: 'Tittel, befaring-dato og Tripletex-prosjekt er påkrevd.',
         variant: 'destructive',
       });
       return;
@@ -87,10 +123,11 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+        const { data, error } = await supabase
         .from('befaringer')
         .insert({
           org_id: orgId,
+          tripletex_project_id: formData.tripletex_project_id,
           title: formData.title.trim(),
           description: formData.description.trim() || null,
           adresse: formData.adresse.trim() || null,
@@ -119,6 +156,7 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
         sted: '',
         befaring_date: new Date(),
         befaring_type: 'forbefaring',
+        tripletex_project_id: null,
       });
 
       setOpen(false);
@@ -135,12 +173,19 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
     }
   };
 
-  const handleInputChange = (field: keyof BefaringFormData, value: string | Date | null) => {
+  const handleInputChange = (field: keyof BefaringFormData, value: string | Date | number | null) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
     }));
   };
+
+  // Load projects when dialog opens
+  useEffect(() => {
+    if (open) {
+      loadTripletexProjects();
+    }
+  }, [open, orgId]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -246,6 +291,31 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
                 />
               </PopoverContent>
             </Popover>
+          </div>
+
+          {/* Tripletex-prosjekt */}
+          <div className="space-y-2">
+            <Label htmlFor="tripletex_project">Tripletex-prosjekt *</Label>
+            <Select
+              value={formData.tripletex_project_id?.toString() || ''}
+              onValueChange={(value) => handleInputChange('tripletex_project_id', value ? parseInt(value) : null)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={projectsLoading ? "Laster prosjekter..." : "Velg prosjekt"} />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.tripletex_project_id.toString()}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{project.project_name}</span>
+                      <span className="text-xs text-gray-500">
+                        #{project.tripletex_project_id} • {project.customer_name || 'Ingen kunde'}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Befaring-type */}
