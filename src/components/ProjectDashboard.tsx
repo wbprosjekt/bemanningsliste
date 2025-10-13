@@ -1,0 +1,259 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { 
+  Search, 
+  Star, 
+  Clock, 
+  Building, 
+  Plus,
+  Filter,
+  Grid3X3,
+  List,
+  Calendar
+} from 'lucide-react';
+
+interface Project {
+  id: string;
+  tripletex_project_id: number;
+  project_name: string;
+  project_number: number;
+  customer_name: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ProjectStats {
+  total_projects: number;
+  active_projects: number;
+  recent_projects: number;
+}
+
+export default function ProjectDashboard() {
+  const { profile } = useAuth();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [stats, setStats] = useState<ProjectStats>({
+    total_projects: 0,
+    active_projects: 0,
+    recent_projects: 0
+  });
+
+  const loadProjects = async () => {
+    if (!profile?.org_id) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('ttx_project_cache')
+        .select('*')
+        .eq('org_id', profile.org_id)
+        .eq('is_active', true)
+        .order('project_name');
+
+      if (error) throw error;
+      
+      setProjects(data || []);
+      setFilteredProjects(data || []);
+      
+      // Calculate stats
+      setStats({
+        total_projects: data?.length || 0,
+        active_projects: data?.length || 0,
+        recent_projects: data?.filter(p => {
+          const daysSinceUpdate = (Date.now() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60 * 24);
+          return daysSinceUpdate <= 7;
+        }).length || 0
+      });
+    } catch (error) {
+      console.error('Error loading projects:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProjects();
+  }, [profile?.org_id]);
+
+  useEffect(() => {
+    const filtered = projects.filter(project =>
+      project.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.project_number.toString().includes(searchTerm) ||
+      project.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredProjects(filtered);
+  }, [searchTerm, projects]);
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Laster prosjekter...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Prosjekt Dashboard</h1>
+          <p className="text-muted-foreground">
+            Oversikt over alle aktive prosjekter
+          </p>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Ny befaring
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Totalt prosjekter</CardTitle>
+            <Building className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total_projects}</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Aktive prosjekter</CardTitle>
+            <Star className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.active_projects}</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Nylig oppdatert</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.recent_projects}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Søk prosjekter..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <Button
+            variant={viewMode === 'grid' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid3X3 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Projects */}
+      {filteredProjects.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Building className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Ingen prosjekter funnet</h3>
+            <p className="text-muted-foreground text-center">
+              {searchTerm 
+                ? `Ingen prosjekter matcher "${searchTerm}"`
+                : "Ingen aktive prosjekter funnet"
+              }
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className={viewMode === 'grid' 
+          ? "grid gap-4 md:grid-cols-2 lg:grid-cols-3" 
+          : "space-y-4"
+        }>
+          {filteredProjects.map((project) => (
+            <Card key={project.id} className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="text-lg">
+                      {project.project_name}
+                    </CardTitle>
+                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                      <Badge variant="outline">
+                        #{project.project_number}
+                      </Badge>
+                      {project.customer_name && (
+                        <span>• {project.customer_name}</span>
+                      )}
+                    </div>
+                  </div>
+                  <Badge variant="secondary">
+                    Aktiv
+                  </Badge>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="pt-0">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    Oppdatert {new Date(project.updated_at).toLocaleDateString('no-NO')}
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button variant="outline" size="sm">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Befaringer
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Oppgaver
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
