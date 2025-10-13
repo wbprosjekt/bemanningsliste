@@ -15,8 +15,16 @@ export default {
     },
     extend: {
       colors: {
+        // FieldNote brand colors (direct HEX for utility classes)
+        "field-blue": "var(--color-primary)",
+        "concrete-gray": "var(--color-secondary)",
+        "field-green": "var(--color-accent)",
+        "field-warning": "var(--color-warning)",
+        "field-error": "var(--color-error)",
+        
+        // shadcn/ui HSL colors (for component compatibility)
         border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
+        input: "hsl(var(--border))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
@@ -61,10 +69,19 @@ export default {
         "gray-25": "hsl(var(--gray-25))",
         "slate-75": "hsl(var(--slate-75))",
       },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
+        heading: ["Poppins", "Inter", "system-ui", "sans-serif"],
+      },
+      boxShadow: {
+        card: "0 2px 12px rgba(0,0,0,.06)",
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 0.25rem)",
+        "2xl": "calc(var(--radius) + 0.5rem)",
       },
       keyframes: {
         "accordion-down": {

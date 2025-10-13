@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Logo from "@/components/Logo";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,80 +86,80 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
             {/* Logo */}
             <div className="flex items-center">
               <button 
-                onClick={() => router.push("/")} 
-                className="text-xl font-bold hover:text-blue-300 transition-colors"
+                onClick={() => router.push("/")}
+                className="text-xl font-bold font-heading hover:text-blue-300 transition-colors"
               >
-                Bemanningsliste
+                <Logo size={32} showText={true} className="text-white" />
               </button>
             </div>
 
             {/* Navigation Links */}
-            <div className="hidden md:flex items-center space-x-8">
+            <div className="hidden lg:flex items-center space-x-4">
               <button
                 onClick={() => router.push("/")}
-                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/") && pathname === "/"
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
               >
                 <Home className="h-4 w-4" />
-                <span>Hjem</span>
+                <span className="hidden xl:inline">Hjem</span>
               </button>
 
               <button
                 onClick={() => router.push(`/admin/bemanningsliste/${getCurrentYear()}/${getCurrentWeek()}`)}
-                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/admin/bemanningsliste")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
               >
                 <Users className="h-4 w-4" />
-                <span>Bemanningsliste</span>
+                <span className="hidden xl:inline">Bemanningsliste</span>
               </button>
 
               <button
                 onClick={() => router.push("/befaring")}
-                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/befaring")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
               >
                 <ClipboardCheck className="h-4 w-4" />
-                <span>Befaring</span>
+                <span className="hidden xl:inline">Befaring</span>
               </button>
 
               <button
                 onClick={() => router.push("/admin/rapporter/maanedlig")}
-                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/admin/rapporter")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
               >
                 <BarChart3 className="h-4 w-4" />
-                <span>Rapporter</span>
+                <span className="hidden xl:inline">Rapporter</span>
               </button>
 
               <button
                 onClick={() => router.push("/admin/settings")}
-                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/admin/settings")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
               >
                 <Bell className="h-4 w-4" />
-                <span>Innstillinger</span>
+                <span className="hidden xl:inline">Innstillinger</span>
               </button>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive("/admin/brukere") ||
                       isActive("/admin/integrasjoner") ||
                       isActive("/admin/timer")
@@ -167,7 +168,7 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                     }`}
                   >
                     <Settings className="h-4 w-4" />
-                    <span>Admin</span>
+                    <span className="hidden xl:inline">Admin</span>
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -192,10 +193,10 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white"
+                    className="flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white"
                   >
                     <User className="h-4 w-4" />
-                    <span>{profile?.fornavn || user?.email}</span>
+                    <span className="hidden xl:inline">{profile?.fornavn || user?.email}</span>
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>

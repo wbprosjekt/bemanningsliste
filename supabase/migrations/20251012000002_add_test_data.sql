@@ -16,3 +16,4 @@ ON CONFLICT DO NOTHING;
 -- You can find your org_id by running:
 -- SELECT id, navn FROM public.org;
 
+

@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Logo from "@/components/Logo";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -83,9 +84,9 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
             <div className="flex items-center">
               <button 
                 onClick={() => router.push("/min/uke")} 
-                className="text-xl font-bold hover:text-blue-300 transition-colors"
+                className="text-xl font-bold font-heading hover:text-blue-300 transition-colors"
               >
-                Bemanningsliste
+                <Logo size={32} showText={true} className="text-white" />
               </button>
             </div>
 

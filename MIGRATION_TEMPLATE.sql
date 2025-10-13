@@ -87,3 +87,4 @@ COMMENT ON COLUMN public.example_table.created_by IS 'User ID (auth.uid) of crea
 NOTIFY pgrst, 'reload schema';
 
 
+

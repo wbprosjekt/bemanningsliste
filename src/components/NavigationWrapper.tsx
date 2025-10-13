@@ -6,6 +6,7 @@ import EmployeeNavigation from "./EmployeeNavigation";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import Logo from "@/components/Logo";
 
 interface Profile {
   id: string;
@@ -78,7 +79,7 @@ export default function NavigationWrapper() {
       <nav className="bg-gray-800 text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="text-xl font-bold">Bemanningsliste</div>
+            <Logo size={32} showText={true} className="text-white" />
             <div className="text-sm text-gray-300">Laster...</div>
           </div>
         </div>
