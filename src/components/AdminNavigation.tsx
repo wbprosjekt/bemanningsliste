@@ -90,7 +90,7 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                 onClick={() => router.push("/")}
                 className="text-xl font-bold font-heading hover:text-blue-300 transition-colors"
               >
-                <Logo size={48} showText={true} variant="dark" className="text-white" />
+                <span className="text-xl font-bold font-heading text-white">FieldNote</span>
               </button>
             </div>
 
