@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="256" viewBox="0 0 1024 256">
+  <defs>
+    <style>
+      .stroke { fill: none; stroke: #2E6375; stroke-width: 14; stroke-linecap: round; stroke-linejoin: round; }
+      .word { fill: #2E6375; font-family: Arial, Helvetica, sans-serif; font-size: 118px; font-weight: 700; }
+    </style>
+  </defs>
+  <g transform="translate(60,20)">
+    <rect x="10" y="40" rx="20" ry="20" width="210" height="230" class="stroke"/>
+    <path d="M 200 40 L 200 120" class="stroke"/>
+    <path d="M 140 40 L 200 100" class="stroke"/>
+    <path d="M 60 170 L 180 170" class="stroke"/>
+    <circle cx="205" cy="25" r="20" class="stroke"/>
+  </g>
+  <text x="300" y="170" class="word">FieldNote</text>
+</svg>

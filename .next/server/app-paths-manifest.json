@@ -5,6 +5,7 @@
   "/api/forecast/route": "app/api/forecast/route.js",
   "/api/historical-weather/route": "app/api/historical-weather/route.js",
   "/auth/page": "app/auth/page.js",
+  "/befaring/page": "app/befaring/page.js",
   "/min/uke/[year]/[week]/page": "app/min/uke/[year]/[week]/page.js",
   "/min/uke/page": "app/min/uke/page.js",
   "/page": "app/page.js"

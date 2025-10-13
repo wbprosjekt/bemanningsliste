@@ -87,7 +87,7 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
                 onClick={() => router.push("/min/uke")} 
                 className="text-xl font-bold font-heading hover:text-blue-300 transition-colors"
               >
-                <Logo size={48} showText={true} className="text-white" />
+                <Logo size={48} showText={true} variant="dark" className="text-white" />
               </button>
             </div>
 
