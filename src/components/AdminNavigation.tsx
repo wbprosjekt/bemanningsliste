@@ -81,7 +81,7 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
 
   return (
     <>
-      <nav className="bg-gray-800 text-white shadow-lg sticky top-0 z-50">
+      <nav className="bg-gray-800 text-white shadow-lg sticky top-0 z-50 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
@@ -95,64 +95,69 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
             </div>
 
             {/* Navigation Links */}
-            <div className="hidden xl:flex items-center space-x-3">
+            <div className="flex items-center space-x-3">
               <button
                 onClick={() => router.push("/")}
-                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/") && pathname === "/"
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
+                title="Gå til hoveddashboard"
               >
-                <Home className="h-4 w-4" />
+                <Home className="h-5 w-5" />
                 <span className="hidden xl:inline">Hjem</span>
               </button>
 
               <button
                 onClick={() => router.push("/min/uke")}
-                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/min/uke")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
+                title="Se og rediger din ukesplan"
               >
-                <Calendar className="h-4 w-4" />
+                <Calendar className="h-5 w-5" />
                 <span className="hidden xl:inline">Min Uke</span>
               </button>
 
               <button
                 onClick={() => router.push(`/admin/bemanningsliste/${getCurrentYear()}/${getCurrentWeek()}`)}
-                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/admin/bemanningsliste")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
+                title="Planlegg og administrer bemanning"
               >
-                <Users className="h-4 w-4" />
+                <Users className="h-5 w-5" />
                 <span className="hidden xl:inline">Bemanningsliste</span>
               </button>
 
               <button
                 onClick={() => router.push("/befaring")}
-                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/befaring")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
+                title="Opprett og administrer befaringer"
               >
-                <ClipboardCheck className="h-4 w-4" />
+                <ClipboardCheck className="h-5 w-5" />
                 <span className="hidden xl:inline">Befaring</span>
               </button>
 
               <button
                 onClick={() => router.push("/admin/rapporter/maanedlig")}
-                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/admin/rapporter")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
+                title="Vis månedlige rapporter og statistikker"
               >
-                <BarChart3 className="h-4 w-4" />
+                <BarChart3 className="h-5 w-5" />
                 <span className="hidden xl:inline">Rapporter</span>
               </button>
 
@@ -160,7 +165,7 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive("/admin/brukere") ||
                       isActive("/admin/integrasjoner") ||
                       isActive("/admin/timer") ||
@@ -168,10 +173,11 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                         ? "bg-blue-600 text-white"
                         : "text-gray-300 hover:bg-gray-700 hover:text-white"
                     }`}
+                    title="Admin-innstillinger og verktøy"
                   >
-                    <Settings className="h-4 w-4" />
+                    <Settings className="h-5 w-5" />
                     <span className="hidden xl:inline">Admin</span>
-                    <ChevronDown className="h-3 w-3" />
+                    <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
