@@ -272,15 +272,6 @@ export default function ProtectedRoute({
       role: profile.role
     } : null 
   });
-  
-  // Clone children and pass profile as prop
-  const childrenWithProfile = React.Children.map(children, (child) => {
-    if (React.isValidElement(child)) {
-      return React.cloneElement(child, { profile } as any);
-    }
-    return child;
-  });
-  
-  return <>{childrenWithProfile}</>;
+  return <>{children}</>;
 }
 
