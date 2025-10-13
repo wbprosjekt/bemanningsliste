@@ -35,6 +35,7 @@ interface CreateBefaringDialogProps {
   orgId: string;
   userId: string;
   onSuccess: () => void;
+  variant?: 'header' | 'fab' | 'inline';
 }
 
 interface BefaringFormData {
@@ -65,7 +66,7 @@ const BEFARING_TYPES = [
   { value: 'annet', label: 'Annet' },
 ];
 
-export default function CreateBefaringDialog({ orgId, userId, onSuccess }: CreateBefaringDialogProps) {
+export default function CreateBefaringDialog({ orgId, userId, onSuccess, variant = 'fab' }: CreateBefaringDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [projects, setProjects] = useState<TripletexProject[]>([]);
@@ -134,6 +135,7 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
           befaring_date: formData.befaring_date.toISOString().split('T')[0],
           befaring_type: formData.befaring_type,
           status: 'aktiv',
+          created_by: userId, // Use userId directly (auth.uid())
         })
         .select()
         .single();
@@ -185,14 +187,47 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
     }
   }, [open, orgId]);
 
+  // Render different button styles based on variant
+  const renderTriggerButton = () => {
+    if (variant === 'header') {
+      return (
+        <Button 
+          size="lg"
+          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 
+                     shadow-lg hover:shadow-xl transition-all whitespace-nowrap"
+        >
+          <Plus className="h-5 w-5 mr-2" />
+          Ny befaring
+        </Button>
+      );
+    }
+    
+    if (variant === 'inline') {
+      return (
+        <Button 
+          size="lg"
+          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+        >
+          <Plus className="h-5 w-5 mr-2" />
+          Opprett din første befaring
+        </Button>
+      );
+    }
+    
+    // Default FAB variant
+    return (
+      <Button className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-xl 
+                         bg-gradient-to-r from-blue-600 to-blue-700 
+                         hover:scale-110 active:scale-95 transition-transform duration-200">
+        <Plus className="h-6 w-6" />
+      </Button>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-xl 
-                           bg-gradient-to-r from-blue-600 to-blue-700 
-                           hover:scale-110 active:scale-95 transition-transform duration-200">
-          <Plus className="h-6 w-6" />
-        </Button>
+        {renderTriggerButton()}
       </DialogTrigger>
       
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
@@ -204,6 +239,51 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Tripletex-prosjekt */}
+          <div className="space-y-2">
+            <Label htmlFor="tripletex_project">Tripletex-prosjekt *</Label>
+            <Select
+              value={formData.tripletex_project_id?.toString() || ''}
+              onValueChange={(value) => handleInputChange('tripletex_project_id', value ? parseInt(value) : null)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={projectsLoading ? "Laster prosjekter..." : "Velg prosjekt"} />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.tripletex_project_id.toString()}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{project.project_name}</span>
+                      <span className="text-xs text-gray-500">
+                        #{project.tripletex_project_id} • {project.customer_name || 'Ingen kunde'}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Befaring-type */}
+          <div className="space-y-2">
+            <Label htmlFor="befaring_type">Befaring-type</Label>
+            <Select
+              value={formData.befaring_type}
+              onValueChange={(value) => handleInputChange('befaring_type', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Velg type" />
+              </SelectTrigger>
+              <SelectContent>
+                {BEFARING_TYPES.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Tittel */}
           <div className="space-y-2">
             <Label htmlFor="title">Tittel *</Label>
@@ -292,51 +372,6 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess }: Creat
                 />
               </PopoverContent>
             </Popover>
-          </div>
-
-          {/* Tripletex-prosjekt */}
-          <div className="space-y-2">
-            <Label htmlFor="tripletex_project">Tripletex-prosjekt *</Label>
-            <Select
-              value={formData.tripletex_project_id?.toString() || ''}
-              onValueChange={(value) => handleInputChange('tripletex_project_id', value ? parseInt(value) : null)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={projectsLoading ? "Laster prosjekter..." : "Velg prosjekt"} />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((project) => (
-                  <SelectItem key={project.id} value={project.tripletex_project_id.toString()}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{project.project_name}</span>
-                      <span className="text-xs text-gray-500">
-                        #{project.tripletex_project_id} • {project.customer_name || 'Ingen kunde'}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Befaring-type */}
-          <div className="space-y-2">
-            <Label htmlFor="befaring_type">Befaring-type</Label>
-            <Select
-              value={formData.befaring_type}
-              onValueChange={(value) => handleInputChange('befaring_type', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Velg type" />
-              </SelectTrigger>
-              <SelectContent>
-                {BEFARING_TYPES.map((type) => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <DialogFooter>

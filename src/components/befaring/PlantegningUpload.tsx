@@ -1,128 +1,78 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { 
-  Upload, 
-  Image as ImageIcon, 
-  X, 
-  Plus,
-  FileImage,
-  Trash2
-} from 'lucide-react';
-
-interface Plantegning {
-  id: string;
-  navn: string;
-  filsti: string;
-  rekkefolge: number;
-}
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Upload, X, Image as ImageIcon, FileText } from 'lucide-react';
 
 interface PlantegningUploadProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   befaringId: string;
-  onUploadSuccess: () => void;
+  onSuccess: () => void;
 }
 
-export default function PlantegningUpload({ befaringId, onUploadSuccess }: PlantegningUploadProps) {
-  const [plantegninger, setPlantegninger] = useState<Plantegning[]>([]);
+export default function PlantegningUpload({
+  open,
+  onOpenChange,
+  befaringId,
+  onSuccess
+}: PlantegningUploadProps) {
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [title, setTitle] = useState('');
+  const [preview, setPreview] = useState<string | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const handleFileSelect = async (files: FileList) => {
-    if (!files.length) return;
+  const handleFileSelect = (file: File) => {
+    // Validate file type (images and PDFs)
+    const isImage = file.type.startsWith('image/');
+    const isPDF = file.type === 'application/pdf';
+    
+    if (!isImage && !isPDF) {
+      toast({
+        title: 'Ugyldig filtype',
+        description: 'Kun bildefiler og PDF-er er tillatt.',
+        variant: 'destructive'
+      });
+      return;
+    }
 
-    setLoading(true);
-    const uploadPromises = Array.from(files).map(async (file) => {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        toast({
-          title: 'Ugyldig filtype',
-          description: `${file.name} er ikke et bilde.`,
-          variant: 'destructive',
-        });
-        return null;
-      }
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: 'Fil for stor',
+        description: 'Filen kan ikke være større enn 10MB.',
+        variant: 'destructive'
+      });
+      return;
+    }
 
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        toast({
-          title: 'Fil for stor',
-          description: `${file.name} er større enn 10MB.`,
-          variant: 'destructive',
-        });
-        return null;
-      }
+    setSelectedFile(file);
+    setTitle(file.name.replace(/\.[^/.]+$/, '')); // Remove extension
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setPreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
-      try {
-        // Upload to Supabase Storage
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `plantegninger/${befaringId}/${fileName}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('befaring-assets')
-          .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-
-        // Get public URL
-        const { data: urlData } = supabase.storage
-          .from('befaring-assets')
-          .getPublicUrl(filePath);
-
-        // Save to database
-        const { data: dbData, error: dbError } = await supabase
-          .from('plantegninger')
-          .insert({
-            befaring_id: befaringId,
-            navn: file.name.replace(/\.[^/.]+$/, ''), // Remove file extension
-            filsti: filePath,
-            rekkefolge: plantegninger.length + 1,
-          })
-          .select()
-          .single();
-
-        if (dbError) throw dbError;
-
-        return {
-          ...dbData,
-          url: urlData.publicUrl,
-        };
-      } catch (error) {
-        console.error('Error uploading file:', error);
-        toast({
-          title: 'Feil ved opplasting',
-          description: `Kunne ikke laste opp ${file.name}.`,
-          variant: 'destructive',
-        });
-        return null;
-      }
-    });
-
-    try {
-      const results = await Promise.all(uploadPromises);
-      const successfulUploads = results.filter(Boolean);
-      
-      if (successfulUploads.length > 0) {
-        setPlantegninger(prev => [...prev, ...successfulUploads]);
-        onUploadSuccess();
-        
-        toast({
-          title: 'Plantegninger lastet opp',
-          description: `${successfulUploads.length} plantegning(er) lastet opp.`,
-        });
-      }
-    } catch (error) {
-      console.error('Error in batch upload:', error);
-    } finally {
-      setLoading(false);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      handleFileSelect(files[0]);
     }
   };
 
@@ -131,144 +81,228 @@ export default function PlantegningUpload({ befaringId, onUploadSuccess }: Plant
     setDragOver(true);
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDragLeave = () => {
     setDragOver(false);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setDragOver(false);
-    handleFileSelect(e.dataTransfer.files);
-  };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      handleFileSelect(e.target.files);
-    }
-  };
-
-  const handleDeletePlantegning = async (plantegningId: string) => {
-    try {
-      setLoading(true);
-      
-      // Delete from database first
-      const { error: dbError } = await supabase
-        .from('plantegninger')
-        .delete()
-        .eq('id', plantegningId);
-
-      if (dbError) throw dbError;
-
-      // Update local state
-      setPlantegninger(prev => prev.filter(p => p.id !== plantegningId));
-      
+    
+    if (!selectedFile || !title.trim()) {
       toast({
-        title: 'Plantegning slettet',
-        description: 'Plantegningen er fjernet.',
+        title: 'Mangler informasjon',
+        description: 'Vennligst velg en fil og skriv inn en tittel.',
+        variant: 'destructive'
       });
-    } catch (error) {
-      console.error('Error deleting plantegning:', error);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Get next display order
+      const { data: lastPlantegning, error: countError } = await supabase
+        .from('plantegninger')
+        .select('display_order')
+        .eq('befaring_id', befaringId)
+        .order('display_order', { ascending: false })
+        .limit(1)
+        .single();
+
+      const nextOrder = lastPlantegning ? lastPlantegning.display_order + 1 : 1;
+
+      // Upload file to Supabase Storage
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `${befaringId}/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('befaring-assets')
+        .upload(fileName, selectedFile);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('befaring-assets')
+        .getPublicUrl(fileName);
+
+      // Determine file type
+      const fileType = selectedFile.type === 'application/pdf' ? 'pdf' : 'image';
+
+      // Create plantegning record
+      const { error: insertError } = await supabase
+        .from('plantegninger')
+        .insert({
+          befaring_id: befaringId,
+          title: title.trim(),
+          image_url: urlData.publicUrl,
+          display_order: nextOrder,
+          file_type: fileType
+        });
+
+      if (insertError) throw insertError;
+
       toast({
-        title: 'Feil ved sletting',
-        description: 'Kunne ikke slette plantegningen.',
-        variant: 'destructive',
+        title: 'Plantegning lastet opp',
+        description: `${title} har blitt lagt til befaringen.`
+      });
+
+      // Reset form
+      setSelectedFile(null);
+      setTitle('');
+      setPreview(null);
+      onOpenChange(false);
+      onSuccess();
+    } catch (error) {
+      console.error('Error uploading plantegning:', error);
+      toast({
+        title: 'Feil ved opplasting',
+        description: error instanceof Error ? error.message : 'En ukjent feil oppstod',
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleClose = () => {
+    setSelectedFile(null);
+    setTitle('');
+    setPreview(null);
+    setDragOver(false);
+    onOpenChange(false);
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Upload Area */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileImage className="h-5 w-5" />
-            Last opp plantegninger
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Last opp plantegning</DialogTitle>
+          <DialogDescription>
+            Velg et bilde eller PDF som skal brukes som plantegning for befaringen.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* File upload area */}
           <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragOver 
-                ? 'border-blue-500 bg-blue-50' 
-                : 'border-gray-300 hover:border-gray-400'
-            }`}
+            className={`
+              border-2 border-dashed rounded-lg p-8 text-center transition-colors
+              ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}
+              ${selectedFile ? 'border-green-500 bg-green-50' : ''}
+            `}
+            onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
           >
-            <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <p className="text-lg font-medium text-gray-900 mb-2">
-              Dra og slipp plantegninger her
-            </p>
-            <p className="text-sm text-gray-500 mb-4">
-              eller klikk for å velge filer
-            </p>
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={loading}
-              variant="outline"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Velg filer
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleFileInputChange}
-              className="hidden"
+            {selectedFile ? (
+              <div className="space-y-4">
+                {preview && (
+                  <div className="mx-auto max-w-xs">
+                    <img
+                      src={preview}
+                      alt="Preview"
+                      className="w-full h-auto rounded-lg border border-gray-200"
+                    />
+                  </div>
+                )}
+                <div>
+                  <div className="flex items-center justify-center gap-2 text-green-600">
+                    {selectedFile.type === 'application/pdf' ? (
+                      <FileText className="h-5 w-5" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5" />
+                    )}
+                    <span className="font-medium">{selectedFile.name}</span>
+                  </div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB • {selectedFile.type === 'application/pdf' ? 'PDF' : 'Bilde'}
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setPreview(null);
+                    setTitle('');
+                  }}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Fjern fil
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Upload className="h-12 w-12 text-gray-400 mx-auto" />
+                <div>
+                  <div className="text-lg font-medium text-gray-900">
+                    Dra og slipp bilde eller PDF her
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    eller klikk for å velge fil
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Velg fil
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                  }}
+                  className="hidden"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Title input */}
+          <div className="space-y-2">
+            <Label htmlFor="title">Tittel *</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="F.eks. 1. etasje, Kjøkken, Bad..."
+              required
             />
           </div>
-          
-          <div className="mt-4 text-xs text-gray-500">
-            <p>• Støtter JPG, PNG, PDF (maks 10MB per fil)</p>
-            <p>• Flere filer kan lastes opp samtidig</p>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Uploaded Plantegninger */}
-      {plantegninger.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Lastet opp plantegninger ({plantegninger.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {plantegninger.map((plantegning, index) => (
-                <div key={plantegning.id} className="relative group">
-                  <div className="aspect-video bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
-                    <div className="text-center">
-                      <ImageIcon className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                      <p className="text-sm font-medium text-gray-900 line-clamp-2">
-                        {plantegning.navn}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Plantegning {index + 1}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => handleDeletePlantegning(plantegning.id)}
-                    disabled={loading}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
+          {/* File info */}
+          {selectedFile && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+              <div><strong>Filtype:</strong> {selectedFile.type}</div>
+              <div><strong>Størrelse:</strong> {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</div>
+              <div><strong>Maks størrelse:</strong> 10 MB</div>
             </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClose}
+            >
+              Avbryt
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={loading || !selectedFile || !title.trim()}
+            >
+              {loading ? 'Laster opp...' : 'Last opp'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

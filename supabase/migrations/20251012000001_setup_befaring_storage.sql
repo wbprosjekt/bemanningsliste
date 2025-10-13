@@ -4,7 +4,7 @@ VALUES (
   'befaring-assets',
   'befaring-assets', 
   true,
-  10485760, -- 10MB limit
+  5242880, -- 5MB limit (images are compressed client-side)
   ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 );
 

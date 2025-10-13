@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS public.oppgave_bilder (
   oppgave_id uuid NOT NULL REFERENCES public.oppgaver(id) ON DELETE CASCADE,
   image_url text NOT NULL,
   image_type text DEFAULT 'standard' CHECK (image_type IN ('før', 'etter', 'standard')),
-  uploaded_by uuid REFERENCES public.profiles(id),
+  uploaded_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   uploaded_by_email text,
   created_at timestamptz DEFAULT now()
 );
@@ -219,7 +219,7 @@ ALTER TABLE public.oppgave_epost_tokens ENABLE ROW LEVEL SECURITY;
 -- Helper function: Get user's org_id
 CREATE OR REPLACE FUNCTION public.get_user_org_id()
 RETURNS uuid AS $$
-  SELECT org_id FROM public.profiles WHERE id = auth.uid();
+  SELECT org_id FROM public.profiles WHERE user_id = auth.uid() LIMIT 1;
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- BEFARINGER: Users see own org befaringer
@@ -233,7 +233,7 @@ CREATE POLICY "Admins manage own org befaringer"
   ON public.befaringer FOR ALL
   USING (
     org_id = public.get_user_org_id()
-    AND (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'manager')
+    AND (SELECT role FROM public.profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
   );
 
 -- PLANTEGNINGER: Users see befaringer in own org
@@ -257,7 +257,7 @@ CREATE POLICY "Admins manage plantegninger in own org"
       WHERE b.id = plantegninger.befaring_id
       AND b.org_id = public.get_user_org_id()
     )
-    AND (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'manager')
+    AND (SELECT role FROM public.profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
   );
 
 -- UNDERLEVERANDØRER: Users see own org underleverandører
@@ -271,7 +271,7 @@ CREATE POLICY "Admins manage own org underleverandører"
   ON public.underleverandorer FOR ALL
   USING (
     org_id = public.get_user_org_id()
-    AND (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'manager')
+    AND (SELECT role FROM public.profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
   );
 
 -- OPPGAVER: Users see oppgaver in own org befaringer
@@ -297,7 +297,7 @@ CREATE POLICY "Admins manage oppgaver in own org"
       WHERE p.id = oppgaver.plantegning_id
       AND b.org_id = public.get_user_org_id()
     )
-    AND (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'manager')
+    AND (SELECT role FROM public.profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
   );
 
 -- OPPGAVE_KOMMENTARER: Same as oppgaver

@@ -34,7 +34,7 @@ export const OfflineBanner = () => {
   // Vis "Tilkoblet igjen" melding
   if (showReconnected) {
     return (
-      <div className="fixed top-0 left-0 right-0 z-50 animate-in slide-in-from-top-2 duration-300">
+      <div className="fixed top-0 left-0 right-0 z-[60] animate-in slide-in-from-top-2 duration-300">
         <Alert className="rounded-none border-green-500 bg-green-50 text-green-900">
           <Wifi className="h-4 w-4" />
           <AlertDescription className="ml-2">
@@ -48,7 +48,7 @@ export const OfflineBanner = () => {
   // Vis offline banner
   if (!isOnline) {
     return (
-      <div className="fixed top-0 left-0 right-0 z-50 animate-in slide-in-from-top-2 duration-300">
+      <div className="fixed top-0 left-0 right-0 z-[60] animate-in slide-in-from-top-2 duration-300">
         <Alert 
           variant="destructive" 
           className="rounded-none border-amber-500 bg-amber-50 text-amber-900"
