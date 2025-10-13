@@ -12,8 +12,9 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import ProjectDashboard from "@/components/ProjectDashboard";
 import { supabase } from "@/integrations/supabase/client";
 
-function DashboardContent() {
-  const { user, signOut, profile } = useAuth();
+function DashboardContent({ profile: propProfile }: { profile?: any }) {
+  const { user, signOut, profile: authProfile } = useAuth();
+  const profile = propProfile || authProfile;
   const router = useRouter();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isCheckingRole, setIsCheckingRole] = useState(true);
@@ -58,6 +59,13 @@ function DashboardContent() {
 
         // Admin/manager/leder can see the project dashboard
         console.log(`✅ User with role "${role}" can access project dashboard`);
+        console.log('🔄 Page.tsx: useAuth profile:', { 
+          profile: profile ? { 
+            org_id: profile.org_id, 
+            role: profile.role,
+            fornavn: profile.fornavn 
+          } : null 
+        });
       } catch (error) {
         console.error('Error in checkUserRole:', error);
       } finally {

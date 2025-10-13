@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -266,6 +266,21 @@ export default function ProtectedRoute({
   }
 
   // Hvis vi kom hit, har brukeren tilgang
-  return <>{children}</>;
+  console.log('🔒 ProtectedRoute: Rendering children with profile:', { 
+    profile: profile ? { 
+      org_id: profile.org_id, 
+      role: profile.role
+    } : null 
+  });
+  
+  // Clone children and pass profile as prop
+  const childrenWithProfile = React.Children.map(children, (child) => {
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, { profile } as any);
+    }
+    return child;
+  });
+  
+  return <>{childrenWithProfile}</>;
 }
 
