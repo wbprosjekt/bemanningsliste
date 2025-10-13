@@ -1,0 +1,24 @@
+/* FieldNote Design Tokens */
+:root {
+  --color-primary: #2E6375;   /* Field Blue */
+  --color-secondary: #E7EAEC; /* Concrete Gray */
+  --color-accent: #66B895;    /* Accent Green */
+  --color-warning: #F4C84A;   /* Warning Amber */
+  --color-error: #D9655D;     /* Error Red */
+  --color-text: #1F2A33;      /* Ink Black */
+  --color-bg: #FDFDFD;        /* White Smoke */
+  --radius: 0.75rem;
+}
+
+[data-theme='dark'] {
+  --color-primary: #3E8CA6;
+  --color-bg: #1E252B;
+  --color-text: #F5F7F8;
+}
+
+@layer base {
+  html, body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+  }
+}
