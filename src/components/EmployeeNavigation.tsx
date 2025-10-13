@@ -36,6 +36,7 @@ import {
   BarChart3,
   Menu,
   ClipboardCheck,
+  Home,
 } from "lucide-react";
 
 interface EmployeeNavigationProps {
@@ -86,34 +87,46 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
                 onClick={() => router.push("/min/uke")} 
                 className="text-xl font-bold font-heading hover:text-blue-300 transition-colors"
               >
-                <Logo size={32} showText={true} className="text-white" />
+                <Logo size={48} showText={true} className="text-white" />
               </button>
             </div>
 
             {/* Navigation Links - Centered for employees */}
-            <div className="hidden md:flex items-center space-x-8">
+            <div className="hidden lg:flex items-center space-x-4">
+              <button
+                onClick={() => router.push("/")}
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive("/") && pathname === "/"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                <Home className="h-4 w-4" />
+                <span className="hidden xl:inline">Hjem</span>
+              </button>
+
               <button
                 onClick={() => router.push("/min/uke")}
-                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/min/uke")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
               >
                 <Calendar className="h-4 w-4" />
-                <span>Min Uke</span>
+                <span className="hidden xl:inline">Min Uke</span>
               </button>
 
               <button
                 onClick={() => router.push("/befaring")}
-                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/befaring")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
               >
                 <ClipboardCheck className="h-4 w-4" />
-                <span>Befaring</span>
+                <span className="hidden xl:inline">Befaring</span>
               </button>
 
               {/* User Menu */}

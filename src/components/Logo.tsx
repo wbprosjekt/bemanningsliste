@@ -1,6 +1,5 @@
 "use client";
 
-import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
@@ -13,11 +12,10 @@ interface LogoProps {
 
 export default function Logo({ 
   className = "", 
-  size = 32, 
+  size = 48, 
   showText = true, 
   textClassName = "" 
 }: LogoProps) {
-  const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   // Prevent hydration mismatch
@@ -42,12 +40,9 @@ export default function Logo({
     );
   }
 
-  // Determine if we're in dark mode
-  const isDark = theme === "dark" || (theme === "system" && systemTheme === "dark");
-  
-  // Use transparent logo for dark backgrounds (navigation, etc.)
-  // Use regular logo for light backgrounds
-  const logoSrc = isDark ? "/logo-transparent.png" : "/logo.png";
+  // For now, always use transparent logo (works best on dark navigation)
+  // TODO: Implement proper theme detection when next-themes is added
+  const logoSrc = "/logo-transparent.png";
 
   return (
     <div className={`flex items-center space-x-3 ${className}`}>

@@ -37,6 +37,7 @@ import {
   LogOut,
   ChevronDown,
   Menu,
+  Calendar,
   Bell,
   ClipboardCheck,
 } from "lucide-react";
@@ -89,12 +90,12 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                 onClick={() => router.push("/")}
                 className="text-xl font-bold font-heading hover:text-blue-300 transition-colors"
               >
-                <Logo size={32} showText={true} className="text-white" />
+                <Logo size={48} showText={true} className="text-white" />
               </button>
             </div>
 
             {/* Navigation Links */}
-            <div className="hidden lg:flex items-center space-x-4">
+            <div className="hidden xl:flex items-center space-x-3">
               <button
                 onClick={() => router.push("/")}
                 className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -105,6 +106,18 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               >
                 <Home className="h-4 w-4" />
                 <span className="hidden xl:inline">Hjem</span>
+              </button>
+
+              <button
+                onClick={() => router.push("/min/uke")}
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive("/min/uke")
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                <Calendar className="h-4 w-4" />
+                <span className="hidden xl:inline">Min Uke</span>
               </button>
 
               <button
@@ -143,18 +156,6 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                 <span className="hidden xl:inline">Rapporter</span>
               </button>
 
-              <button
-                onClick={() => router.push("/admin/settings")}
-                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive("/admin/settings")
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
-                }`}
-              >
-                <Bell className="h-4 w-4" />
-                <span className="hidden xl:inline">Innstillinger</span>
-              </button>
-
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -162,7 +163,8 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                     className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive("/admin/brukere") ||
                       isActive("/admin/integrasjoner") ||
-                      isActive("/admin/timer")
+                      isActive("/admin/timer") ||
+                      isActive("/admin/settings")
                         ? "bg-blue-600 text-white"
                         : "text-gray-300 hover:bg-gray-700 hover:text-white"
                     }`}
@@ -173,6 +175,10 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={() => router.push("/admin/settings")}>
+                    <Bell className="h-4 w-4 mr-2" />
+                    <span>Innstillinger</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push("/admin/brukere")}>
                     <Users className="h-4 w-4 mr-2" />
                     <span>Brukere</span>
