@@ -13,7 +13,7 @@ import ProjectDashboard from "@/components/ProjectDashboard";
 import { supabase } from "@/integrations/supabase/client";
 
 function DashboardContent() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, profile } = useAuth();
   const router = useRouter();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isCheckingRole, setIsCheckingRole] = useState(true);
@@ -85,7 +85,7 @@ function DashboardContent() {
   }
 
   // Show ProjectDashboard for admins/managers/leders
-  return <ProjectDashboard />;
+  return <ProjectDashboard profile={profile} />;
 }
 
 export default function IndexPage() {

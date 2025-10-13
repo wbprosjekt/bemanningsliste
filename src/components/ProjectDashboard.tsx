@@ -37,8 +37,21 @@ interface ProjectStats {
   recent_projects: number;
 }
 
-export default function ProjectDashboard() {
-  const { profile } = useAuth();
+interface ProjectDashboardProps {
+  profile?: any;
+}
+
+export default function ProjectDashboard({ profile: propProfile }: ProjectDashboardProps) {
+  const { profile: authProfile } = useAuth();
+  const profile = propProfile || authProfile;
+  
+  console.log('🔄 ProjectDashboard: Profile state:', { 
+    profile: profile ? { 
+      org_id: profile.org_id, 
+      role: profile.role,
+      fornavn: profile.fornavn 
+    } : null 
+  });
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,8 +64,12 @@ export default function ProjectDashboard() {
   });
 
   const loadProjects = async () => {
-    if (!profile?.org_id) return;
+    if (!profile?.org_id) {
+      console.log('❌ ProjectDashboard: No profile.org_id available', { profile });
+      return;
+    }
     
+    console.log('🔄 ProjectDashboard: Loading projects for org_id:', profile.org_id);
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -64,6 +81,7 @@ export default function ProjectDashboard() {
 
       if (error) throw error;
       
+      console.log('✅ ProjectDashboard: Loaded projects:', data?.length || 0);
       setProjects(data || []);
       setFilteredProjects(data || []);
       
@@ -77,7 +95,7 @@ export default function ProjectDashboard() {
         }).length || 0
       });
     } catch (error) {
-      console.error('Error loading projects:', error);
+      console.error('❌ ProjectDashboard: Error loading projects:', error);
     } finally {
       setLoading(false);
     }
