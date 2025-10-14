@@ -5,8 +5,27 @@
 --              sporbarhet, debugging og compliance
 -- =====================================================
 
--- STEG 1: Lag audit_log tabell
+-- STEG 1: Oppdater eksisterende audit_log tabell
 -- -------------------------------------------------------
+-- VIKTIG: audit_log finnes allerede fra gammel migrering
+-- Vi oppdaterer den i stedet for å lage ny
+
+-- Først, dropp eksisterende hvis den er tom eller gammel
+DO $$
+BEGIN
+  -- Sjekk om tabellen har data
+  IF EXISTS (SELECT 1 FROM audit_log LIMIT 1) THEN
+    RAISE NOTICE 'audit_log har eksisterende data - beholder den';
+  ELSE
+    RAISE NOTICE 'audit_log er tom - dropper og lager ny';
+    DROP TABLE IF EXISTS audit_log CASCADE;
+  END IF;
+EXCEPTION
+  WHEN undefined_table THEN
+    RAISE NOTICE 'audit_log finnes ikke - lager ny';
+END $$;
+
+-- Lag ny audit_log tabell
 CREATE TABLE IF NOT EXISTS audit_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   
