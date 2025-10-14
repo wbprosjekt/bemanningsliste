@@ -195,7 +195,7 @@ SELECT
       THEN 'critical'
     WHEN COUNT(o.id) FILTER (WHERE o.created_at < NOW() - INTERVAL '3 days' AND o.status != 'lukket') > 0
       THEN 'warning'
-    WHEN COUNT(bf.id) FILTER (WHERE bf.status = 'planlagt' AND bf.dato < NOW() + INTERVAL '24 hours') > 0
+    WHEN COUNT(bf.id) FILTER (WHERE bf.status = 'planlagt' AND bf.befaring_date < NOW() + INTERVAL '24 hours') > 0
       THEN 'warning'
     ELSE 'ok'
   END as alert_level,
@@ -203,7 +203,7 @@ SELECT
   -- Alert detaljer
   COUNT(o.id) FILTER (WHERE o.created_at < NOW() - INTERVAL '7 days' AND o.status != 'lukket') as critical_old_tasks,
   COUNT(o.id) FILTER (WHERE o.created_at < NOW() - INTERVAL '3 days' AND o.status != 'lukket') as warning_old_tasks,
-  COUNT(bf.id) FILTER (WHERE bf.status = 'planlagt' AND bf.dato < NOW() + INTERVAL '24 hours') as upcoming_befaringer,
+  COUNT(bf.id) FILTER (WHERE bf.status = 'planlagt' AND bf.befaring_date < NOW() + INTERVAL '24 hours') as upcoming_befaringer,
   COUNT(ob.id) FILTER (WHERE ob.is_tagged = false) as untagged_images
 
 FROM ttx_project_cache p
@@ -214,7 +214,7 @@ LEFT JOIN oppgave_bilder ob ON ob.prosjekt_id = p.id
 WHERE p.is_active = true
 GROUP BY p.id, p.project_name, p.project_number, p.org_id
 HAVING COUNT(o.id) FILTER (WHERE o.created_at < NOW() - INTERVAL '7 days' AND o.status != 'lukket') > 0
-    OR COUNT(bf.id) FILTER (WHERE bf.status = 'planlagt' AND bf.dato < NOW() + INTERVAL '24 hours') > 0
+    OR COUNT(bf.id) FILTER (WHERE bf.status = 'planlagt' AND bf.befaring_date < NOW() + INTERVAL '24 hours') > 0
     OR COUNT(ob.id) FILTER (WHERE ob.is_tagged = false) > 5;  -- Mer enn 5 utaggede bilder
 
 GRANT SELECT ON project_alerts TO authenticated;
