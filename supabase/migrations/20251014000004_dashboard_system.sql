@@ -132,7 +132,7 @@ SELECT
   (
     -- Bilder: 3 poeng
     COALESCE(COUNT(DISTINCT CASE 
-      WHEN ob.uploaded_at > NOW() - INTERVAL '7 days' 
+      WHEN ob.created_at > NOW() - INTERVAL '7 days' 
       THEN ob.id END) * 3, 0) +
     
     -- Oppgaver: 2 poeng
@@ -152,24 +152,24 @@ SELECT
     WHERE o.status != 'lukket' 
       AND o.created_at < NOW() - INTERVAL '7 days'
   ) as old_tasks,
-  COUNT(DISTINCT ob.id) FILTER (WHERE ob.uploaded_at > NOW() - INTERVAL '7 days') as recent_images,
+  COUNT(DISTINCT ob.id) FILTER (WHERE ob.created_at > NOW() - INTERVAL '7 days') as recent_images,
   COUNT(DISTINCT ob.id) FILTER (WHERE ob.is_tagged = false) as untagged_images,
   COUNT(DISTINCT bf.id) as total_befaringer,
   COUNT(DISTINCT bf.id) FILTER (WHERE bf.status = 'planlagt') as planned_befaringer,
   
   -- Timestamps
   MAX(o.created_at) as last_task_date,
-  MAX(ob.uploaded_at) as last_image_date,
+  MAX(ob.created_at) as last_image_date,
   MAX(bf.created_at) as last_befaring_date,
   GREATEST(
     MAX(o.created_at),
-    MAX(ob.uploaded_at),
+    MAX(ob.created_at),
     MAX(bf.created_at)
   ) as last_activity_date
 
 FROM ttx_project_cache p
 LEFT JOIN befaringer bf ON bf.tripletex_project_id = p.tripletex_project_id
-LEFT JOIN oppgaver o ON o.befaring_id = bf.id OR o.prosjekt_id = p.id
+LEFT JOIN oppgaver o ON o.befaring_id = bf.id OR o.project_id = p.id
 LEFT JOIN oppgave_bilder ob ON ob.prosjekt_id = p.id
 
 WHERE p.is_active = true
@@ -208,7 +208,7 @@ SELECT
 
 FROM ttx_project_cache p
 LEFT JOIN befaringer bf ON bf.tripletex_project_id = p.tripletex_project_id
-LEFT JOIN oppgaver o ON o.befaring_id = bf.id OR o.prosjekt_id = p.id
+LEFT JOIN oppgaver o ON o.befaring_id = bf.id OR o.project_id = p.id
 LEFT JOIN oppgave_bilder ob ON ob.prosjekt_id = p.id
 
 WHERE p.is_active = true
