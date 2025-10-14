@@ -23,12 +23,12 @@ COMMENT ON COLUMN oppgave_bilder.thumbnail_1024_path IS 'Path til 1024px thumbna
 COMMENT ON COLUMN oppgave_bilder.thumbnail_2048_path IS 'Path til 2048px thumbnail (for preview)';
 COMMENT ON COLUMN oppgave_bilder.is_optimized IS 'True når thumbnails er generert';
 
--- STEG 2: Oppdater eksisterende bilder (sett storage_path fra file_url)
+-- STEG 2: Oppdater eksisterende bilder (sett storage_path fra image_url)
 -- -------------------------------------------------------
--- Hvis file_url allerede eksisterer, kopier til storage_path
+-- Hvis image_url allerede eksisterer, kopier til storage_path
 UPDATE oppgave_bilder
-SET storage_path = file_url
-WHERE file_url IS NOT NULL AND storage_path IS NULL;
+SET storage_path = image_url
+WHERE image_url IS NOT NULL AND storage_path IS NULL;
 
 -- STEG 3: Legg til foto-innboks funksjonalitet
 -- -------------------------------------------------------
@@ -85,10 +85,10 @@ BEGIN
   END IF;
 END $$;
 
--- Marker eksisterende bilder som "tagged" (de har allerede befaring/oppgave)
+-- Marker eksisterende bilder som "tagged" (de har allerede oppgave)
 UPDATE oppgave_bilder
 SET is_tagged = true
-WHERE (befaring_id IS NOT NULL OR oppgave_id IS NOT NULL)
+WHERE oppgave_id IS NOT NULL
   AND is_tagged = false;
 
 -- STEG 4: Indekser for performance
@@ -104,7 +104,7 @@ ON oppgave_bilder(storage_path);
 
 -- Indeks for optimalisering-jobb (finn bilder som trenger thumbnails)
 CREATE INDEX IF NOT EXISTS idx_oppgave_bilder_optimization 
-ON oppgave_bilder(is_optimized, uploaded_at DESC) 
+ON oppgave_bilder(is_optimized, created_at DESC) 
 WHERE is_optimized = false;
 
 -- Indeks for prosjekt (foto-innboks query)
@@ -123,15 +123,14 @@ SELECT
   array_agg(
     jsonb_build_object(
       'id', ob.id,
-      'file_url', COALESCE(ob.storage_path, ob.file_url),
+      'image_url', COALESCE(ob.storage_path, ob.image_url),
       'thumbnail_1024', ob.thumbnail_1024_path,
       'thumbnail_2048', ob.thumbnail_2048_path,
-      'file_name', ob.file_name,
       'uploaded_by', pr.display_name,
-      'uploaded_at', ob.uploaded_at,
+      'uploaded_at', ob.created_at,
       'file_size', ob.file_size_bytes,
       'is_optimized', ob.is_optimized
-    ) ORDER BY ob.uploaded_at DESC
+    ) ORDER BY ob.created_at DESC
   ) FILTER (WHERE ob.id IS NOT NULL) as images
 FROM ttx_project_cache p
 LEFT JOIN oppgave_bilder ob ON ob.prosjekt_id = p.id AND ob.is_tagged = false
