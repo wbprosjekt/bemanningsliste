@@ -21,8 +21,10 @@ interface Oppgave {
   oppgave_nummer: number;
   fag: string;
   fag_color: string;
-  x_position: number;
-  y_position: number;
+  x_position: number;  // Legacy: 0-100 (prosent)
+  y_position: number;  // Legacy: 0-100 (prosent)
+  x_normalized?: number;  // Ny: 0-1 (zoom-safe)
+  y_normalized?: number;  // Ny: 0-1 (zoom-safe)
   title?: string;
   description?: string;
   status: string;
@@ -178,6 +180,8 @@ export default function OppgaveDialog({
 
         if (!profile) throw new Error('Profile not found');
 
+        // OPPDATERT: Lagre både normalized (ny) og position (legacy for bakoverkompatibilitet)
+        // xPosition og yPosition kommer nå som normalized (0-1) fra InteractivePlantegning
         const { error } = await supabase
           .from('oppgaver')
           .insert({
@@ -185,8 +189,10 @@ export default function OppgaveDialog({
             oppgave_nummer: nextNumber,
             fag: formData.fag,
             fag_color: formData.fag_color,
-            x_position: xPosition,
-            y_position: yPosition,
+            x_position: xPosition * 100,      // Legacy: Konverter til prosent (0-100)
+            y_position: yPosition * 100,      // Legacy: Konverter til prosent (0-100)
+            x_normalized: xPosition,          // Ny: Normalized (0-1) - zoom-safe!
+            y_normalized: yPosition,          // Ny: Normalized (0-1) - zoom-safe!
             title: formData.title.trim() || null,
             description: formData.description.trim() || null,
             status: formData.status,

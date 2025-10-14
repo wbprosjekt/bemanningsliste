@@ -30,8 +30,10 @@ interface Oppgave {
   oppgave_nummer: number;
   fag: string;
   fag_color: string;
-  x_position: number;
-  y_position: number;
+  x_position: number;  // Legacy: 0-100 (prosent)
+  y_position: number;  // Legacy: 0-100 (prosent)
+  x_normalized?: number;  // Ny: 0-1 (zoom-safe)
+  y_normalized?: number;  // Ny: 0-1 (zoom-safe)
   title?: string;
   description?: string;
   status: string;
@@ -83,23 +85,34 @@ export default function InteractivePlantegning({
     if (!imageRef.current) return;
 
     const rect = imageRef.current.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    
+    // OPPDATERT: Bruk normaliserte koordinater (0-1) i stedet for prosent (0-100)
+    const xNormalized = (event.clientX - rect.left) / rect.width;
+    const yNormalized = (event.clientY - rect.top) / rect.height;
+    
+    console.log('📍 Click position (normalized):', { xNormalized, yNormalized });
 
     // Sjekk om vi klikket på en eksisterende oppgave
     const clickedTask = plantegningOppgaver.find(oppgave => {
-      const taskX = oppgave.x_position;
-      const taskY = oppgave.y_position;
-      const distance = Math.sqrt(Math.pow(x - taskX, 2) + Math.pow(y - taskY, 2));
-      return distance < 3; // 3% tolerance
+      // Prioriter normalized coords, fallback til legacy position
+      const taskX = oppgave.x_normalized ?? (oppgave.x_position / 100);
+      const taskY = oppgave.y_normalized ?? (oppgave.y_position / 100);
+      
+      const distance = Math.sqrt(
+        Math.pow(xNormalized - taskX, 2) + 
+        Math.pow(yNormalized - taskY, 2)
+      );
+      
+      return distance < 0.03; // 3% tolerance (i normalized space)
     });
 
     if (clickedTask) {
       setSelectedTask(clickedTask);
       onTaskEdit(clickedTask);
     } else {
-      // Opprett ny oppgave
-      onTaskCreate(plantegning.id, x, y);
+      // Opprett ny oppgave med normaliserte koordinater
+      // VIKTIG: onTaskCreate må oppdateres til å håndtere normalized (0-1)
+      onTaskCreate(plantegning.id, xNormalized, yNormalized);
     }
   };
 
@@ -246,21 +259,30 @@ export default function InteractivePlantegning({
                 />
 
                 {/* Oppgave-punkter */}
-                {imageLoaded && plantegningOppgaver.map((oppgave) => (
-                  <div
-                    key={oppgave.id}
-                    className="absolute cursor-pointer group"
-                    style={{
-                      left: `${oppgave.x_position}%`,
-                      top: `${oppgave.y_position}%`,
-                      transform: `translate(-50%, -50%) scale(${1/zoom})`
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedTask(oppgave);
-                      onTaskEdit(oppgave);
-                    }}
-                  >
+                {imageLoaded && plantegningOppgaver.map((oppgave) => {
+                  // OPPDATERT: Bruk normaliserte coords (0-1) med fallback til legacy (0-100)
+                  const xPercent = oppgave.x_normalized 
+                    ? oppgave.x_normalized * 100 
+                    : oppgave.x_position;
+                  const yPercent = oppgave.y_normalized 
+                    ? oppgave.y_normalized * 100 
+                    : oppgave.y_position;
+                  
+                  return (
+                    <div
+                      key={oppgave.id}
+                      className="absolute cursor-pointer group"
+                      style={{
+                        left: `${xPercent}%`,
+                        top: `${yPercent}%`,
+                        transform: `translate(-50%, -50%) scale(${1/zoom})`
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedTask(oppgave);
+                        onTaskEdit(oppgave);
+                      }}
+                    >
                     {/* Oppgave-punkt */}
                     <div
                       className={`
