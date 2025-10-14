@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS project_favorites (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
   project_id uuid REFERENCES ttx_project_cache(id) ON DELETE CASCADE,
-  org_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
+  org_id uuid REFERENCES org(id) ON DELETE CASCADE,
   
   is_org_favorite boolean DEFAULT false,  -- Org-favoritt (alle ser)
   is_pinned boolean DEFAULT false,         -- Pinned øverst
@@ -49,7 +49,7 @@ COMMENT ON TABLE project_favorites IS 'Bruker- og org-favoritter for prosjekter'
 CREATE TABLE IF NOT EXISTS project_activity (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid REFERENCES ttx_project_cache(id) ON DELETE CASCADE,
-  org_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
+  org_id uuid REFERENCES org(id) ON DELETE CASCADE,
   
   activity_type text NOT NULL,    -- 'image_uploaded', 'task_created', 'befaring_completed', etc.
   description text,

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
   
   -- Hvem
   user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  org_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
+  org_id uuid REFERENCES org(id) ON DELETE CASCADE,
   
   -- Hva
   action text NOT NULL,           -- 'CREATE', 'UPDATE', 'DELETE'
