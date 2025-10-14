@@ -148,7 +148,7 @@ export default function AuthPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Bemanningsliste & Timer</CardTitle>
+          <CardTitle className="text-2xl">FieldNote</CardTitle>
           <CardDescription>Logg inn eller registrer deg for å komme i gang</CardDescription>
         </CardHeader>
         <CardContent>

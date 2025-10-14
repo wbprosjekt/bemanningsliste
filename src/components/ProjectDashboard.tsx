@@ -38,7 +38,9 @@ interface ProjectStats {
 }
 
 export default function ProjectDashboard() {
-  const { profile } = useAuth();
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   
   console.log('🔄 ProjectDashboard: Profile state:', { 
     profile: profile ? { 
@@ -58,9 +60,49 @@ export default function ProjectDashboard() {
     recent_projects: 0
   });
 
+  // Load profile when user is available
+  useEffect(() => {
+    if (user) {
+      loadProfileData();
+    }
+  }, [user]);
+
+  const loadProfileData = async () => {
+    if (!user) return;
+    
+    try {
+      setProfileLoading(true);
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('❌ ProjectDashboard: Error loading profile:', error);
+        setProfile(null);
+      } else if (profileData) {
+        console.log('✅ ProjectDashboard: Profile loaded:', {
+          org_id: profileData.org_id,
+          role: profileData.role
+        });
+        setProfile({
+          ...profileData,
+          role: profileData.role || 'user',
+          org_id: profileData.org_id
+        });
+      }
+    } catch (error) {
+      console.error('❌ ProjectDashboard: Error loading profile:', error);
+      setProfile(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   const loadProjects = async () => {
     if (!profile?.org_id) {
-      console.log('❌ ProjectDashboard: No profile.org_id available', { profile });
+      console.log('❌ ProjectDashboard: No profile.org_id available, waiting...', { profile });
       return;
     }
     
@@ -97,8 +139,20 @@ export default function ProjectDashboard() {
   };
 
   useEffect(() => {
-    loadProjects();
+    if (profile?.org_id) {
+      loadProjects();
+    } else {
+      console.log('🔄 ProjectDashboard: Waiting for profile.org_id...');
+    }
   }, [profile?.org_id]);
+
+  // Also try to load when profile changes from null to having data
+  useEffect(() => {
+    if (profile && profile.org_id && projects.length === 0) {
+      console.log('🔄 ProjectDashboard: Profile loaded, attempting to load projects...');
+      loadProjects();
+    }
+  }, [profile]);
 
   useEffect(() => {
     const filtered = projects.filter(project =>
@@ -109,13 +163,15 @@ export default function ProjectDashboard() {
     setFilteredProjects(filtered);
   }, [searchTerm, projects]);
 
-  if (loading) {
+  if (profileLoading || loading) {
     return (
       <div className="container mx-auto p-6">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Laster prosjekter...</p>
+            <p className="text-muted-foreground">
+              {profileLoading ? 'Laster profil...' : 'Laster prosjekter...'}
+            </p>
           </div>
         </div>
       </div>
