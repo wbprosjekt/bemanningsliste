@@ -37,13 +37,8 @@ interface ProjectStats {
   recent_projects: number;
 }
 
-interface ProjectDashboardProps {
-  profile?: any;
-}
-
-export default function ProjectDashboard({ profile: propProfile }: ProjectDashboardProps) {
-  const { profile: authProfile } = useAuth();
-  const profile = propProfile || authProfile;
+export default function ProjectDashboard() {
+  const { profile } = useAuth();
   
   console.log('🔄 ProjectDashboard: Profile state:', { 
     profile: profile ? { 
