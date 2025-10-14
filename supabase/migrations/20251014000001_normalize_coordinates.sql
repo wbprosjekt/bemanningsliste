@@ -37,13 +37,13 @@ COMMENT ON COLUMN plantegninger.original_height IS 'Original høyde i piksler (f
 UPDATE oppgaver o
 SET 
   x_normalized = CASE 
-    WHEN p.original_width > 0 AND o.x_coordinate IS NOT NULL 
-    THEN o.x_coordinate::decimal / p.original_width
+    WHEN p.original_width > 0 AND o.x_position IS NOT NULL 
+    THEN o.x_position::decimal / p.original_width
     ELSE NULL
   END,
   y_normalized = CASE 
-    WHEN p.original_height > 0 AND o.y_coordinate IS NOT NULL 
-    THEN o.y_coordinate::decimal / p.original_height
+    WHEN p.original_height > 0 AND o.y_position IS NOT NULL 
+    THEN o.y_position::decimal / p.original_height
     ELSE NULL
   END
 FROM plantegninger p
@@ -82,8 +82,8 @@ END $$;
 
 -- VIKTIG NOTATER:
 -- -------------------------------------------------------
--- 1. Vi beholder x_coordinate og y_coordinate for bakoverkompatibilitet
--- 2. Client-kode må oppdateres til å bruke normalized først, fallback til pixel
+-- 1. Vi beholder x_position og y_position for bakoverkompatibilitet
+-- 2. Client-kode må oppdateres til å bruke normalized først, fallback til position
 -- 3. Når alt er verifisert, kan vi droppe gamle kolonner (separat migrering)
 -- 4. Plantegninger uten dimensions kan ikke konverteres automatisk
 
