@@ -94,6 +94,24 @@ c4ab623 - fix(migration): Use correct column names in dashboard_system
 - [ ] `/api/upload/complete` route (trigger thumbnail-generering)
 - [ ] Edge Function for thumbnail-generering (optional - kan gjøres senere)
 
+### 5. "Fri Befaring" Feature ⭐⭐ (NY!)
+- [ ] Database: Alter `befaringer` tabell (nullable `tripletex_project_id`)
+- [ ] Database: Legg til `is_orphaned`, `orphaned_until` kolonner
+- [ ] `CreateBefaringDialog.tsx` - Legg til "Skip prosjekt" knapp
+- [ ] `BefaringList.tsx` - Vis frie befaringer i egen seksjon
+- [ ] `ProjectDashboard.tsx` - "Frie Befaringer" card
+- [ ] `LinkBefaringDialog.tsx` (NY) - Dialog for å knytte til prosjekt
+- [ ] Backend: `linkBefaringToProject()` funksjon
+- [ ] Testing: Full workflow (lage → knytte)
+
+### 6. Prosjekt-innboks for bilder ⭐⭐⭐ (KRITISK!)
+- [ ] `ProjectPhotoUpload.tsx` (NY) - Komponent for å laste opp bilder
+- [ ] Integrer i Timer (`src/app/min/page.tsx`)
+- [ ] Integrer i Bemanningsliste (`src/app/uke/page.tsx`)
+- [ ] `TagPhotoDialog.tsx` (NY) - Dialog for å tagge bilder
+- [ ] Foto-innboks i Dashboard (`ProjectDashboard.tsx`)
+- [ ] Testing: Full workflow (last opp → tagge)
+
 ---
 
 ## 🎯 NESTE GANG DU STARTER:
