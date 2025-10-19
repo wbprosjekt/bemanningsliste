@@ -87,7 +87,7 @@ export default function PlantegningViewer({
   const [isMobile, setIsMobile] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [rotation, setRotation] = useState(currentPlantegning?.rotation ?? 0); // Rotation in degrees (0, 90, 180, 270)
+  const [rotation, setRotation] = useState(0); // Rotation in degrees (0, 90, 180, 270)
   const [showRotationTip, setShowRotationTip] = useState(false); // Show tip for rotation
   const { toast } = useToast();
   
