@@ -86,6 +86,7 @@ export default function PlantegningViewer({
   const [isMobile, setIsMobile] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [rotation, setRotation] = useState(0); // Rotation in degrees (0, 90, 180, 270)
   const { toast } = useToast();
   
   const imageRef = useRef<HTMLImageElement>(null);
@@ -584,6 +585,10 @@ export default function PlantegningViewer({
   const resetZoom = () => {
     fitToScreen(); // This will set scale to optimal fit-to-screen (100% in our new display)
   };
+  
+  const rotateImage = () => {
+    setRotation((prev) => (prev + 90) % 360);
+  };
 
   const getStatusColor = (status?: string | null) => {
     switch (status) {
@@ -700,6 +705,9 @@ export default function PlantegningViewer({
                 <Button variant="outline" size="sm" onClick={resetZoom}>
                   <Maximize2 className="h-4 w-4" />
                 </Button>
+                <Button variant="outline" size="sm" onClick={rotateImage} title="Roter 90°">
+                  <RotateCw className="h-4 w-4" />
+                </Button>
                 <span className="text-sm text-muted-foreground ml-2">
                   {(() => {
                     if (!containerRef.current || imgWH.W === 0) return '100%';
@@ -777,7 +785,7 @@ export default function PlantegningViewer({
                     top: 0,
                     width: imgWH.W || 800, // Fallback width
                     height: imgWH.H || 600, // Fallback height
-                    transform: `translate(${vp.tx}px, ${vp.ty}px) scale(${vp.s})`,
+                    transform: `translate(${vp.tx}px, ${vp.ty}px) scale(${vp.s}) rotate(${rotation}deg)`,
                     transformOrigin: '0 0',
                     willChange: 'transform',
                     pointerEvents: 'none', // Let overlay handle all events
