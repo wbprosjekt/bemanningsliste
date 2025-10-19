@@ -143,6 +143,7 @@ export default function BefaringDetail({
   }, [befaringId]);
 
   const loadBefaringData = async () => {
+    console.log('🔄 loadBefaringData called for befaring:', befaringId);
     setLoading(true);
     try {
       // Load befaring details

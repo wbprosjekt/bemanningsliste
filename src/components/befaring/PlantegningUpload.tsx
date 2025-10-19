@@ -176,7 +176,10 @@ export default function PlantegningUpload({
       setTitle('');
       setPreview(null);
       onOpenChange(false);
+      
+      console.log('🔄 Calling onSuccess callback...');
       onSuccess();
+      console.log('✅ onSuccess callback completed');
     } catch (error) {
       console.error('Error uploading plantegning:', error);
       toast({
