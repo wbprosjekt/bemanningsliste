@@ -302,9 +302,29 @@ Jeg vil da lese denne filen og vite nøyaktig hvor vi var! ✅
 
 ---
 
-**SISTE GIT COMMIT:** `c4ab623` (fix: dashboard column names)  
+**SISTE GIT COMMIT:** `2d3548a` (docs: Add Prosjekt-innboks feature plan)  
 **BRANCH:** `feature/befaring-module`  
 **FILES CHANGED:** 15+ filer (migrasjoner, komponenter, planer)
+
+---
+
+## 🌐 DOMAIN INFO (NY!)
+
+**Produksjon:**
+- URL: https://fieldnote.no
+- Miljø: Production
+- Deployment: Vercel (automatic)
+- Branch: `main`
+
+**Development:**
+- URL: https://dev.fieldnote.no
+- Miljø: Development/Staging
+- Deployment: Vercel (automatic)
+- Branch: `develop` eller `dev`
+
+**Dokument:** `DOMAIN_SETUP.md` (ny fil)
+
+---
 
 **God pause! Vi gjør resten senere! 🚀**
 

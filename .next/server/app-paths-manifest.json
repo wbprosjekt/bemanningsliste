@@ -8,6 +8,7 @@
   "/auth/page": "app/auth/page.js",
   "/befaring/[id]/page": "app/befaring/[id]/page.js",
   "/befaring/page": "app/befaring/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
   "/min/uke/[year]/[week]/oversikt/page": "app/min/uke/[year]/[week]/oversikt/page.js",
   "/min/uke/[year]/[week]/page": "app/min/uke/[year]/[week]/page.js",
   "/min/uke/page": "app/min/uke/page.js",
