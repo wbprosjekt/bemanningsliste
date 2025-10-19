@@ -110,15 +110,15 @@ export default function PlantegningUpload({
     setLoading(true);
     try {
       // Get next display order
-      const { data: lastPlantegning, error: countError } = await supabase
+      const { data: lastPlantegning } = await supabase
         .from('plantegninger')
         .select('display_order')
         .eq('befaring_id', befaringId)
         .order('display_order', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      const nextOrder = lastPlantegning ? lastPlantegning.display_order + 1 : 1;
+      const nextOrder = lastPlantegning?.display_order ? lastPlantegning.display_order + 1 : 1;
 
       // Upload file to Supabase Storage
       const fileExt = selectedFile.name.split('.').pop();
