@@ -198,6 +198,7 @@ export default function BefaringDetail({
         title: p.title ?? 'Uten tittel',
         image_url: p.image_url ?? '',
         display_order: p.display_order ?? 0,
+        file_type: p.file_type ?? 'image', // Default to 'image' if not set
         oppgaver: (p.oppgaver ?? []).map((o: any) => sanitizeOppgave(o)),
       }));
 
