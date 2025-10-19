@@ -645,7 +645,12 @@ export default function PlantegningViewer({
             description: 'Kunne ikke lagre rotasjon',
             variant: 'destructive'
           });
+          // Revert rotation on error
+          setRotation(rotation);
         } else {
+          // Update local plantegning object
+          currentPlantegning.rotation = newRotation;
+          
           // Re-fit to screen after rotation to ensure proper centering
           setTimeout(() => {
             fitToScreen();
@@ -653,6 +658,8 @@ export default function PlantegningViewer({
         }
       } catch (error) {
         console.error('Error saving rotation:', error);
+        // Revert rotation on error
+        setRotation(rotation);
       }
     } else {
       toast({
