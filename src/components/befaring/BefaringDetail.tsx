@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -142,7 +142,7 @@ export default function BefaringDetail({
     loadBefaringData();
   }, [befaringId]);
 
-  const loadBefaringData = async () => {
+  const loadBefaringData = useCallback(async () => {
     console.log('🔄 loadBefaringData called for befaring:', befaringId);
     setLoading(true);
     try {
@@ -212,7 +212,7 @@ export default function BefaringDetail({
     } finally {
       setLoading(false);
     }
-  };
+  }, [befaringId, userId]);
 
   const handlePlantegningClick = (index: number) => {
     setCurrentPlantegningIndex(index);
