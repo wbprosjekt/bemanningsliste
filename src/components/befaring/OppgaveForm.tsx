@@ -334,8 +334,8 @@ export default function OppgaveForm({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {oppgave ? `Rediger oppgave #${oppgave.oppgave_nummer}` : 'Ny oppgave'}
           </DialogTitle>
@@ -345,7 +345,7 @@ export default function OppgaveForm({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex-1 overflow-y-auto pr-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
             {/* Fag */}
             <FormField
               control={form.control}
@@ -546,7 +546,7 @@ export default function OppgaveForm({
               </div>
             )}
 
-            <DialogFooter className="flex justify-between items-center">
+            <DialogFooter className="flex justify-between items-center sticky bottom-0 bg-background border-t pt-4 mt-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
               <div className="flex-1">
                 {oppgave && (
                   <Button 

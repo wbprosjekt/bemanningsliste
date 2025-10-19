@@ -234,8 +234,8 @@ export default function OppgaveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {oppgave ? 'Rediger oppgave' : 'Ny oppgave'}
           </DialogTitle>
@@ -247,7 +247,7 @@ export default function OppgaveDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-y-auto pr-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           {/* Fag */}
           <div className="space-y-2">
             <Label htmlFor="fag">Fag *</Label>
@@ -353,8 +353,8 @@ export default function OppgaveDialog({
             </Popover>
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-4">
+          {/* Actions - Sticky at bottom */}
+          <div className="flex justify-end gap-2 pt-4 pb-4 sticky bottom-0 bg-background border-t pt-4 mt-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
             <Button
               type="button"
               variant="outline"

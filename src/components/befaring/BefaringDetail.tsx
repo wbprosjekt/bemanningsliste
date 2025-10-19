@@ -321,6 +321,9 @@ export default function BefaringDetail({
         description: `${plantegningToDelete.title ?? 'Plantegning'} har blitt slettet.`
       });
 
+      // Close plantegning viewer since it's been deleted
+      setShowPlantegningViewer(false);
+
       // Refresh data
       loadBefaringData();
     } catch (error) {
@@ -725,7 +728,7 @@ export default function BefaringDetail({
             if (plantegning) {
               setPlantegningToDelete(plantegning);
               setShowDeleteDialog(true);
-              setShowPlantegningViewer(false); // Close viewer when showing delete dialog
+              // Don't close viewer - let user decide in dialog
             }
           }}
         />

@@ -859,7 +859,7 @@ export default function PlantegningViewer({
   return (
     <>
     <div 
-      className="fixed inset-0 z-50 bg-background flex flex-col"
+      className="fixed inset-0 z-[50] bg-background flex flex-col"
       style={{
         touchAction: 'none', // Disable all touch gestures at root level
       }}
@@ -995,7 +995,7 @@ export default function PlantegningViewer({
           {/* Image container */}
           <div
             ref={containerRef}
-            className="flex-1 relative overflow-hidden bg-gray-100 pb-24 sm:pb-0"
+            className="flex-1 relative overflow-hidden bg-gray-100 pb-16 sm:pb-0" // Reduced padding for compact mobile bottom sheet
             style={{ 
               touchAction: 'pan-x pan-y', // Allow panning but handle pinch-zoom ourselves
               userSelect: 'none', // Prevent text selection
@@ -1298,17 +1298,17 @@ export default function PlantegningViewer({
           )}
       </div>
       
-      {/* Mobile Bottom Sheet - Actions */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-background border-t p-3 z-40">
-        {/* Top row - Zoom controls */}
-        <div className="flex items-center justify-center space-x-2 mb-2">
-          <Button variant="ghost" size="sm" onClick={zoomOut} className="h-8 w-8 p-0">
+      {/* Mobile Bottom Sheet - Compact Actions */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-background border-t p-2 z-[60] shadow-lg" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+        {/* Single row - All controls */}
+        <div className="flex items-center justify-center gap-1">
+          <Button variant="ghost" size="sm" onClick={zoomOut} className="h-9 w-9 p-0">
             <ZoomOut className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={zoomIn} className="h-8 w-8 p-0">
+          <Button variant="ghost" size="sm" onClick={zoomIn} className="h-9 w-9 p-0">
             <ZoomIn className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={resetZoom} className="h-8 w-8 p-0">
+          <Button variant="ghost" size="sm" onClick={resetZoom} className="h-9 w-9 p-0">
             <Maximize2 className="h-4 w-4" />
           </Button>
           <Button 
@@ -1316,31 +1316,29 @@ export default function PlantegningViewer({
             size="sm" 
             onClick={rotateImage} 
             disabled={currentOppgaver.length > 0}
-            className="h-8 w-8 p-0"
+            className="h-9 w-9 p-0"
           >
             <RotateCw className="h-4 w-4" />
           </Button>
-        </div>
-        
-        {/* Bottom row - Actions */}
-        <div className="flex items-center justify-between">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDeletePlantegning && onDeletePlantegning(currentPlantegning.id)}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-          >
-            <Trash2 className="h-4 w-4 mr-1" />
-            Slett
-          </Button>
+          
+          {/* Divider */}
+          <div className="h-6 w-px bg-gray-300 mx-1"></div>
           
           <Button
-            variant={isAddingOppgave ? "default" : "outline"}
+            variant="ghost"
             size="sm"
-            onClick={() => setIsAddingOppgave(!isAddingOppgave)}
+            onClick={() => onDeletePlantegning && onDeletePlantegning(currentPlantegning.id)}
+            className="h-9 w-9 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
           >
-            <Plus className="h-4 w-4 mr-1" />
-            {isAddingOppgave ? 'Avbryt' : 'Legg til'}
+            <Trash2 className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant={isAddingOppgave ? "default" : "ghost"} 
+            size="sm" 
+            onClick={() => setIsAddingOppgave(!isAddingOppgave)}
+            className="h-9 w-9 p-0"
+          >
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>

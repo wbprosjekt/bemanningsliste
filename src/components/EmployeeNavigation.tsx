@@ -91,8 +91,8 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
               </button>
             </div>
 
-            {/* Navigation Links - Centered for employees */}
-            <div className="hidden lg:flex items-center space-x-4">
+            {/* Navigation Links - Centered for employees, hidden on mobile */}
+            <div className="hidden md:flex items-center space-x-4">
               <button
                 onClick={() => router.push("/")}
                 className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -181,8 +181,8 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
               </AlertDialog>
             </div>
 
-            {/* Mobile menu button */}
-            <div className="md:hidden">
+            {/* Mobile menu button - Only show on mobile */}
+            <div className="flex md:hidden">
               <Button
                 variant="ghost"
                 size="sm"

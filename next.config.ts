@@ -11,6 +11,17 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
   },
 
+  // Image configuration
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'jlndohflirfixbinqdwe.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
+  },
+
   // Exclude backup directories and Deno files from build
   webpack: (config) => {
     config.watchOptions = {

@@ -94,8 +94,8 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               </button>
             </div>
 
-            {/* Navigation Links */}
-            <div className="flex items-center space-x-3">
+            {/* Navigation Links - Hidden on mobile, shown on desktop */}
+            <div className="hidden md:flex items-center space-x-3">
               <button
                 onClick={() => router.push("/")}
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -252,8 +252,8 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               </AlertDialog>
             </div>
 
-            {/* Mobile menu button */}
-            <div className="md:hidden">
+            {/* Mobile menu button - Only show on mobile */}
+            <div className="flex md:hidden">
               <Button
                 variant="ghost"
                 size="sm"

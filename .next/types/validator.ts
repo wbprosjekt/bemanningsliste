@@ -272,6 +272,24 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/test-inbox/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/test-inbox">> = Specific
+  const handler = {} as typeof import("../../src/app/test-inbox/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/test-upload/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/test-upload">> = Specific
+  const handler = {} as typeof import("../../src/app/test-upload/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/uke/[year]/[week]/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/uke/[year]/[week]">> = Specific
