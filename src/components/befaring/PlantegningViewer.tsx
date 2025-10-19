@@ -311,12 +311,22 @@ export default function PlantegningViewer({
 
   // Load PDF and render to canvas
   useEffect(() => {
+    console.log('🔄 PlantegningViewer useEffect triggered:', {
+      file_type: currentPlantegning?.file_type,
+      has_image_url: !!currentImageUrl,
+      current_title: currentPlantegning?.title
+    });
+    
     if (currentPlantegning?.file_type === 'pdf' && currentImageUrl) {
+      console.log('📄 Loading PDF...');
       loadAndRenderPDF();
     } else if (currentPlantegning?.file_type === 'image') {
+      console.log('🖼️ Loading image...');
       setIsPdf(false);
       setImageLoaded(false);
       setImageError(false);
+    } else {
+      console.log('⚠️ Unknown file type or no URL');
     }
   }, [currentPlantegning, currentImageUrl]);
 
