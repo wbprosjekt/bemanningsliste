@@ -159,15 +159,18 @@ export default function PlantegningViewer({
       const cy = e.clientY - rect.top;
 
       setVp(v => {
+        // Get display dimensions based on rotation
+        const { W: displayW, H: displayH } = getDisplayDimensions();
+        
         // screen -> world under cursor before zoom:
-        const u = (cx - v.tx) / (imgWH.W * v.s);
-        const w = (cy - v.ty) / (imgWH.H * v.s);
+        const u = (cx - v.tx) / (displayW * v.s);
+        const w = (cy - v.ty) / (displayH * v.s);
         const sNew = Math.max(0.1, Math.min(6, v.s * factor));
         // adjust tx,ty so same world point stays under cursor
         return {
           s: sNew,
-          tx: cx - u * imgWH.W * sNew,
-          ty: cy - w * imgWH.H * sNew,
+          tx: cx - u * displayW * sNew,
+          ty: cy - w * displayH * sNew,
         };
       });
     };
@@ -178,7 +181,7 @@ export default function PlantegningViewer({
     return () => {
       container.removeEventListener('wheel', handleWheelCombined);
     };
-  }, [imgWH.W, imgWH.H]); // Depend on image dimensions
+  }, [imgWH.W, imgWH.H, rotation]); // Depend on image dimensions and rotation
 
   // Handle pinch-to-zoom for touch devices (iPad, tablets, phones)
   useEffect(() => {
@@ -228,13 +231,16 @@ export default function PlantegningViewer({
         const scaleFactor = currentDistance / initialTouchDistance;
         const newScale = Math.max(0.1, Math.min(6, initialScale * scaleFactor));
         
+        // Get display dimensions based on rotation
+        const { W: displayW, H: displayH } = getDisplayDimensions();
+        
         // Calculate world coordinates under pinch center (using INITIAL viewport)
-        const u = (pinchCenter.x - initialVp.tx) / (imgWH.W * initialVp.s);
-        const w = (pinchCenter.y - initialVp.ty) / (imgWH.H * initialVp.s);
+        const u = (pinchCenter.x - initialVp.tx) / (displayW * initialVp.s);
+        const w = (pinchCenter.y - initialVp.ty) / (displayH * initialVp.s);
         
         // Calculate new translation to keep pinch center fixed
-        const newTx = pinchCenter.x - u * imgWH.W * newScale;
-        const newTy = pinchCenter.y - w * imgWH.H * newScale;
+        const newTx = pinchCenter.x - u * displayW * newScale;
+        const newTy = pinchCenter.y - w * displayH * newScale;
         
         setVp({
           s: newScale,
@@ -259,7 +265,7 @@ export default function PlantegningViewer({
       container.removeEventListener('touchmove', handleTouchMove);
       container.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [imgWH.W, imgWH.H]);
+  }, [imgWH.W, imgWH.H, rotation]);
 
   // Save viewport to ref whenever it changes
   const vpRef = useRef(vp);
@@ -479,6 +485,14 @@ export default function PlantegningViewer({
     setImageError(true);
     setImageLoaded(false);
   };
+  
+  // Helper function to get display dimensions based on rotation
+  const getDisplayDimensions = () => {
+    if (rotation === 90 || rotation === 270) {
+      return { W: imgWH.H, H: imgWH.W };
+    }
+    return { W: imgWH.W, H: imgWH.H };
+  };
 
   // Removed handleWheel - now handled in useEffect with addEventListener
 
@@ -526,9 +540,12 @@ export default function PlantegningViewer({
       const cx = e.clientX - rect.left;
       const cy = e.clientY - rect.top;
       
+      // Get display dimensions based on rotation
+      const { W: displayW, H: displayH } = getDisplayDimensions();
+      
       // Convert screen coordinates to world coordinates
-      const u = (cx - vp.tx) / (imgWH.W * vp.s);
-      const v = (cy - vp.ty) / (imgWH.H * vp.s);
+      const u = (cx - vp.tx) / (displayW * vp.s);
+      const v = (cy - vp.ty) / (displayH * vp.s);
       
       // Only proceed if click is within bounds
       if (u >= 0 && u <= 1 && v >= 0 && v <= 1) {
@@ -591,9 +608,13 @@ export default function PlantegningViewer({
     
     const cW = containerRef.current.clientWidth;
     const cH = containerRef.current.clientHeight;
-    const s = Math.min(cW / imgWH.W, cH / imgWH.H) * 0.9;
-    const tx = (cW - imgWH.W * s) / 2;
-    const ty = (cH - imgWH.H * s) / 2;
+    
+    // Get display dimensions based on rotation
+    const { W: displayW, H: displayH } = getDisplayDimensions();
+    
+    const s = Math.min(cW / displayW, cH / displayH) * 0.9;
+    const tx = (cW - displayW * s) / 2;
+    const ty = (cH - displayH * s) / 2;
     
     setVp({ s, tx, ty });
   };
@@ -623,6 +644,11 @@ export default function PlantegningViewer({
             description: 'Kunne ikke lagre rotasjon',
             variant: 'destructive'
           });
+        } else {
+          // Re-fit to screen after rotation to ensure proper centering
+          setTimeout(() => {
+            fitToScreen();
+          }, 50);
         }
       } catch (error) {
         console.error('Error saving rotation:', error);
@@ -891,9 +917,13 @@ export default function PlantegningViewer({
                   const oppgaveNummer = oppgave.oppgave_nummer;
                   const u = (oppgave.x_position / 100); // normalized
                   const v = (oppgave.y_position / 100); // normalized
+                  
+                  // Get display dimensions based on rotation
+                  const { W: displayW, H: displayH } = getDisplayDimensions();
+                  
                   // World coordinates
-                  const xWorld = u * imgWH.W;
-                  const yWorld = v * imgWH.H;
+                  const xWorld = u * displayW;
+                  const yWorld = v * displayH;
                   // Convert to screen coordinates
                   const xScreen = vp.tx + xWorld * vp.s;
                   const yScreen = vp.ty + yWorld * vp.s;
@@ -931,12 +961,16 @@ export default function PlantegningViewer({
                 })}
                 
                 {/* Pending click indicator - screen-space positioning */}
-                {pendingClickPosition && imgWH.W > 0 && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: vp.tx + (pendingClickPosition.x / 100) * imgWH.W * vp.s - 24,
-                      top: vp.ty + (pendingClickPosition.y / 100) * imgWH.H * vp.s - 24,
+                {pendingClickPosition && imgWH.W > 0 && (() => {
+                  // Get display dimensions based on rotation
+                  const { W: displayW, H: displayH } = getDisplayDimensions();
+                  
+                  return (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: vp.tx + (pendingClickPosition.x / 100) * displayW * vp.s - 24,
+                        top: vp.ty + (pendingClickPosition.y / 100) * displayH * vp.s - 24,
                       width: 48,
                       height: 48,
                       borderRadius: 999,
@@ -956,7 +990,8 @@ export default function PlantegningViewer({
                   >
                     +
                   </div>
-                )}
+                  );
+                })()}
                 
                 {!imageLoaded && !imageError && (
                   <div className="flex items-center justify-center h-full">
