@@ -869,55 +869,53 @@ export default function PlantegningViewer({
         <h1>Plantegning Viewer</h1>
         <p>Viser plantegning med interaktive oppgave-punkter. Bruk zoom-kontroller og klikk på plantegningen for å legge til oppgaver.</p>
       </div>
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                {isPdf ? (
-                  <FileText className="h-5 w-5 text-blue-600" />
-                ) : (
-                  <div className="h-5 w-5 rounded bg-gray-300"></div>
-                )}
-                <h2 className="text-xl font-semibold">{currentTitle}</h2>
-              </div>
-              <Badge variant="outline">
-                {currentIndex + 1} av {plantegninger.length}
-              </Badge>
-              
-              {/* Delete plantegning button - moved to left side for safety */}
-              {onDeletePlantegning && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onDeletePlantegning(currentPlantegning.id)}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 ml-8"
-                >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Slett plantegning
-                </Button>
-              )}
-            </div>
-            
-            <div className="flex items-center space-x-2">
+          {/* Minimal Header - Mobile Optimized */}
+          <div className="flex items-center justify-between p-2 sm:p-4 border-b bg-background">
+            <div className="flex items-center space-x-2 sm:space-x-4 flex-1 min-w-0">
               {/* Navigation */}
               <div className="flex items-center space-x-1">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => onNavigate(currentIndex - 1)}
                   disabled={currentIndex === 0}
+                  className="h-8 w-8 p-0"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => onNavigate(currentIndex + 1)}
                   disabled={currentIndex === plantegninger.length - 1}
+                  className="h-8 w-8 p-0"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
+              
+              {/* Title */}
+              <div className="flex items-center space-x-2 min-w-0">
+                {isPdf ? (
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
+                ) : (
+                  <div className="h-4 w-4 sm:h-5 sm:w-5 rounded bg-gray-300 flex-shrink-0"></div>
+                )}
+                <h2 className="text-sm sm:text-xl font-semibold truncate">{currentTitle}</h2>
+              </div>
+              
+              {/* Counter */}
+              <Badge variant="outline" className="hidden sm:inline-flex">
+                {currentIndex + 1} av {plantegninger.length}
+              </Badge>
+              
+              {/* Mobile Counter */}
+              <Badge variant="outline" className="sm:hidden text-xs">
+                {currentIndex + 1}/{plantegninger.length}
+              </Badge>
+            </div>
+            
+            <div className="flex items-center space-x-2">
               
               {/* Zoom controls */}
               <div className="flex items-center space-x-1 border-l pl-2">
@@ -960,18 +958,34 @@ export default function PlantegningViewer({
                 </span>
               </div>
               
-              {/* Add oppgave button */}
+              {/* Add oppgave button - Desktop only */}
               <Button
                 variant={isAddingOppgave ? "default" : "outline"}
                 size="sm"
                 onClick={() => setIsAddingOppgave(!isAddingOppgave)}
+                className="hidden sm:flex"
               >
                 <Plus className="h-4 w-4 mr-1" />
                 {isAddingOppgave ? 'Avbryt' : 'Legg til oppgave'}
               </Button>
               
-              {/* Close button - prominent */}
-              <Button variant="outline" size="sm" onClick={onClose} className="border-l ml-2 pl-2">
+              {/* Close button - Mobile optimized */}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={onClose} 
+                className="h-8 w-8 p-0 sm:hidden"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              
+              {/* Desktop close button */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onClose} 
+                className="hidden sm:flex border-l ml-2 pl-2"
+              >
                 <X className="h-4 w-4 mr-1" />
                 Lukk visning
               </Button>
@@ -981,7 +995,7 @@ export default function PlantegningViewer({
           {/* Image container */}
           <div
             ref={containerRef}
-            className="flex-1 relative overflow-hidden bg-gray-100"
+            className="flex-1 relative overflow-hidden bg-gray-100 pb-24 sm:pb-0"
             style={{ 
               touchAction: 'pan-x pan-y', // Allow panning but handle pinch-zoom ourselves
               userSelect: 'none', // Prevent text selection
@@ -1282,6 +1296,53 @@ export default function PlantegningViewer({
               </Card>
             </div>
           )}
+      </div>
+      
+      {/* Mobile Bottom Sheet - Actions */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-background border-t p-3 z-40">
+        {/* Top row - Zoom controls */}
+        <div className="flex items-center justify-center space-x-2 mb-2">
+          <Button variant="ghost" size="sm" onClick={zoomOut} className="h-8 w-8 p-0">
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={zoomIn} className="h-8 w-8 p-0">
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={resetZoom} className="h-8 w-8 p-0">
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={rotateImage} 
+            disabled={currentOppgaver.length > 0}
+            className="h-8 w-8 p-0"
+          >
+            <RotateCw className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        {/* Bottom row - Actions */}
+        <div className="flex items-center justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onDeletePlantegning && onDeletePlantegning(currentPlantegning.id)}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            Slett
+          </Button>
+          
+          <Button
+            variant={isAddingOppgave ? "default" : "outline"}
+            size="sm"
+            onClick={() => setIsAddingOppgave(!isAddingOppgave)}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            {isAddingOppgave ? 'Avbryt' : 'Legg til'}
+          </Button>
+        </div>
       </div>
 
       {/* Delete Confirmation Dialog */}
