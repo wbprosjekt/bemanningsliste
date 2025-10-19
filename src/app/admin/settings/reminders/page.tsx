@@ -92,7 +92,7 @@ export default function ReminderSettingsPage() {
       }
 
       if (data) {
-        setSettings(data);
+        setSettings(data as any);
       } else {
         // Create default settings if none exist
         const defaultSettings: ReminderSettings = {
@@ -319,7 +319,7 @@ export default function ReminderSettingsPage() {
                       type="number"
                       min="1"
                       max="14"
-                      value={settings.payroll_days_before}
+                      value={settings.payroll_days_before ?? 3}
                       onChange={(e) => updateSettings({ payroll_days_before: parseInt(e.target.value) || 3 })}
                     />
                   </div>
@@ -331,7 +331,7 @@ export default function ReminderSettingsPage() {
                       type="number"
                       min="1"
                       max="31"
-                      value={settings.payroll_day_of_month}
+                      value={settings.payroll_day_of_month ?? 1}
                       onChange={(e) => updateSettings({ payroll_day_of_month: parseInt(e.target.value) || 10 })}
                     />
                     <p className="text-sm text-muted-foreground">
@@ -376,7 +376,7 @@ export default function ReminderSettingsPage() {
                   <div className="space-y-2">
                     <Label htmlFor="weekly-day">Dag i uken</Label>
                     <Select
-                      value={settings.weekly_day.toString()}
+                      value={settings.weekly_day?.toString() ?? '1'}
                       onValueChange={(value) => updateSettings({ weekly_day: parseInt(value) })}
                     >
                       <SelectTrigger>
@@ -397,7 +397,7 @@ export default function ReminderSettingsPage() {
                     <Input
                       id="weekly-time"
                       type="time"
-                      value={settings.weekly_time}
+                      value={settings.weekly_time ?? '09:00'}
                       onChange={(e) => updateSettings({ weekly_time: e.target.value })}
                     />
                   </div>

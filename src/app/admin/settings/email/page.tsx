@@ -103,7 +103,7 @@ export default function EmailSettingsPage() {
       }
 
       if (data) {
-        setSettings(data);
+        setSettings(data as any);
       } else {
         // Create default settings if none exist
         const defaultSettings: EmailSettings = {

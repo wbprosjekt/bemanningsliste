@@ -194,7 +194,7 @@ export default function EmailTemplatesPage() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        setTemplates(data);
+        setTemplates(data as any);
       } else {
         // Create default templates if none exist
         const defaultTemplates: EmailTemplate[] = Object.entries(DEFAULT_TEMPLATES).map(([type, template]) => ({

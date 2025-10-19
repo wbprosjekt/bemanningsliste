@@ -119,10 +119,7 @@ export default function BefaringDetail({
 
       if (befaringError) throw befaringError;
 
-      setBefaring({
-        ...befaringData,
-        project_name: befaringData.ttx_project_cache?.project_name,
-      });
+      setBefaring(befaringData as any);
 
       // Load plantegninger with oppgaver
       const { data: plantegningerData, error: plantegningerError } = await supabase
