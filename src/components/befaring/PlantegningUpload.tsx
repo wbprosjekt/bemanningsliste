@@ -27,6 +27,7 @@ export default function PlantegningUpload({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -58,12 +59,21 @@ export default function PlantegningUpload({
     setSelectedFile(file);
     setTitle(file.name.replace(/\.[^/.]+$/, '')); // Remove extension
     
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    // Create preview only for images (not PDFs)
+    if (isImage) {
+      setPreviewLoading(true);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreview(e.target?.result as string);
+        setPreviewLoading(false);
+      };
+      reader.onerror = () => {
+        setPreviewLoading(false);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setPreview(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -168,6 +178,7 @@ export default function PlantegningUpload({
     setSelectedFile(null);
     setTitle('');
     setPreview(null);
+    setPreviewLoading(false);
     setDragOver(false);
     onOpenChange(false);
   };
@@ -196,7 +207,12 @@ export default function PlantegningUpload({
           >
             {selectedFile ? (
               <div className="space-y-4">
-                {preview && (
+                {previewLoading && (
+                  <div className="mx-auto max-w-xs flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                )}
+                {preview && !previewLoading && (
                   <div className="mx-auto max-w-xs">
                     <img
                       src={preview}
@@ -225,6 +241,7 @@ export default function PlantegningUpload({
                   onClick={() => {
                     setSelectedFile(null);
                     setPreview(null);
+                    setPreviewLoading(false);
                     setTitle('');
                   }}
                 >
