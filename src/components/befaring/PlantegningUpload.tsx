@@ -109,6 +109,8 @@ export default function PlantegningUpload({
 
     setLoading(true);
     try {
+      console.log('📤 Starting plantegning upload...', { befaringId, title, fileName: selectedFile.name });
+      
       // Get next display order
       const { data: lastPlantegning } = await supabase
         .from('plantegninger')
@@ -118,25 +120,34 @@ export default function PlantegningUpload({
         .limit(1)
         .maybeSingle();
 
+      console.log('📊 Last plantegning:', lastPlantegning);
       const nextOrder = lastPlantegning?.display_order ? lastPlantegning.display_order + 1 : 1;
+      console.log('📋 Next order:', nextOrder);
 
       // Upload file to Supabase Storage
       const fileExt = selectedFile.name.split('.').pop();
       const fileName = `${befaringId}/${Date.now()}.${fileExt}`;
+      console.log('📁 Uploading to:', fileName);
       
       const { error: uploadError } = await supabase.storage
         .from('befaring-assets')
         .upload(fileName, selectedFile);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('❌ Upload error:', uploadError);
+        throw uploadError;
+      }
+      console.log('✅ Upload successful');
 
       // Get public URL
       const { data: urlData } = supabase.storage
         .from('befaring-assets')
         .getPublicUrl(fileName);
+      console.log('🔗 Public URL:', urlData.publicUrl);
 
       // Determine file type
       const fileType = selectedFile.type === 'application/pdf' ? 'pdf' : 'image';
+      console.log('📄 File type:', fileType);
 
       // Create plantegning record
       const { error: insertError } = await supabase
@@ -149,7 +160,11 @@ export default function PlantegningUpload({
           file_type: fileType
         });
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('❌ Insert error:', insertError);
+        throw insertError;
+      }
+      console.log('✅ Plantegning created successfully');
 
       toast({
         title: 'Plantegning lastet opp',
