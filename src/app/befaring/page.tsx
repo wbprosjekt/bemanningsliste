@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 interface Profile {
   id: string;
   user_id: string;
-  role: string;
+  role: string | null;
   org_id: string;
   org: {
     id: string;
@@ -101,7 +101,7 @@ export default function BefaringPage() {
   }
 
   // Sjekk tilgang til befaring-modul
-  const canAccessBefaring = profile.org?.modules?.includes('befaring') || profile.role === 'admin' || profile.role === 'manager';
+  const canAccessBefaring = profile.org?.modules?.includes('befaring') || profile.role === 'admin' || profile.role === 'manager' || profile.role === 'leder';
 
   // Ingen tilgang til befaring-modul
   if (!canAccessBefaring) {
