@@ -49,14 +49,7 @@ export default function BefaringPage() {
       setProfileLoading(true);
       const { data: profileData, error } = await supabase
         .from('profiles')
-        .select(`
-          *,
-          org:org_id (
-            id,
-            subscription_plan,
-            modules
-          )
-        `)
+        .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
 
@@ -64,7 +57,17 @@ export default function BefaringPage() {
         console.error('Error loading profile:', error);
         setProfile(null);
       } else if (profileData) {
-        setProfile(profileData);
+        // Fetch org data separately
+        const { data: orgData } = await supabase
+          .from('org')
+          .select('id')
+          .eq('id', profileData.org_id)
+          .single();
+
+        setProfile({
+          ...profileData,
+          org: orgData || { id: profileData.org_id }
+        });
       } else {
         setProfile(null);
       }
@@ -101,7 +104,9 @@ export default function BefaringPage() {
   }
 
   // Sjekk tilgang til befaring-modul
-  const canAccessBefaring = profile.org?.modules?.includes('befaring') || profile.role === 'admin' || profile.role === 'manager' || profile.role === 'leder';
+  // For nå: alle admins, managers og ledere har tilgang
+  // TODO: Legg til modul-basert tilgang når subscription_plan og modules er implementert
+  const canAccessBefaring = profile.role === 'admin' || profile.role === 'manager' || profile.role === 'leder';
 
   // Ingen tilgang til befaring-modul
   if (!canAccessBefaring) {
