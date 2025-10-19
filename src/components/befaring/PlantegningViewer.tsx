@@ -345,6 +345,16 @@ export default function PlantegningViewer({
     }
   }, [currentPlantegning, currentImageUrl]);
   
+  // Re-fit to screen when rotation changes
+  useEffect(() => {
+    if (imageLoaded && imgWH.W > 0) {
+      // Small delay to ensure dimensions are set
+      setTimeout(() => {
+        fitToScreen();
+      }, 50);
+    }
+  }, [rotation]); // Re-fit when rotation changes
+  
   // Show rotation tip on first open (only if 0 oppgaver)
   useEffect(() => {
     if (currentOppgaver.length === 0 && !showRotationTip) {
