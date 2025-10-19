@@ -54,6 +54,8 @@ interface Plantegning {
   title: string;
   image_url: string;
   display_order: number;
+  file_type?: string;
+  rotation?: number; // Rotation in degrees (0, 90, 180, 270)
   oppgaver: Oppgave[];
 }
 
@@ -199,6 +201,7 @@ export default function BefaringDetail({
         image_url: p.image_url ?? '',
         display_order: p.display_order ?? 0,
         file_type: p.file_type ?? 'image', // Default to 'image' if not set
+        rotation: p.rotation ?? 0, // Rotation in degrees (0, 90, 180, 270)
         oppgaver: (p.oppgaver ?? []).map((o: any) => sanitizeOppgave(o)),
       }));
 

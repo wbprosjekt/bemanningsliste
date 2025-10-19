@@ -41,6 +41,7 @@ interface Plantegning {
   display_order: number;
   oppgaver: Oppgave[];
   file_type?: string; // Add file type to distinguish PDF from images
+  rotation?: number; // Rotation in degrees (0, 90, 180, 270)
 }
 
 interface PlantegningViewerProps {
@@ -86,7 +87,8 @@ export default function PlantegningViewer({
   const [isMobile, setIsMobile] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [rotation, setRotation] = useState(0); // Rotation in degrees (0, 90, 180, 270)
+  const [rotation, setRotation] = useState(currentPlantegning?.rotation ?? 0); // Rotation in degrees (0, 90, 180, 270)
+  const [showRotationTip, setShowRotationTip] = useState(false); // Show tip for rotation
   const { toast } = useToast();
   
   const imageRef = useRef<HTMLImageElement>(null);
@@ -329,7 +331,23 @@ export default function PlantegningViewer({
     } else {
       console.log('⚠️ Unknown file type or no URL');
     }
+    
+    // Set rotation from plantegning
+    if (currentPlantegning?.rotation !== undefined) {
+      setRotation(currentPlantegning.rotation);
+    }
   }, [currentPlantegning, currentImageUrl]);
+  
+  // Show rotation tip on first open (only if 0 oppgaver)
+  useEffect(() => {
+    if (currentOppgaver.length === 0 && !showRotationTip) {
+      // Check if user has dismissed this tip before
+      const tipDismissed = localStorage.getItem('rotation-tip-dismissed');
+      if (!tipDismissed) {
+        setShowRotationTip(true);
+      }
+    }
+  }, [currentOppgaver.length, showRotationTip]);
 
   const loadAndRenderPDF = async () => {
     // Prevent multiple simultaneous renders
@@ -586,8 +604,36 @@ export default function PlantegningViewer({
     fitToScreen(); // This will set scale to optimal fit-to-screen (100% in our new display)
   };
   
-  const rotateImage = () => {
-    setRotation((prev) => (prev + 90) % 360);
+  const rotateImage = async () => {
+    const newRotation = (rotation + 90) % 360;
+    setRotation(newRotation);
+    
+    // Save rotation to database (only if no oppgaver)
+    if (currentOppgaver.length === 0) {
+      try {
+        const { error } = await supabase
+          .from('plantegninger')
+          .update({ rotation: newRotation })
+          .eq('id', currentPlantegning.id);
+        
+        if (error) {
+          console.error('Error saving rotation:', error);
+          toast({
+            title: 'Feil',
+            description: 'Kunne ikke lagre rotasjon',
+            variant: 'destructive'
+          });
+        }
+      } catch (error) {
+        console.error('Error saving rotation:', error);
+      }
+    } else {
+      toast({
+        title: 'Kan ikke rotere',
+        description: 'Rotasjon kan kun endres når plantegningen har 0 oppgaver',
+        variant: 'destructive'
+      });
+    }
   };
 
   const getStatusColor = (status?: string | null) => {
@@ -705,7 +751,13 @@ export default function PlantegningViewer({
                 <Button variant="outline" size="sm" onClick={resetZoom}>
                   <Maximize2 className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={rotateImage} title="Roter 90°">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={rotateImage} 
+                  title={currentOppgaver.length > 0 ? "Kan ikke rotere når det er oppgaver" : "Roter 90°"}
+                  disabled={currentOppgaver.length > 0}
+                >
                   <RotateCw className="h-4 w-4" />
                 </Button>
                 <span className="text-sm text-muted-foreground ml-2">
@@ -916,8 +968,48 @@ export default function PlantegningViewer({
 
             {/* Instructions when adding oppgave */}
             {isAddingOppgave && (
-              <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg">
+              <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg z-50">
                 <p className="text-sm font-medium">Klikk på plantegningen for å legge til oppgave</p>
+              </div>
+            )}
+            
+            {/* Rotation tip popup */}
+            {showRotationTip && currentOppgaver.length === 0 && (
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border-2 border-blue-500 rounded-lg shadow-2xl p-6 max-w-md z-50">
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-2xl">💡</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Tips: Roter plantegningen</h3>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Du kan rotere plantegningen før du legger til punkter. Klikk på rotasjons-knappen (🔄) for å justere orienteringen.
+                    </p>
+                    <p className="text-xs text-amber-600 mb-4">
+                      ⚠️ Viktig: Rotasjon kan kun endres når plantegningen har 0 oppgaver.
+                    </p>
+                    <div className="flex space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          localStorage.setItem('rotation-tip-dismissed', 'true');
+                          setShowRotationTip(false);
+                        }}
+                      >
+                        Ikke vis igjen
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => setShowRotationTip(false)}
+                      >
+                        Forstått
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div> {/* End Image container */}
