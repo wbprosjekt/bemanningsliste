@@ -399,44 +399,44 @@ export default function BefaringDetail({
   const closedOppgaver = allOppgaver.filter(o => o.status === 'lukket');
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button variant="outline" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Tilbake
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center space-x-2 sm:space-x-4">
+          <Button variant="outline" size="sm" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Tilbake</span>
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{befaring.title || 'Uten tittel'}</h1>
-            <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-3xl font-bold truncate">{befaring.title || 'Uten tittel'}</h1>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground mt-1">
               <span className="flex items-center">
-                <Calendar className="h-4 w-4 mr-1" />
+                <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 {befaring.befaring_date
                   ? format(new Date(befaring.befaring_date), 'PPP', { locale: nb })
                   : 'Dato ikke satt'}
               </span>
               <span className="flex items-center">
-                <Building className="h-4 w-4 mr-1" />
+                <Building className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 {getBefaringTypeLabel(befaring.befaring_type)}
               </span>
               {befaring.adresse && (
                 <span className="flex items-center">
-                  <MapPin className="h-4 w-4 mr-1" />
-                  {befaring.adresse}, {befaring.postnummer} {befaring.sted}
+                  <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  <span className="truncate">{befaring.adresse}, {befaring.postnummer} {befaring.sted}</span>
                 </span>
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <Badge variant="outline">
+        <div className="flex items-center space-x-2 flex-shrink-0">
+          <Badge variant="outline" className="text-xs sm:text-sm">
             {allOppgaver.length} oppgaver
           </Badge>
-          <Button>
-            <FileText className="h-4 w-4 mr-2" />
-            PDF-rapport
+          <Button size="sm" className="text-xs sm:text-sm">
+            <FileText className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">PDF-rapport</span>
           </Button>
         </div>
       </div>
