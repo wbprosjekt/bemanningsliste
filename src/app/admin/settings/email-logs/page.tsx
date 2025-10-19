@@ -22,14 +22,14 @@ interface EmailLog {
   recipient_name: string | null;
   subject: string;
   template_type: string;
-  sent_at: string;
+  sent_at: string | null;
   status: string;
   error_message?: string | null;
   message_id?: string | null;
   provider: string;
   triggered_by: string;
   reminder_type?: string | null;
-  created_at: string;
+  created_at: string | null;
   provider_response?: any;
 }
 
@@ -180,7 +180,7 @@ export default function EmailLogsPage() {
     const csvContent = [
       ['Dato', 'Mottaker', 'Emne', 'Type', 'Status', 'Triggered By', 'Message ID', 'Feilmelding'],
       ...logs.map(log => [
-        format(new Date(log.sent_at), 'dd.MM.yyyy HH:mm', { locale: nb }),
+        log.sent_at ? format(new Date(log.sent_at), 'dd.MM.yyyy HH:mm', { locale: nb }) : '',
         log.recipient_email,
         log.subject,
         log.template_type,
@@ -338,7 +338,7 @@ export default function EmailLogsPage() {
                     {logs.map((log) => (
                       <TableRow key={log.id}>
                         <TableCell>
-                          {format(new Date(log.sent_at), 'dd.MM.yyyy HH:mm', { locale: nb })}
+                          {log.sent_at ? format(new Date(log.sent_at), 'dd.MM.yyyy HH:mm', { locale: nb }) : '-'}
                         </TableCell>
                         <TableCell>
                           <div>
