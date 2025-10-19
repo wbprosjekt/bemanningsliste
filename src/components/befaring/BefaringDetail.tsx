@@ -187,6 +187,9 @@ export default function BefaringDetail({
         .eq('befaring_id', befaringId)
         .order('display_order');
 
+      console.log('📊 Plantegninger data:', plantegningerData);
+      console.log('❌ Plantegninger error:', plantegningerError);
+
       if (plantegningerError) throw plantegningerError;
 
       const processedPlantegninger: Plantegning[] = (plantegningerData || []).map((p: any) => ({
