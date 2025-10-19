@@ -354,7 +354,7 @@ export default function PlantegningViewer({
         setShowRotationTip(true);
       }
     }
-  }, [currentOppgaver.length, showRotationTip]);
+  }, [currentOppgaver.length]); // Removed showRotationTip from dependencies
 
   const loadAndRenderPDF = async () => {
     // Prevent multiple simultaneous renders
