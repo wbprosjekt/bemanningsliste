@@ -215,8 +215,10 @@ export default function BefaringDetail({
   }, [befaringId, userId]);
 
   const handlePlantegningClick = (index: number) => {
+    console.log('🖱️ Plantegning clicked:', index, plantegninger[index]?.title);
     setCurrentPlantegningIndex(index);
     setShowPlantegningViewer(true);
+    console.log('✅ PlantegningViewer should now be visible');
   };
 
   const handleAddOppgave = async (x: number, y: number) => {
