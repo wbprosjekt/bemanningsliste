@@ -16,13 +16,15 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 interface ReminderSettings {
   id?: string;
   org_id: string;
-  payroll_enabled: boolean;
-  payroll_days_before: number;
-  payroll_day_of_month: number;
-  weekly_enabled: boolean;
-  weekly_day: number;
-  weekly_time: string;
-  send_to_all: boolean;
+  payroll_enabled: boolean | null;
+  payroll_days_before: number | null;
+  payroll_day_of_month: number | null;
+  weekly_enabled: boolean | null;
+  weekly_day: number | null;
+  weekly_time: string | null;
+  send_to_all: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export default function ReminderSettingsPage() {
@@ -303,7 +305,7 @@ export default function ReminderSettingsPage() {
                 <Label htmlFor="payroll-enabled">Aktiver lønnspåminnelse</Label>
                 <Switch
                   id="payroll-enabled"
-                  checked={settings.payroll_enabled}
+                  checked={settings.payroll_enabled ?? false}
                   onCheckedChange={(checked) => updateSettings({ payroll_enabled: checked })}
                 />
               </div>
@@ -364,7 +366,7 @@ export default function ReminderSettingsPage() {
                 <Label htmlFor="weekly-enabled">Aktiver ukentlig påminnelse</Label>
                 <Switch
                   id="weekly-enabled"
-                  checked={settings.weekly_enabled}
+                  checked={settings.weekly_enabled ?? false}
                   onCheckedChange={(checked) => updateSettings({ weekly_enabled: checked })}
                 />
               </div>
@@ -433,7 +435,7 @@ export default function ReminderSettingsPage() {
               </div>
               <Switch
                 id="send-to-all"
-                checked={settings.send_to_all}
+                checked={settings.send_to_all ?? false}
                 onCheckedChange={(checked) => updateSettings({ send_to_all: checked })}
               />
             </div>

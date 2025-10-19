@@ -26,12 +26,12 @@ interface EmailSettings {
   smtp_username?: string | null;
   smtp_password?: string | null;
   smtp_secure?: boolean | null;
-  is_active: boolean;
+  is_active: boolean | null;
   last_tested_at?: string | null;
   test_status?: string | null;
   test_error_message?: string | null;
-  created_at?: string;
-  updated_at?: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export default function EmailSettingsPage() {
@@ -376,7 +376,7 @@ export default function EmailSettingsPage() {
                 <Label htmlFor="is-active">Aktiver e-post sending</Label>
                 <Switch
                   id="is-active"
-                  checked={settings.is_active}
+                  checked={settings.is_active ?? false}
                   onCheckedChange={(checked) => updateSettings({ is_active: checked })}
                 />
               </div>
