@@ -95,7 +95,18 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess, variant
         .order('project_name');
 
       if (error) throw error;
-      setProjects(data || []);
+
+      const sanitizedProjects: TripletexProject[] = (data || [])
+        .filter((project) => project.tripletex_project_id !== null)
+        .map((project) => ({
+          id: project.id,
+          tripletex_project_id: project.tripletex_project_id as number,
+          project_name: project.project_name ?? 'Uten navn',
+          project_number: project.project_number ?? 0,
+          customer_name: project.customer_name,
+        }));
+
+      setProjects(sanitizedProjects);
     } catch (error) {
       console.error('Error loading projects:', error);
       toast({
@@ -367,7 +378,7 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess, variant
                 <Calendar
                   mode="single"
                   selected={formData.befaring_date || undefined}
-                  onSelect={(date) => handleInputChange('befaring_date', date)}
+                  onSelect={(date) => handleInputChange('befaring_date', date ?? null)}
                   initialFocus
                 />
               </PopoverContent>

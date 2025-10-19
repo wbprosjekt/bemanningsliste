@@ -99,6 +99,45 @@ export default function BefaringDetail({
   const [activeTab, setActiveTab] = useState('plantegninger');
   const { toast } = useToast();
 
+  const normalizeStatus = (status: string | null | undefined): Oppgave['status'] => {
+    switch (status) {
+      case 'apen':
+      case 'under_arbeid':
+      case 'lukket':
+        return status;
+      default:
+        return 'apen';
+    }
+  };
+
+  const normalizePrioritet = (prioritet: string | null | undefined): Oppgave['prioritet'] => {
+    switch (prioritet) {
+      case 'kritisk':
+      case 'høy':
+      case 'medium':
+      case 'lav':
+        return prioritet;
+      default:
+        return 'medium';
+    }
+  };
+
+  const sanitizeOppgave = (raw: any): Oppgave => ({
+    id: raw.id,
+    oppgave_nummer: raw.oppgave_nummer ?? 0,
+    fag: raw.fag ?? 'annet',
+    fag_color: raw.fag_color ?? '#94a3b8',
+    x_position: raw.x_position ?? 0,
+    y_position: raw.y_position ?? 0,
+    title: raw.title ?? undefined,
+    description: raw.description ?? undefined,
+    status: normalizeStatus(raw.status),
+    prioritet: normalizePrioritet(raw.prioritet),
+    frist: raw.frist ?? undefined,
+    underleverandor_id: raw.underleverandor_id ?? undefined,
+    underleverandor_navn: raw.underleverandorer?.navn ?? raw.underleverandor_navn ?? undefined,
+  });
+
   useEffect(() => {
     loadBefaringData();
   }, [befaringId]);
@@ -118,8 +157,22 @@ export default function BefaringDetail({
         .single();
 
       if (befaringError) throw befaringError;
+      const sanitizedBefaring: Befaring = {
+        id: befaringData.id,
+        title: befaringData.title ?? 'Uten tittel',
+        description: befaringData.description ?? undefined,
+        befaring_date: befaringData.befaring_date ?? new Date().toISOString(),
+        befaring_type: befaringData.befaring_type ?? 'forbefaring',
+        adresse: befaringData.adresse ?? undefined,
+        postnummer: befaringData.postnummer ?? undefined,
+        sted: befaringData.sted ?? undefined,
+        land: (befaringData as any).land ?? undefined,
+        status: befaringData.status ?? 'aktiv',
+        tripletex_project_id: befaringData.tripletex_project_id ?? undefined,
+        project_name: (befaringData as any).ttx_project_cache?.project_name ?? undefined,
+      };
 
-      setBefaring(befaringData as any);
+      setBefaring(sanitizedBefaring);
 
       // Load plantegninger with oppgaver
       const { data: plantegningerData, error: plantegningerError } = await supabase
@@ -136,12 +189,12 @@ export default function BefaringDetail({
 
       if (plantegningerError) throw plantegningerError;
 
-      const processedPlantegninger = plantegningerData.map(p => ({
-        ...p,
-        oppgaver: p.oppgaver.map(o => ({
-          ...o,
-          underleverandor_navn: o.underleverandorer?.navn,
-        })),
+      const processedPlantegninger: Plantegning[] = (plantegningerData || []).map((p: any) => ({
+        id: p.id,
+        title: p.title ?? 'Uten tittel',
+        image_url: p.image_url ?? '',
+        display_order: p.display_order ?? 0,
+        oppgaver: (p.oppgaver ?? []).map((o: any) => sanitizeOppgave(o)),
       }));
 
       setPlantegninger(processedPlantegninger);
@@ -174,7 +227,8 @@ export default function BefaringDetail({
       .order('oppgave_nummer', { ascending: false })
       .limit(1);
 
-    const nextNummer = maxNumData && maxNumData.length > 0 ? maxNumData[0].oppgave_nummer + 1 : 1;
+    const lastOppgaveNummer = maxNumData && maxNumData.length > 0 ? maxNumData[0].oppgave_nummer ?? 0 : 0;
+    const nextNummer = lastOppgaveNummer + 1;
 
     const { data, error } = await supabase
       .from('oppgaver')
@@ -206,7 +260,7 @@ export default function BefaringDetail({
     loadBefaringData();
     
     // Open the oppgave form for editing
-    setSelectedOppgave(data);
+    setSelectedOppgave(sanitizeOppgave(data));
     setShowOppgaveForm(true);
   };
 
@@ -254,7 +308,7 @@ export default function BefaringDetail({
 
       toast({
         title: 'Plantegning slettet',
-        description: `${plantegningToDelete.title} har blitt slettet.`
+        description: `${plantegningToDelete.title ?? 'Plantegning'} har blitt slettet.`
       });
 
       // Refresh data
@@ -272,7 +326,7 @@ export default function BefaringDetail({
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status?: string | null) => {
     switch (status) {
       case 'apen': return <Circle className="h-4 w-4 text-amber-500" />;
       case 'under_arbeid': return <Clock className="h-4 w-4 text-blue-500" />;
@@ -281,7 +335,7 @@ export default function BefaringDetail({
     }
   };
 
-  const getPriorityIcon = (prioritet: string) => {
+  const getPriorityIcon = (prioritet?: string | null) => {
     switch (prioritet) {
       case 'kritisk': return <AlertTriangle className="h-4 w-4 text-red-500" />;
       case 'høy': return <AlertTriangle className="h-4 w-4 text-orange-500" />;
@@ -291,7 +345,7 @@ export default function BefaringDetail({
     }
   };
 
-  const getBefaringTypeLabel = (type: string) => {
+  const getBefaringTypeLabel = (type?: string | null) => {
     switch (type) {
       case 'forbefaring': return 'Forbefaring';
       case 'ferdigbefaring': return 'Ferdigbefaring';
@@ -341,11 +395,13 @@ export default function BefaringDetail({
             Tilbake
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">{befaring.title}</h1>
+            <h1 className="text-3xl font-bold">{befaring.title || 'Uten tittel'}</h1>
             <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
               <span className="flex items-center">
                 <Calendar className="h-4 w-4 mr-1" />
-                {format(new Date(befaring.befaring_date), 'PPP', { locale: nb })}
+                {befaring.befaring_date
+                  ? format(new Date(befaring.befaring_date), 'PPP', { locale: nb })
+                  : 'Dato ikke satt'}
               </span>
               <span className="flex items-center">
                 <Building className="h-4 w-4 mr-1" />
@@ -463,7 +519,9 @@ export default function BefaringDetail({
                 >
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{plantegning.title}</CardTitle>
+                      <CardTitle className="text-lg">
+                        {plantegning.title || 'Uten tittel'}
+                      </CardTitle>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -535,82 +593,89 @@ export default function BefaringDetail({
             </Card>
           ) : (
             <div className="space-y-4">
-              {allOppgaver.map((oppgave) => (
-                <Card key={oppgave.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                  <CardContent 
-                    className="p-4" 
-                    onClick={(e) => {
-                      // Don't open edit dialog if image viewer is open
-                      if (imageViewerOpen) return;
-                      handleOppgaveClick(oppgave);
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <Badge 
-                            className="bg-gray-100 border-gray-500 text-gray-700"
-                          >
-                            #{oppgave.oppgave_nummer}
-                          </Badge>
-                          <Badge 
-                            style={{ 
-                              backgroundColor: oppgave.fag_color + '20', 
-                              borderColor: oppgave.fag_color,
-                              color: oppgave.fag_color
-                            }}
-                          >
-                            {oppgave.fag}
-                          </Badge>
-                          <div className="flex items-center">
-                            {getStatusIcon(oppgave.status)}
+              {allOppgaver.map((oppgave) => {
+                const oppgaveNummer = oppgave.oppgave_nummer;
+                const fagColor = oppgave.fag_color || '#94a3b8';
+                const fagLabel = oppgave.fag || 'Ukjent fag';
+                const oppgaveTitle = oppgave.title ?? `${fagLabel} oppgave`;
+
+                return (
+                  <Card key={oppgave.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                    <CardContent 
+                      className="p-4" 
+                      onClick={(e) => {
+                        // Don't open edit dialog if image viewer is open
+                        if (imageViewerOpen) return;
+                        handleOppgaveClick(oppgave);
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Badge 
+                              className="bg-gray-100 border-gray-500 text-gray-700"
+                            >
+                              #{oppgaveNummer}
+                            </Badge>
+                            <Badge 
+                              style={{ 
+                                backgroundColor: `${fagColor}20`, 
+                                borderColor: fagColor,
+                                color: fagColor
+                              }}
+                            >
+                              {fagLabel}
+                            </Badge>
+                            <div className="flex items-center">
+                              {getStatusIcon(oppgave.status)}
+                            </div>
+                            {getPriorityIcon(oppgave.prioritet)}
                           </div>
-                          {getPriorityIcon(oppgave.prioritet)}
+                          
+                          <h3 className="font-semibold mb-1">
+                            {oppgaveTitle}
+                          </h3>
+                          
+                          {oppgave.description && (
+                            <p className="text-sm text-muted-foreground mb-2 break-words overflow-wrap-anywhere">
+                              {oppgave.description}
+                            </p>
+                          )}
+                          
+                          <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                            {oppgave.frist && (
+                              <span>
+                                Frist: {new Date(oppgave.frist).toLocaleDateString('no-NO')}
+                              </span>
+                            )}
+                            {oppgave.underleverandor_navn && (
+                              <span>UL: {oppgave.underleverandor_navn}</span>
+                            )}
+                            <OppgaveImageThumbnails 
+                              oppgaveId={oppgave.id} 
+                              maxThumbnails={3}
+                              showUploadButton={false}
+                              onViewerStateChange={setImageViewerOpen}
+                            />
+                          </div>
                         </div>
                         
-                        <h3 className="font-semibold mb-1">
-                          {oppgave.title || `${oppgave.fag} oppgave`}
-                        </h3>
-                        
-                        {oppgave.description && (
-                          <p className="text-sm text-muted-foreground mb-2 break-words overflow-wrap-anywhere">
-                            {oppgave.description}
-                          </p>
-                        )}
-                        
-                        <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                          {oppgave.frist && (
-                            <span>
-                              Frist: {new Date(oppgave.frist).toLocaleDateString('no-NO')}
-                            </span>
-                          )}
-                          {oppgave.underleverandor_navn && (
-                            <span>UL: {oppgave.underleverandor_navn}</span>
-                          )}
-                          <OppgaveImageThumbnails 
-                            oppgaveId={oppgave.id} 
-                            maxThumbnails={3}
-                            showUploadButton={false}
-                            onViewerStateChange={setImageViewerOpen}
-                          />
-                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="flex-shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOppgaveClick(oppgave);
+                          }}
+                        >
+                          Rediger
+                        </Button>
                       </div>
-                      
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="flex-shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOppgaveClick(oppgave);
-                        }}
-                      >
-                        Rediger
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -687,7 +752,7 @@ export default function BefaringDetail({
           <DialogHeader>
             <DialogTitle>Slett plantegning</DialogTitle>
             <DialogDescription>
-              Er du sikker på at du vil slette "{plantegningToDelete?.title}"? 
+              Er du sikker på at du vil slette "{plantegningToDelete?.title ?? 'Plantegning'}"? 
               Denne handlingen kan ikke angres og vil også slette alle tilknyttede oppgaver.
             </DialogDescription>
           </DialogHeader>

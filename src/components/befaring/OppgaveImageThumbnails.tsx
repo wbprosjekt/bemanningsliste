@@ -69,7 +69,15 @@ export default function OppgaveImageThumbnails({
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setImages(data || []);
+      const sanitizedImages: OppgaveImage[] = (data || []).map((img: any) => ({
+        id: img.id,
+        image_url: img.image_url ?? '',
+        image_type: img.image_type === 'før' || img.image_type === 'etter' ? img.image_type : 'standard',
+        uploaded_by: img.uploaded_by ?? null,
+        uploaded_by_email: img.uploaded_by_email ?? null,
+        created_at: img.created_at ?? new Date().toISOString(),
+      }));
+      setImages(sanitizedImages);
     } catch (error) {
       console.error('Error loading images:', error);
       setImages([]); // Set empty array on error

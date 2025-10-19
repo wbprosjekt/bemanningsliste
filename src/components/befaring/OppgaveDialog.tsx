@@ -185,7 +185,7 @@ export default function OppgaveDialog({
         const { error } = await supabase
           .from('oppgaver')
           .insert({
-            plantegning_id,
+            plantegning_id: plantegningId,
             oppgave_nummer: nextNumber,
             fag: formData.fag,
             fag_color: formData.fag_color,
@@ -371,4 +371,3 @@ export default function OppgaveDialog({
     </Dialog>
   );
 }
-

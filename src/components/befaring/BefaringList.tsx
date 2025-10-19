@@ -32,17 +32,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { formatDate } from '@/lib/utils';
 
 interface Befaring {
   id: string;
-  title: string;
+  title: string | null;
   description: string | null;
   adresse: string | null;
-  befaring_date: string;
-  befaring_type: string;
-  status: string;
-  created_at: string;
+  befaring_date: string | null;
+  befaring_type: string | null;
+  status: string | null;
+  created_at: string | null;
   tripletex_project_id: number | null;
   _oppgaver_count?: {
     total: number;
@@ -53,8 +52,8 @@ interface Befaring {
   };
   _plantegninger_count?: number;
   _project_info?: {
-    project_number: number;
-    project_name: string;
+    project_number: number | null;
+    project_name: string | null;
   } | null;
 }
 
@@ -83,8 +82,10 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
     const suggestions = new Set<string>();
     
     befaringer.forEach(befaring => {
+      const loweredQuery = searchQuery.toLowerCase();
+
       // Tittel
-      if (befaring.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+      if (befaring.title && befaring.title.toLowerCase().includes(loweredQuery)) {
         suggestions.add(befaring.title);
       }
       
@@ -104,7 +105,7 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
       }
       
       // Befaringstype
-      if (befaring.befaring_type.toLowerCase().includes(searchQuery.toLowerCase())) {
+      if (befaring.befaring_type && befaring.befaring_type.toLowerCase().includes(loweredQuery)) {
         suggestions.add(befaring.befaring_type);
       }
       
@@ -239,13 +240,13 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
       if (plantegninger && plantegninger.length > 0) {
         const filePaths = plantegninger
           .map(p => p.image_url)
-          .filter(url => url)
+          .filter((url): url is string => Boolean(url))
           .map(url => {
             // Extract file path from URL
             const parts = url.split('/storage/v1/object/');
             return parts[1] ? parts[1].split('?')[0] : null;
           })
-          .filter(Boolean);
+          .filter((path): path is string => Boolean(path));
 
         if (filePaths.length > 0) {
           const { error: storageError } = await supabase.storage
@@ -297,7 +298,7 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
 
       toast({
         title: 'Befaring slettet',
-        description: `"${befaringToDelete.title}" og all tilhørende data ble slettet.`,
+        description: `"${befaringToDelete.title ?? 'Befaring'}" og all tilhørende data ble slettet.`,
       });
 
       // Reload the list
@@ -324,12 +325,12 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
     
     const query = searchQuery.toLowerCase();
     return (
-      b.title.toLowerCase().includes(query) ||
+      (b.title && b.title.toLowerCase().includes(query)) ||
       b._project_info?.project_number?.toString().includes(searchQuery) ||
       b._project_info?.project_name?.toLowerCase().includes(query) ||
       b.adresse?.toLowerCase().includes(query) ||
       b.description?.toLowerCase().includes(query) ||
-      b.befaring_type.toLowerCase().includes(query)
+      (b.befaring_type && b.befaring_type.toLowerCase().includes(query))
     );
   });
 
@@ -498,158 +499,190 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
         </Card>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredBefaringer.map((befaring) => (
-            <Card
-              key={befaring.id}
-              className="hover:shadow-xl transition-all duration-200 hover:scale-105 cursor-pointer"
-              onClick={() => router.push(`/befaring/${befaring.id}`)}
-            >
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <FileText className="h-6 w-6 text-blue-600" />
-                  <Badge variant="outline">
-                    {befaring._plantegninger_count} plantegn.
-                  </Badge>
-                </div>
+          {filteredBefaringer.map((befaring) => {
+            const safeTitle = befaring.title ?? 'Uten tittel';
+            const plantegningCount = befaring._plantegninger_count ?? 0;
+            const projectNumber = befaring._project_info?.project_number;
+            const projectName = befaring._project_info?.project_name ?? '';
+            const hasProjectInfo = (projectNumber !== null && projectNumber !== undefined) || projectName.length > 0;
+            const dateText = befaring.befaring_date
+              ? new Date(befaring.befaring_date).toLocaleDateString('no-NO', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })
+              : 'Dato ikke satt';
+            const adresse = befaring.adresse ?? '';
+            const totalOppgaver = befaring._oppgaver_count?.total ?? 0;
+            const apenOppgaver = befaring._oppgaver_count?.apen ?? 0;
+            const underArbeidOppgaver = befaring._oppgaver_count?.under_arbeid ?? 0;
+            const lukketOppgaver = befaring._oppgaver_count?.lukket ?? 0;
+            const kritiskFrister = befaring._oppgaver_count?.kritisk_frist ?? 0;
+            const status = befaring.status ?? '';
 
-                <div className="space-y-2">
-                  {/* Prosjektnummer og navn */}
-                  {befaring._project_info && (
-                    <div className="space-y-1">
+            return (
+              <Card
+                key={befaring.id}
+                className="hover:shadow-xl transition-all duration-200 hover:scale-105 cursor-pointer"
+                onClick={() => router.push(`/befaring/${befaring.id}`)}
+              >
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <FileText className="h-6 w-6 text-blue-600" />
+                    <Badge variant="outline">
+                      {plantegningCount} plantegn.
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-2">
+                    {/* Prosjektnummer og navn */}
+                    {hasProjectInfo && (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          {projectNumber !== null && projectNumber !== undefined && (
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-300">
+                              #{projectNumber}
+                            </Badge>
+                          )}
+                          {projectName && (
+                            <span className="text-sm font-medium text-gray-700 truncate">
+                              {projectName}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Befaring tittel */}
+                    <CardTitle className="text-lg font-semibold line-clamp-2 text-gray-900">
+                      {safeTitle}
+                    </CardTitle>
+                  </div>
+
+                  <div className="space-y-1 text-sm text-gray-500">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      {dateText}
+                    </div>
+
+                    {adresse && (
                       <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-300">
-                          #{befaring._project_info.project_number}
-                        </Badge>
-                        <span className="text-sm font-medium text-gray-700 truncate">
-                          {befaring._project_info.project_name}
+                        <MapPin className="h-4 w-4" />
+                        <span className="line-clamp-1">{adresse}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                  {/* Oppgavestatus */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">
+                        {totalOppgaver} oppgaver
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                        <span className="text-gray-600">
+                          {apenOppgaver} åpne
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        <span className="text-gray-600">
+                          {underArbeidOppgaver} under arbeid
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        <span className="text-gray-600">
+                          {lukketOppgaver} lukket
                         </span>
                       </div>
                     </div>
-                  )}
-                  
-                  {/* Befaring tittel */}
-                  <CardTitle className="text-lg font-semibold line-clamp-2 text-gray-900">
-                    {befaring.title}
-                  </CardTitle>
-                </div>
-
-                <div className="space-y-1 text-sm text-gray-500">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    {new Date(befaring.befaring_date).toLocaleDateString('no-NO', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    })}
                   </div>
 
-                  {befaring.adresse && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      <span className="line-clamp-1">{befaring.adresse}</span>
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-3">
-                {/* Oppgavestatus */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">
-                      {befaring._oppgaver_count?.total || 0} oppgaver
-                    </span>
-                  </div>
-
-                  <div className="space-y-1 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                      <span className="text-gray-600">
-                        {befaring._oppgaver_count?.apen || 0} åpne
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                      <span className="text-gray-600">
-                        {befaring._oppgaver_count?.under_arbeid || 0} under arbeid
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                      <span className="text-gray-600">
-                        {befaring._oppgaver_count?.lukket || 0} lukket
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Kritiske frister */}
-                {befaring._oppgaver_count && befaring._oppgaver_count.kritisk_frist > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                      <div className="text-xs text-amber-900">
-                        <span className="font-semibold">
-                          {befaring._oppgaver_count.kritisk_frist} frist
-                          {befaring._oppgaver_count.kritisk_frist > 1 ? 'er' : ''}
-                        </span>
-                        {' '}innen 7 dager
+                  {/* Kritiske frister */}
+                  {kritiskFrister > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-xs text-amber-900">
+                          <span className="font-semibold">
+                            {kritiskFrister} frist
+                            {kritiskFrister > 1 ? 'er' : ''}
+                          </span>
+                          {' '}innen 7 dager
+                        </div>
                       </div>
                     </div>
+                  )}
+
+                  {/* Status badge */}
+                  <div className="pt-2 space-y-1">
+                    {status === 'aktiv' && (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                        Aktiv
+                      </Badge>
+                    )}
+                    {status === 'arkivert' && (
+                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-300">
+                        <Archive className="mr-1 h-3 w-3" />
+                        Arkivert
+                      </Badge>
+                    )}
+                    {status === 'avsluttet' && (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
+                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                        Avsluttet
+                      </Badge>
+                    )}
+                    {status && !['aktiv', 'arkivert', 'avsluttet'].includes(status) && (
+                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-300">
+                        Ukjent status
+                      </Badge>
+                    )}
+                    {!status && (
+                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-300">
+                        Status ikke satt
+                      </Badge>
+                    )}
                   </div>
-                )}
 
-                {/* Status badge */}
-                <div className="pt-2">
-                  {befaring.status === 'aktiv' && (
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Aktiv
-                    </Badge>
-                  )}
-                  {befaring.status === 'arkivert' && (
-                    <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-300">
-                      <Archive className="mr-1 h-3 w-3" />
-                      Arkivert
-                    </Badge>
-                  )}
-                  {befaring.status === 'avsluttet' && (
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Avsluttet
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Action buttons */}
-                <div className="mt-2 space-y-2">
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      router.push(`/befaring/${befaring.id}`);
-                    }}
-                  >
-                    Åpne befaring →
-                  </Button>
-                  <Button
-                    className="w-full"
-                    variant="destructive"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setBefaringToDelete(befaring);
-                      setShowDeleteDialog(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Slett befaring
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  {/* Action buttons */}
+                  <div className="mt-2 space-y-2">
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/befaring/${befaring.id}`);
+                      }}
+                    >
+                      Åpne befaring →
+                    </Button>
+                    <Button
+                      className="w-full"
+                      variant="destructive"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setBefaringToDelete(befaring);
+                        setShowDeleteDialog(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Slett befaring
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         // List view
@@ -667,34 +700,37 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
                       <FileText className="h-5 w-5 text-blue-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          {befaring._project_info && (
+                          {befaring._project_info?.project_number !== null &&
+                           befaring._project_info?.project_number !== undefined && (
                             <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-300">
                               #{befaring._project_info.project_number}
                             </Badge>
                           )}
                           <h3 className="text-lg font-semibold text-gray-900 truncate">
-                            {befaring.title}
+                            {befaring.title ?? 'Uten tittel'}
                           </h3>
                         </div>
-                        {befaring._project_info && (
+                        {befaring._project_info?.project_name && (
                           <p className="text-sm text-gray-600 truncate">
                             {befaring._project_info.project_name}
                           </p>
                         )}
                       </div>
                       <Badge variant="outline" className="flex-shrink-0">
-                        {befaring._plantegninger_count} plantegn.
+                        {befaring._plantegninger_count ?? 0} plantegn.
                       </Badge>
                     </div>
                     
                     <div className="flex items-center gap-6 text-sm text-gray-600 mb-3">
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
-                        {new Date(befaring.befaring_date).toLocaleDateString('no-NO', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })}
+                        {befaring.befaring_date
+                          ? new Date(befaring.befaring_date).toLocaleDateString('no-NO', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric',
+                            })
+                          : 'Dato ikke satt'}
                       </div>
                       
                       {befaring.adresse && (
@@ -763,6 +799,16 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
                         Avsluttet
                       </Badge>
                     )}
+                    {befaring.status && !['aktiv', 'arkivert', 'avsluttet'].includes(befaring.status) && (
+                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-300">
+                        Ukjent status
+                      </Badge>
+                    )}
+                    {!befaring.status && (
+                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-300">
+                        Status ikke satt
+                      </Badge>
+                    )}
                     
                     {/* Action buttons */}
                     <div className="flex items-center gap-2">
@@ -802,7 +848,7 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Er du sikker?</AlertDialogTitle>
             <AlertDialogDescription>
-              Dette vil permanent slette befaringen "{befaringToDelete?.title}" og all tilhørende data:
+              Dette vil permanent slette befaringen "{befaringToDelete?.title ?? 'Befaring'}" og all tilhørende data:
               <br />• Alle plantegninger og filer
               <br />• Alle oppgaver og kommentarer
               <br />• Alle filer fra storage
@@ -826,4 +872,3 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
     </div>
   );
 }
-

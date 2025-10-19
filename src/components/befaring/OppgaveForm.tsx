@@ -156,7 +156,14 @@ export default function OppgaveForm({
           .order('navn');
 
         if (error) throw error;
-        setUnderleverandorer(data || []);
+        setUnderleverandorer(
+          (data || []).map((ul) => ({
+            id: ul.id,
+            navn: ul.navn ?? 'Ukjent',
+            epost: ul.epost ?? '',
+            fag: [],
+          }))
+        );
       } catch (error) {
         console.error('Error loading underleverandorer:', error);
       }
@@ -234,10 +241,21 @@ export default function OppgaveForm({
 
         const nextNummer = maxNumData && maxNumData.length > 0 ? maxNumData[0].oppgave_nummer + 1 : 1;
 
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!profile) throw new Error('Profile not found');
+
         const { error } = await supabase
           .from('oppgaver')
           .insert({
-            plantegning_id,
+            plantegning_id: plantegningId,
             oppgave_nummer: nextNummer,
             fag: values.fag,
             fag_color: values.fag_color,
@@ -249,6 +267,7 @@ export default function OppgaveForm({
             prioritet: values.prioritet,
             frist: values.frist ? values.frist.toISOString().split('T')[0] : null,
             underleverandor_id: values.underleverandor_id || null,
+            created_by: profile.id,
           });
 
         if (error) throw error;
@@ -478,9 +497,6 @@ export default function OppgaveForm({
                         mode="single"
                         selected={field.value}
                         onSelect={field.onChange}
-                        disabled={(date) =>
-                          date < new Date() || date < new Date('1900-01-01')
-                        }
                         initialFocus
                       />
                     </PopoverContent>

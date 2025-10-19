@@ -118,18 +118,29 @@ export default function ProjectDashboard() {
 
       if (error) throw error;
       
-      console.log('✅ ProjectDashboard: Loaded projects:', data?.length || 0);
-      setProjects(data || []);
-      setFilteredProjects(data || []);
+      const sanitizedProjects: Project[] = (data || []).map((project: any) => ({
+        id: project.id,
+        tripletex_project_id: project.tripletex_project_id ?? 0,
+        project_name: project.project_name ?? 'Uten navn',
+        project_number: project.project_number ?? 0,
+        customer_name: project.customer_name,
+        is_active: project.is_active ?? false,
+        created_at: project.created_at ?? new Date().toISOString(),
+        updated_at: project.updated_at ?? new Date().toISOString(),
+      }));
+      
+      console.log('✅ ProjectDashboard: Loaded projects:', sanitizedProjects.length);
+      setProjects(sanitizedProjects);
+      setFilteredProjects(sanitizedProjects);
       
       // Calculate stats
       setStats({
-        total_projects: data?.length || 0,
-        active_projects: data?.length || 0,
-        recent_projects: data?.filter(p => {
+        total_projects: sanitizedProjects.length,
+        active_projects: sanitizedProjects.filter(p => p.is_active).length,
+        recent_projects: sanitizedProjects.filter(p => {
           const daysSinceUpdate = (Date.now() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60 * 24);
           return daysSinceUpdate <= 7;
-        }).length || 0
+        }).length
       });
     } catch (error) {
       console.error('❌ ProjectDashboard: Error loading projects:', error);

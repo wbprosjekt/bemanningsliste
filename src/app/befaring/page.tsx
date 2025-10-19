@@ -15,11 +15,11 @@ interface Profile {
   user_id: string;
   role: string | null;
   org_id: string;
-  org: {
+  org?: {
     id: string;
-    subscription_plan?: string;
-    modules?: string[];
-  };
+    subscription_plan?: string | null;
+    modules?: string[] | null;
+  } | null;
 }
 
 /**
@@ -204,4 +204,3 @@ export default function BefaringPage() {
     </>
   );
 }
-

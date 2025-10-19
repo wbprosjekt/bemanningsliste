@@ -54,19 +54,19 @@ function Calendar({
     days.push(day);
   }
   
-  const isSelected = (day: number) => {
+  const isSelected = (day?: number | null) => {
     if (!selected || !day) return false;
     const date = new Date(year, month, day);
     return date.toDateString() === selected.toDateString();
   };
   
-  const isToday = (day: number) => {
+  const isToday = (day?: number | null) => {
     if (!day) return false;
     const date = new Date(year, month, day);
     return date.toDateString() === today.toDateString();
   };
   
-  const handleDayClick = (day: number) => {
+  const handleDayClick = (day?: number | null) => {
     if (!day) return;
     const date = new Date(year, month, day);
     onSelect?.(date);

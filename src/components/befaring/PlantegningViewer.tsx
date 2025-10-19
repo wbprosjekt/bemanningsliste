@@ -94,6 +94,29 @@ export default function PlantegningViewer({
   const isRenderingRef = useRef<boolean>(false);
 
   const currentPlantegning = plantegninger[currentIndex];
+  const currentTitle = currentPlantegning?.title ?? 'Uten tittel';
+  const currentImageUrl = currentPlantegning?.image_url ?? '';
+  const currentOppgaver = currentPlantegning?.oppgaver ?? [];
+  const selectedStatusLabel =
+    selectedOppgave?.status === 'apen'
+      ? 'Åpen'
+      : selectedOppgave?.status === 'under_arbeid'
+        ? 'Under arbeid'
+        : selectedOppgave?.status === 'lukket'
+          ? 'Lukket'
+          : 'Ukjent status';
+  const selectedPriorityLabel =
+    selectedOppgave?.prioritet === 'kritisk'
+      ? 'Kritisk'
+      : selectedOppgave?.prioritet === 'høy'
+        ? 'Høy'
+        : selectedOppgave?.prioritet === 'medium'
+          ? 'Medium'
+          : selectedOppgave?.prioritet === 'lav'
+            ? 'Lav'
+            : 'Ukjent';
+  const selectedOppgaveNummer = selectedOppgave ? selectedOppgave.oppgave_nummer : '-';
+  const selectedOppgaveFag = selectedOppgave?.fag ?? 'Ukjent fag';
 
   // Detect mobile device
   useEffect(() => {
@@ -288,19 +311,25 @@ export default function PlantegningViewer({
 
   // Load PDF and render to canvas
   useEffect(() => {
-    if (currentPlantegning && currentPlantegning.file_type === 'pdf') {
+    if (currentPlantegning?.file_type === 'pdf' && currentImageUrl) {
       loadAndRenderPDF();
-    } else if (currentPlantegning && currentPlantegning.file_type === 'image') {
+    } else if (currentPlantegning?.file_type === 'image') {
       setIsPdf(false);
       setImageLoaded(false);
       setImageError(false);
     }
-  }, [currentPlantegning]);
+  }, [currentPlantegning, currentImageUrl]);
 
   const loadAndRenderPDF = async () => {
     // Prevent multiple simultaneous renders
     if (isRenderingRef.current) {
       console.log('Render already in progress, skipping...');
+      return;
+    }
+
+    if (!currentPlantegning || !currentImageUrl) {
+      setImageError(true);
+      isRenderingRef.current = false;
       return;
     }
     
@@ -330,7 +359,7 @@ export default function PlantegningViewer({
       }
       
       // Load PDF
-      const loadingTask = pdfjsLib.getDocument(currentPlantegning.image_url);
+      const loadingTask = pdfjsLib.getDocument(currentImageUrl);
       const pdf = await loadingTask.promise;
       
       // Get first page
@@ -546,7 +575,7 @@ export default function PlantegningViewer({
     fitToScreen(); // This will set scale to optimal fit-to-screen (100% in our new display)
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
     switch (status) {
       case 'apen': return 'bg-amber-100 border-amber-500 text-amber-700';
       case 'under_arbeid': return 'bg-blue-100 border-blue-500 text-blue-700';
@@ -555,7 +584,7 @@ export default function PlantegningViewer({
     }
   };
 
-  const getPriorityColor = (prioritet: string) => {
+  const getPriorityColor = (prioritet?: string | null) => {
     switch (prioritet) {
       case 'kritisk': return 'border-red-500 bg-red-50';
       case 'høy': return 'border-orange-500 bg-orange-50';
@@ -565,8 +594,8 @@ export default function PlantegningViewer({
     }
   };
 
-  const getFagColor = (color: string) => {
-    return color || '#6366f1';
+  const getFagColor = (color?: string | null) => {
+    return color && color.trim().length > 0 ? color : '#6366f1';
   };
 
 
@@ -609,7 +638,7 @@ export default function PlantegningViewer({
                 ) : (
                   <div className="h-5 w-5 rounded bg-gray-300"></div>
                 )}
-                <h2 className="text-xl font-semibold">{currentPlantegning.title}</h2>
+                <h2 className="text-xl font-semibold">{currentTitle}</h2>
               </div>
               <Badge variant="outline">
                 {currentIndex + 1} av {plantegninger.length}
@@ -748,8 +777,8 @@ export default function PlantegningViewer({
                   {!isPdf && (
                     <img
                       ref={imageRef}
-                      src={currentPlantegning.image_url}
-                      alt={currentPlantegning.title}
+                      src={currentImageUrl}
+                      alt={currentTitle}
                       className={cn(
                         "block transition-opacity duration-300",
                         imageLoaded ? "opacity-100" : "opacity-0"
@@ -771,7 +800,7 @@ export default function PlantegningViewer({
                     <img
                       ref={imageRef}
                       src={pdfCanvas}
-                      alt={currentPlantegning.title}
+                      alt={currentTitle}
                       className={cn(
                         "block transition-opacity duration-300",
                         imageLoaded ? "opacity-100" : "opacity-0"
@@ -788,9 +817,10 @@ export default function PlantegningViewer({
                 </div>
                 
                 {/* Oppgave markers - OUTSIDE viewport wrapper, screen-space positioning */}
-                {imageLoaded && currentPlantegning.oppgaver.map((oppgave) => {
-                  const u = oppgave.x_position / 100; // normalized
-                  const v = oppgave.y_position / 100; // normalized
+                {imageLoaded && currentOppgaver.map((oppgave) => {
+                  const oppgaveNummer = oppgave.oppgave_nummer;
+                  const u = (oppgave.x_position / 100); // normalized
+                  const v = (oppgave.y_position / 100); // normalized
                   // World coordinates
                   const xWorld = u * imgWH.W;
                   const yWorld = v * imgWH.H;
@@ -823,9 +853,9 @@ export default function PlantegningViewer({
                         e.preventDefault();
                         setSelectedOppgave(oppgave);
                       }}
-                      title={`#${oppgave.oppgave_nummer}`}
+                      title={`#${oppgaveNummer}`}
                     >
-                      {oppgave.oppgave_nummer}
+                      {oppgaveNummer}
                     </div>
                   );
                 })}
@@ -882,23 +912,20 @@ export default function PlantegningViewer({
                   <div className="flex-1 pr-4">
                     <div className="flex items-center space-x-2 mb-2">
                       <Badge 
-                        className={cn(getStatusColor(selectedOppgave.status))}
+                        className={cn(getStatusColor(selectedOppgave?.status))}
                       >
-                        {selectedOppgave.status === 'apen' ? 'Åpen' : 
-                         selectedOppgave.status === 'under_arbeid' ? 'Under arbeid' : 'Lukket'}
+                        {selectedStatusLabel}
                       </Badge>
                       <Badge 
                         variant="outline"
-                        className={getPriorityColor(selectedOppgave.prioritet)}
+                        className={getPriorityColor(selectedOppgave?.prioritet)}
                       >
-                        {selectedOppgave.prioritet === 'kritisk' ? 'Kritisk' :
-                         selectedOppgave.prioritet === 'høy' ? 'Høy' :
-                         selectedOppgave.prioritet === 'medium' ? 'Medium' : 'Lav'}
+                        {selectedPriorityLabel}
                       </Badge>
                     </div>
                     
                     <h3 className="font-semibold text-lg">
-                      Oppgave #{selectedOppgave.oppgave_nummer} - {selectedOppgave.fag}
+                      Oppgave #{selectedOppgaveNummer} - {selectedOppgaveFag}
                     </h3>
                     
                     {selectedOppgave.title && (
@@ -960,7 +987,7 @@ export default function PlantegningViewer({
           <AlertDialogHeader>
             <AlertDialogTitle>Er du sikker?</AlertDialogTitle>
             <AlertDialogDescription>
-              Dette vil permanent slette oppgave #{selectedOppgave?.oppgave_nummer}.
+              Dette vil permanent slette oppgave #{selectedOppgaveNummer}.
               Denne handlingen kan ikke angres.
             </AlertDialogDescription>
           </AlertDialogHeader>
