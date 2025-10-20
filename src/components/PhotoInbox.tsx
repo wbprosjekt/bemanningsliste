@@ -64,7 +64,7 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
       // If projectId is provided, filter by project
       if (projectId) {
         if (projectId === 'untagged') {
-          // Filter for photos without project
+          // Filter for photos without project - use .is() for null check
           query = query.is('prosjekt_id', null);
         } else {
           // Filter for specific project
@@ -345,23 +345,25 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
                       </div>
                     )}
                     
-                    {/* Overlay on hover (only if not selecting) */}
+                    {/* Action buttons - always visible for easy tagging */}
                     {!isSelecting && (
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <div className="absolute top-2 right-2 flex gap-1 z-10">
                         <Button
                           size="sm"
                           variant="secondary"
+                          className="bg-white/90 hover:bg-white shadow-md"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleTagPhoto(photo);
                           }}
                         >
                           <Tag className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                          Tag
+                          <span className="hidden sm:inline">Tag</span>
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
+                          className="bg-red-500/90 hover:bg-red-600 shadow-md"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeletePhoto(photo);
