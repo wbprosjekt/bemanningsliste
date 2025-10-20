@@ -27,6 +27,7 @@ interface TagPhotoDialogProps {
     comment: string | null;
   };
   orgId: string;
+  photoIds?: string[]; // For bulk tagging
   onSuccess?: () => void;
 }
 
@@ -50,6 +51,7 @@ export default function TagPhotoDialog({
   onOpenChange,
   photo,
   orgId,
+  photoIds = [],
   onSuccess
 }: TagPhotoDialogProps) {
   const [tagType, setTagType] = useState<'project' | 'befaring' | 'oppgave' | 'general'>('project');
@@ -61,6 +63,8 @@ export default function TagPhotoDialog({
   const [loadingBefaringer, setLoadingBefaringer] = useState(false);
   const [loadingOppgaver, setLoadingOppgaver] = useState(false);
   const { toast } = useToast();
+  
+  const isBulkTagging = photoIds.length > 0;
 
   // Load befaringer when dialog opens
   useEffect(() => {
@@ -152,16 +156,21 @@ export default function TagPhotoDialog({
         updates.is_tagged = true;
       }
 
+      // Tag single photo or bulk
+      const idsToUpdate = isBulkTagging ? photoIds : [photo.id];
+      
       const { error } = await supabase
         .from('oppgave_bilder')
         .update(updates)
-        .eq('id', photo.id);
+        .in('id', idsToUpdate);
 
       if (error) throw error;
 
       toast({
-        title: 'Bilde tagget',
-        description: 'Bildet er nå knyttet til riktig sted',
+        title: isBulkTagging ? 'Bilder tagget' : 'Bilde tagget',
+        description: isBulkTagging 
+          ? `${photoIds.length} bilder er nå knyttet til riktig sted`
+          : 'Bildet er nå knyttet til riktig sted',
       });
 
       onSuccess?.();
@@ -176,7 +185,7 @@ export default function TagPhotoDialog({
       console.error('Error tagging photo:', error);
       toast({
         title: 'Feil',
-        description: 'Kunne ikke tagge bilde',
+        description: 'Kunne ikke tagge bilde(r)',
         variant: 'destructive'
       });
     } finally {
@@ -188,20 +197,35 @@ export default function TagPhotoDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tagge bilde</DialogTitle>
+          <DialogTitle>
+            {isBulkTagging ? `Tagge ${photoIds.length} bilder` : 'Tagge bilde'}
+          </DialogTitle>
           <DialogDescription>
-            Velg hvor dette bildet tilhører
+            {isBulkTagging 
+              ? 'Velg hvor disse bildene tilhører'
+              : 'Velg hvor dette bildet tilhører'
+            }
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex justify-center">
-            <img
-              src={photo.image_url}
-              alt="Photo to tag"
-              className="max-h-64 rounded-lg"
-            />
-          </div>
+          {!isBulkTagging && (
+            <div className="flex justify-center">
+              <img
+                src={photo.image_url}
+                alt="Photo to tag"
+                className="max-h-64 rounded-lg"
+              />
+            </div>
+          )}
+          
+          {isBulkTagging && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm font-medium text-blue-900">
+                Du tagger {photoIds.length} bilder samtidig
+              </p>
+            </div>
+          )}
 
           <div>
             <Label>Hvor tilhører bildet?</Label>
@@ -301,7 +325,7 @@ export default function TagPhotoDialog({
                 Lagrer...
               </>
             ) : (
-              'Tagge bilde'
+              isBulkTagging ? `Tagge ${photoIds.length} bilder` : 'Tagge bilde'
             )}
           </Button>
         </DialogFooter>

@@ -34,6 +34,8 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [showTagDialog, setShowTagDialog] = useState(false);
   const [photoToTag, setPhotoToTag] = useState<Photo | null>(null);
+  const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+  const [isSelecting, setIsSelecting] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -98,10 +100,75 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
 
   const handleTagSuccess = () => {
     loadPhotos();
+    setSelectedPhotos([]);
+    setIsSelecting(false);
     toast({
       title: 'Suksess',
       description: 'Bildet er tagget'
     });
+  };
+
+  const togglePhotoSelection = (photoId: string) => {
+    setSelectedPhotos(prev => 
+      prev.includes(photoId)
+        ? prev.filter(id => id !== photoId)
+        : [...prev, photoId]
+    );
+  };
+
+  const toggleSelectMode = () => {
+    setIsSelecting(!isSelecting);
+    setSelectedPhotos([]);
+  };
+
+  const selectAllPhotos = () => {
+    setSelectedPhotos(photos.map(p => p.id));
+  };
+
+  const deselectAllPhotos = () => {
+    setSelectedPhotos([]);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedPhotos.length === 0) return;
+    
+    if (!confirm(`Er du sikker på at du vil slette ${selectedPhotos.length} bilder?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('oppgave_bilder')
+        .delete()
+        .in('id', selectedPhotos);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Suksess',
+        description: `${selectedPhotos.length} bilder slettet`
+      });
+
+      loadPhotos();
+      setSelectedPhotos([]);
+      setIsSelecting(false);
+    } catch (error: any) {
+      console.error('Error deleting photos:', error);
+      toast({
+        title: 'Feil',
+        description: 'Kunne ikke slette bilder',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleBulkTag = () => {
+    if (selectedPhotos.length === 0) return;
+    
+    // Open tag dialog for first photo with bulk photo IDs
+    const firstPhoto = photos.find(p => selectedPhotos.includes(p.id));
+    if (firstPhoto) {
+      setPhotoToTag(firstPhoto);
+      setShowTagDialog(true);
+    }
   };
 
   const handleDeletePhoto = async (photo: Photo) => {
@@ -165,12 +232,60 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
                 {projectId ? 'Utaggede bilder for dette prosjektet' : 'Alle utaggede bilder'}
               </CardDescription>
             </div>
-            <Badge variant="outline">
-              {photos.length} bilder
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">
+                {photos.length} bilder
+              </Badge>
+              {!isSelecting ? (
+                <Button variant="outline" size="sm" onClick={toggleSelectMode}>
+                  Velg flere
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={toggleSelectMode}>
+                  Avbryt
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          {/* Bulk Actions Bar */}
+          {isSelecting && selectedPhotos.length > 0 && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedPhotos.length === photos.length}
+                    onChange={(e) => e.target.checked ? selectAllPhotos() : deselectAllPhotos()}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm font-medium">
+                    {selectedPhotos.length} bilder valgt
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleBulkTag}
+                  >
+                    <Tag className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Tag alle
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={handleBulkDelete}
+                  >
+                    <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Slett alle
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {photos.length === 0 ? (
             <div className="text-center py-8">
               <ImageIcon className="h-12 w-12 mx-auto mb-4 text-gray-400" />
@@ -183,8 +298,12 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
                   key={photo.id}
                   className="relative aspect-square group cursor-pointer"
                   onClick={() => {
-                    setSelectedPhoto(photo);
-                    setShowImageViewer(true);
+                    if (isSelecting) {
+                      togglePhotoSelection(photo.id);
+                    } else {
+                      setSelectedPhoto(photo);
+                      setShowImageViewer(true);
+                    }
                   }}
                 >
                   <div className="relative w-full h-full rounded-lg overflow-hidden bg-gray-100">
@@ -194,30 +313,47 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
                       className="w-full h-full object-cover"
                     />
                     
-                    {/* Overlay on hover */}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTagPhoto(photo);
-                        }}
-                      >
-                        <Tag className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                        Tag
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeletePhoto(photo);
-                        }}
-                      >
-                        <X className="h-3 w-3 sm:h-4 sm:w-4" />
-                      </Button>
-                    </div>
+                    {/* Selection checkbox */}
+                    {isSelecting && (
+                      <div className="absolute top-2 left-2 z-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedPhotos.includes(photo.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            togglePhotoSelection(photo.id);
+                          }}
+                          className="h-5 w-5 rounded border-gray-300"
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Overlay on hover (only if not selecting) */}
+                    {!isSelecting && (
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTagPhoto(photo);
+                          }}
+                        >
+                          <Tag className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                          Tag
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePhoto(photo);
+                          }}
+                        >
+                          <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                        </Button>
+                      </div>
+                    )}
 
                     {/* Project badge */}
                     {photo.project_name && (
@@ -294,6 +430,7 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
           onOpenChange={setShowTagDialog}
           photo={photoToTag}
           orgId={orgId}
+          photoIds={isSelecting ? selectedPhotos : []}
           onSuccess={handleTagSuccess}
         />
       )}
