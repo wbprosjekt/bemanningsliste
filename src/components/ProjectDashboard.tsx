@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,7 +22,7 @@ import {
   Image as ImageIcon,
   AlertCircle
 } from 'lucide-react';
-import PhotoInbox from '@/components/PhotoInbox';
+import PhotoInboxMini from '@/components/PhotoInboxMini';
 
 interface Project {
   id: string;
@@ -43,6 +44,7 @@ interface ProjectStats {
 
 export default function ProjectDashboard() {
   const { user } = useAuth();
+  const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   
@@ -275,15 +277,12 @@ export default function ProjectDashboard() {
 
       {/* Photo Inbox Section */}
       {showPhotoInbox && profile && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Foto-innboks</h2>
-            <Button variant="outline" size="sm" onClick={() => setShowPhotoInbox(false)}>
-              Skjul
-            </Button>
-          </div>
-          <PhotoInbox orgId={profile.org_id} projectId={null} />
-        </div>
+        <PhotoInboxMini 
+          orgId={profile.org_id} 
+          projectId={null}
+          maxPhotos={6}
+          onViewAll={() => router.push('/photo-inbox')}
+        />
       )}
 
       {/* Search and Filters */}
