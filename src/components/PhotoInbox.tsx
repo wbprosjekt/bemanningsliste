@@ -56,25 +56,42 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
           inbox_date,
           uploaded_by,
           uploaded_by_email,
-          ttx_project_cache:prosjekt_id(project_name, project_number)
+          ttx_project_cache:prosjekt_id(project_name, project_number, org_id)
         `)
-        .eq('is_tagged', false)
+        .is('is_tagged', false)  // Use .is() for boolean false
         .order('inbox_date', { ascending: false });
 
       // If projectId is provided, filter by project
       if (projectId) {
-        query = query.eq('prosjekt_id', projectId);
+        if (projectId === 'untagged') {
+          // Filter for photos without project
+          query = query.is('prosjekt_id', null);
+        } else {
+          // Filter for specific project
+          query = query.eq('prosjekt_id', projectId);
+        }
       } else {
-        // Show all untagged photos
-        query = query.is('prosjekt_id', null);
+        // Show all untagged photos (both with and without project)
+        // Don't filter by prosjekt_id
       }
 
       const { data, error } = await query;
 
       if (error) throw error;
 
+      // Filter by org_id in JavaScript (since oppgave_bilder doesn't have org_id column)
+      const filteredData = (data || []).filter((photo: any) => {
+        // If photo has prosjekt_id, check if it matches org
+        if (photo.prosjekt_id && photo.ttx_project_cache?.org_id) {
+          return photo.ttx_project_cache.org_id === orgId;
+        }
+        // If no prosjekt_id, check if uploaded_by is in same org
+        // (This requires additional logic if we need to filter by org)
+        return true; // For now, show all untagged photos
+      });
+
       // Transform data to include project info
-      const transformedPhotos = (data || []).map((photo: any) => ({
+      const transformedPhotos = filteredData.map((photo: any) => ({
         ...photo,
         project_name: photo.ttx_project_cache?.project_name || null,
         project_number: photo.ttx_project_cache?.project_number || null,

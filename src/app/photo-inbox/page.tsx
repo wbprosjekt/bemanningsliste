@@ -18,9 +18,10 @@ export default function PhotoInboxPage() {
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedProject, setSelectedProject] = useState<string | null>(
-    searchParams?.get('project') || null
-  );
+  const [selectedProject, setSelectedProject] = useState<string | null>(() => {
+    const project = searchParams?.get('project');
+    return project || null;
+  });
 
   useEffect(() => {
     const loadProfile = async () => {
