@@ -392,7 +392,7 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
               type="file"
               multiple
               accept="image/*"
-              capture="environment"
+              // Without 'capture' attribute, mobile users can choose between camera and photo library
               onChange={(e) => handleFileSelect(e.target.files)}
               className="hidden"
             />
