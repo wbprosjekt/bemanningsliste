@@ -17,8 +17,11 @@ import {
   Filter,
   Grid3X3,
   List,
-  Calendar
+  Calendar,
+  Image as ImageIcon,
+  AlertCircle
 } from 'lucide-react';
+import PhotoInbox from '@/components/PhotoInbox';
 
 interface Project {
   id: string;
@@ -35,6 +38,7 @@ interface ProjectStats {
   total_projects: number;
   active_projects: number;
   recent_projects: number;
+  untagged_photos: number;
 }
 
 export default function ProjectDashboard() {
@@ -57,8 +61,10 @@ export default function ProjectDashboard() {
   const [stats, setStats] = useState<ProjectStats>({
     total_projects: 0,
     active_projects: 0,
-    recent_projects: 0
+    recent_projects: 0,
+    untagged_photos: 0
   });
+  const [showPhotoInbox, setShowPhotoInbox] = useState(false);
 
   // Load profile when user is available
   useEffect(() => {
@@ -133,6 +139,13 @@ export default function ProjectDashboard() {
       setProjects(sanitizedProjects);
       setFilteredProjects(sanitizedProjects);
       
+      // Load untagged photos count
+      const { count: untaggedCount } = await supabase
+        .from('oppgave_bilder')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', profile.org_id)
+        .eq('is_tagged', false);
+      
       // Calculate stats
       setStats({
         total_projects: sanitizedProjects.length,
@@ -140,7 +153,8 @@ export default function ProjectDashboard() {
         recent_projects: sanitizedProjects.filter(p => {
           const daysSinceUpdate = (Date.now() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60 * 24);
           return daysSinceUpdate <= 7;
-        }).length
+        }).length,
+        untagged_photos: untaggedCount || 0
       });
     } catch (error) {
       console.error('❌ ProjectDashboard: Error loading projects:', error);
@@ -209,7 +223,7 @@ export default function ProjectDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Totalt prosjekter</CardTitle>
@@ -239,7 +253,38 @@ export default function ProjectDashboard() {
             <div className="text-2xl font-bold">{stats.recent_projects}</div>
           </CardContent>
         </Card>
+        
+        <Card 
+          className={`cursor-pointer hover:shadow-md transition-shadow ${stats.untagged_photos > 0 ? 'border-orange-500 bg-orange-50' : ''}`}
+          onClick={() => setShowPhotoInbox(!showPhotoInbox)}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Utaggede bilder</CardTitle>
+            <ImageIcon className={`h-4 w-4 ${stats.untagged_photos > 0 ? 'text-orange-600' : 'text-muted-foreground'}`} />
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="text-2xl font-bold">{stats.untagged_photos}</div>
+              {stats.untagged_photos > 0 && (
+                <AlertCircle className="h-4 w-4 text-orange-600" />
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Photo Inbox Section */}
+      {showPhotoInbox && profile && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Foto-innboks</h2>
+            <Button variant="outline" size="sm" onClick={() => setShowPhotoInbox(false)}>
+              Skjul
+            </Button>
+          </div>
+          <PhotoInbox orgId={profile.org_id} projectId={null} />
+        </div>
+      )}
 
       {/* Search and Filters */}
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">

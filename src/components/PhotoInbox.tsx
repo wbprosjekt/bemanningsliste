@@ -8,6 +8,7 @@ import { X, Image as ImageIcon, Tag, Calendar, User, Loader2 } from 'lucide-reac
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import TagPhotoDialog from '@/components/TagPhotoDialog';
 
 interface PhotoInboxProps {
   orgId: string;
@@ -31,6 +32,8 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
   const [loading, setLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [showImageViewer, setShowImageViewer] = useState(false);
+  const [showTagDialog, setShowTagDialog] = useState(false);
+  const [photoToTag, setPhotoToTag] = useState<Photo | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -89,10 +92,15 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
   };
 
   const handleTagPhoto = (photo: Photo) => {
-    // TODO: Open tag dialog
+    setPhotoToTag(photo);
+    setShowTagDialog(true);
+  };
+
+  const handleTagSuccess = () => {
+    loadPhotos();
     toast({
-      title: 'Funksjon under utvikling',
-      description: 'Tag-funksjonen kommer snart'
+      title: 'Suksess',
+      description: 'Bildet er tagget'
     });
   };
 
@@ -277,6 +285,17 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Tag Photo Dialog */}
+      {showTagDialog && photoToTag && (
+        <TagPhotoDialog
+          open={showTagDialog}
+          onOpenChange={setShowTagDialog}
+          photo={photoToTag}
+          orgId={orgId}
+          onSuccess={handleTagSuccess}
+        />
       )}
     </>
   );

@@ -18,7 +18,9 @@ import {
   Calendar,
   BarChart3,
   Users,
+  Camera,
 } from "lucide-react";
+import ProjectPhotoUpload from "@/components/ProjectPhotoUpload";
 import { getDateFromWeek, getWeekNumber, getPersonDisplayName, formatTimeValue } from "@/lib/displayNames";
 import { toLocalDateString } from "@/lib/utils";
 import DayCard from "@/components/DayCard";
@@ -84,6 +86,7 @@ const MinUke = () => {
   }>>([]);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
   const [hasScrolledToToday, setHasScrolledToToday] = useState(false);
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
 
   const currentYear = parseInt(params?.year || new Date().getFullYear().toString(), 10);
   const currentWeek = parseInt(params?.week || getWeekNumber(new Date()).toString(), 10);
@@ -685,7 +688,7 @@ const MinUke = () => {
         {/* Quick Actions */}
         <Card>
           <CardContent className="p-4">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -712,9 +715,27 @@ const MinUke = () => {
                 <BarChart3 className="h-4 w-4 md:h-3 md:w-3 mr-1" />
                 Ukeoversikt
               </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-sm md:text-xs h-12 md:h-10"
+                onClick={() => setShowPhotoUpload(true)}
+              >
+                <Camera className="h-4 w-4 md:h-3 md:w-3 mr-1" />
+                Foto
+              </Button>
             </div>
           </CardContent>
         </Card>
+
+        {/* Photo Upload Dialog */}
+        {showPhotoUpload && profile && (
+          <ProjectPhotoUpload
+            open={showPhotoUpload}
+            onOpenChange={setShowPhotoUpload}
+            orgId={profile.org_id}
+          />
+        )}
       </div>
     </div>
   );
