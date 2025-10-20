@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { X, Upload, Camera, Image as ImageIcon, Loader2 } from 'lucide-react';
@@ -23,9 +23,43 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [projects, setProjects] = useState<Array<{ id: string; project_name: string; project_number: string }>>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
+
+  // Load projects when dialog opens
+  useEffect(() => {
+    const loadProjects = async () => {
+      if (!open || !orgId) return;
+      
+      setLoadingProjects(true);
+      try {
+        const { data, error } = await supabase
+          .from('ttx_project_cache')
+          .select('id, project_name, project_number')
+          .eq('org_id', orgId)
+          .eq('is_active', true)
+          .order('project_name', { ascending: true });
+        
+        if (error) throw error;
+        
+        setProjects(data || []);
+      } catch (error) {
+        console.error('Error loading projects:', error);
+        toast({
+          title: 'Feil',
+          description: 'Kunne ikke laste prosjekter',
+          variant: 'destructive'
+        });
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+    
+    loadProjects();
+  }, [open, orgId]);
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
@@ -274,10 +308,22 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
                 className="w-full p-2 border rounded-md"
+                disabled={loadingProjects}
               >
-                <option value="">Velg prosjekt...</option>
-                {/* TODO: Load projects from ttx_project_cache */}
+                <option value="">
+                  {loadingProjects ? 'Laster prosjekter...' : 'Velg prosjekt...'}
+                </option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.project_number} - {project.project_name}
+                  </option>
+                ))}
               </select>
+              {projects.length === 0 && !loadingProjects && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Ingen aktive prosjekter funnet
+                </p>
+              )}
             </div>
           )}
 
