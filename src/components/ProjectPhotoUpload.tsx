@@ -220,16 +220,17 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
   };
 
   const compressImage = async (file: File): Promise<File> => {
+    const MAX_FILE_SIZE = 1.5 * 1024 * 1024; // 1.5MB maximum
+    
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          // Max 1200x1200 for optimal balance between quality and file size
-          // This ensures compressed images are typically 300KB-800KB
-          const maxWidth = 1200;
-          const maxHeight = 1200;
+          // Max 1000x1000 for optimal balance between quality and file size
+          const maxWidth = 1000;
+          const maxHeight = 1000;
           let width = img.width;
           let height = img.height;
 
@@ -250,21 +251,31 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
 
-          // 60% quality for optimal balance between quality and file size
-          // This ensures compressed images are typically 300KB-800KB
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                const compressedFile = new File([blob], file.name, { type: 'image/webp' });
-                console.log(`📸 Compressed: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB (${Math.round((1 - compressedFile.size / file.size) * 100)}% reduction)`);
-                resolve(compressedFile);
-              } else {
-                resolve(file);
-              }
-            },
-            'image/webp',
-            0.60  // 60% quality - optimal for documentation photos
-          );
+          // Start with 55% quality and reduce if needed
+          const compressWithQuality = (quality: number) => {
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  const compressedFile = new File([blob], file.name, { type: 'image/webp' });
+                  
+                  // If still too large, reduce quality further
+                  if (compressedFile.size > MAX_FILE_SIZE && quality > 0.40) {
+                    console.log(`📸 Still too large (${(compressedFile.size / 1024 / 1024).toFixed(2)}MB), reducing quality to ${(quality - 0.05).toFixed(2)}`);
+                    compressWithQuality(quality - 0.05);
+                  } else {
+                    console.log(`📸 Compressed: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB (${Math.round((1 - compressedFile.size / file.size) * 100)}% reduction, quality: ${(quality * 100).toFixed(0)}%)`);
+                    resolve(compressedFile);
+                  }
+                } else {
+                  resolve(file);
+                }
+              },
+              'image/webp',
+              quality
+            );
+          };
+          
+          compressWithQuality(0.55); // Start with 55% quality
         };
         img.src = e.target?.result as string;
       };
@@ -414,7 +425,7 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
               className="hidden"
             />
             <p className="text-xs text-gray-500 mt-2">
-              Maksimal filstørrelse: 8MB per bilde (komprimeres automatisk til ~300KB-800KB WebP)
+              Maksimal filstørrelse: 8MB per bilde (komprimeres automatisk til maks 1.5MB WebP)
             </p>
           </div>
 
