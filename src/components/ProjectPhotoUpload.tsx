@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X, Upload, Camera, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -23,7 +24,13 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [projects, setProjects] = useState<Array<{ id: string; project_name: string; project_number: string }>>([]);
+  const [projects, setProjects] = useState<Array<{ 
+    id: string; 
+    project_name: string; 
+    project_number: string;
+    tripletex_project_id: number;
+    customer_name: string | null;
+  }>>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
@@ -38,14 +45,24 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
       try {
         const { data, error } = await supabase
           .from('ttx_project_cache')
-          .select('id, project_name, project_number')
+          .select('id, tripletex_project_id, project_name, project_number, customer_name')
           .eq('org_id', orgId)
           .eq('is_active', true)
           .order('project_name', { ascending: true });
         
         if (error) throw error;
         
-        setProjects(data || []);
+        const sanitizedProjects = (data || [])
+          .filter((project) => project.tripletex_project_id !== null)
+          .map((project) => ({
+            id: project.id,
+            tripletex_project_id: project.tripletex_project_id as number,
+            project_name: project.project_name ?? 'Uten navn',
+            project_number: project.project_number ?? '0',
+            customer_name: project.customer_name,
+          }));
+        
+        setProjects(sanitizedProjects);
       } catch (error) {
         console.error('Error loading projects:', error);
         toast({
@@ -304,21 +321,27 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
               <label className="text-sm font-medium mb-2 block">
                 Velg prosjekt *
               </label>
-              <select
+              <Select
                 value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-                className="w-full p-2 border rounded-md"
+                onValueChange={setSelectedProject}
                 disabled={loadingProjects}
               >
-                <option value="">
-                  {loadingProjects ? 'Laster prosjekter...' : 'Velg prosjekt...'}
-                </option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.project_number} - {project.project_name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingProjects ? "Laster prosjekter..." : "Velg prosjekt"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{project.project_name}</span>
+                        <span className="text-xs text-gray-500">
+                          #{project.tripletex_project_id} • {project.customer_name || 'Ingen kunde'}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {projects.length === 0 && !loadingProjects && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Ingen aktive prosjekter funnet
