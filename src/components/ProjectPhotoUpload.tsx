@@ -226,10 +226,10 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          // Max 1400x1400 for optimal balance between quality and file size
-          // This ensures compressed images are typically 500KB-1.5MB
-          const maxWidth = 1400;
-          const maxHeight = 1400;
+          // Max 1200x1200 for optimal balance between quality and file size
+          // This ensures compressed images are typically 300KB-800KB
+          const maxWidth = 1200;
+          const maxHeight = 1200;
           let width = img.width;
           let height = img.height;
 
@@ -250,8 +250,8 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
 
-          // 65% quality for optimal balance between quality and file size
-          // This ensures compressed images are typically 500KB-1.5MB
+          // 60% quality for optimal balance between quality and file size
+          // This ensures compressed images are typically 300KB-800KB
           canvas.toBlob(
             (blob) => {
               if (blob) {
@@ -263,7 +263,7 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
               }
             },
             'image/webp',
-            0.65  // 65% quality - optimal for documentation photos
+            0.60  // 60% quality - optimal for documentation photos
           );
         };
         img.src = e.target?.result as string;
@@ -414,7 +414,7 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
               className="hidden"
             />
             <p className="text-xs text-gray-500 mt-2">
-              Maksimal filstørrelse: 8MB per bilde (komprimeres automatisk til ~500KB-1.5MB WebP)
+              Maksimal filstørrelse: 8MB per bilde (komprimeres automatisk til ~300KB-800KB WebP)
             </p>
           </div>
 
