@@ -62,29 +62,29 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
         .order('inbox_date', { ascending: false });
 
       // If projectId is provided, filter by project
-      if (projectId) {
-        if (projectId === 'untagged') {
-          // Filter for photos without project - use .is() for null check
-          query = query.is('prosjekt_id', null);
-        } else {
-          // Filter for specific project
-          query = query.eq('prosjekt_id', projectId);
-        }
-      } else {
-        // Show all untagged photos (both with and without project)
-        // Don't filter by prosjekt_id
+      if (projectId && projectId !== 'untagged') {
+        // Filter for specific project
+        query = query.eq('prosjekt_id', projectId);
       }
+      // If projectId is 'untagged', we'll filter in JavaScript below
+      // If projectId is null, show all untagged photos
 
       const { data, error } = await query;
 
       if (error) throw error;
 
-      // Filter by org_id in JavaScript (since oppgave_bilder doesn't have org_id column)
+      // Filter by org_id and projectId in JavaScript
       const filteredData = (data || []).filter((photo: any) => {
+        // If projectId is 'untagged', only show photos without project
+        if (projectId === 'untagged') {
+          return !photo.prosjekt_id;
+        }
+        
         // If photo has prosjekt_id, check if it matches org
         if (photo.prosjekt_id && photo.ttx_project_cache?.org_id) {
           return photo.ttx_project_cache.org_id === orgId;
         }
+        
         // If no prosjekt_id, check if uploaded_by is in same org
         // (This requires additional logic if we need to filter by org)
         return true; // For now, show all untagged photos
