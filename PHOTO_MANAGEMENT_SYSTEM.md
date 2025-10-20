@@ -755,11 +755,183 @@ CREATE INDEX idx_oppgave_bilder_category ON oppgave_bilder(category);
 
 ---
 
+## 🎯 REVIDERT ARBEIDSFLYT (October 20, 2025)
+
+### **Problem med tidligere tilnærming:**
+Den opprinnelige planen hadde en kompleks tagging-flyt med 3 valg (Prosjekt/Befaring/Oppgave) direkte fra untaggede bilder. Dette var tungt og krevde mange dropdowns.
+
+### **Ny, enklere tilnærming:**
+
+#### **Steg 1: Enkel tagging fra untaggede bilder**
+```
+┌─────────────────────────────────────────┐
+│  Untaggede bilder                       │
+│  [Bilde 1] [Bilde 2] [Bilde 3]         │
+│                                         │
+│  Klikk "Tag" → Velg prosjekt → Ferdig! │
+└─────────────────────────────────────────┘
+```
+
+**UI:**
+```typescript
+<TagPhotoDialog>
+  <DialogTitle>Tagge bilde</DialogTitle>
+  <DialogDescription>Velg hvilket prosjekt bildet tilhører</DialogDescription>
+  
+  <Select>
+    <SelectTrigger>
+      <SelectValue placeholder="Velg prosjekt" />
+    </SelectTrigger>
+    <SelectContent>
+      {projects.map(p => (
+        <SelectItem key={p.id} value={p.id}>
+          {p.name} #{p.number}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+  
+  <DialogFooter>
+    <Button variant="outline" onClick={onClose}>Avbryt</Button>
+    <Button onClick={handleTag}>Tagge bilde</Button>
+  </DialogFooter>
+</TagPhotoDialog>
+```
+
+**Implementasjon:**
+- Bare ett valg: Velg prosjekt
+- Setter `prosjekt_id` og `is_tagged = true`
+- Bilde flyttes til prosjekt-fotobiblioteket
+
+---
+
+#### **Steg 2: Valgfri organisering fra fotobiblioteket**
+```
+┌─────────────────────────────────────────┐
+│  Prosjekt Foto-bibliotek                │
+│  [Bilde 1] [Bilde 2] [Bilde 3]         │
+│                                         │
+│  Klikk "Organiser" → Flytt til:        │
+│  ○ Behold i fotobibliotek              │
+│  ○ Befaring                            │
+│  ○ Oppgave                             │
+│  ○ Sjekkliste                          │
+└─────────────────────────────────────────┘
+```
+
+**UI:**
+```typescript
+<OrganizePhotoDialog>
+  <DialogTitle>Organiser bilde</DialogTitle>
+  <DialogDescription>Hvor skal bildet organiseres?</DialogDescription>
+  
+  <RadioGroup value={organizationType} onValueChange={setOrganizationType}>
+    <div className="flex items-center space-x-2">
+      <RadioGroupItem value="library" id="library" />
+      <Label htmlFor="library">Behold i fotobibliotek</Label>
+    </div>
+    <div className="flex items-center space-x-2">
+      <RadioGroupItem value="befaring" id="befaring" />
+      <Label htmlFor="befaring">Befaring</Label>
+    </div>
+    {organizationType === 'befaring' && (
+      <Select>
+        <SelectTrigger>
+          <SelectValue placeholder="Velg befaring" />
+        </SelectTrigger>
+        <SelectContent>
+          {befaringer.map(b => (
+            <SelectItem key={b.id} value={b.id}>
+              {b.title}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )}
+    <div className="flex items-center space-x-2">
+      <RadioGroupItem value="oppgave" id="oppgave" />
+      <Label htmlFor="oppgave">Oppgave</Label>
+    </div>
+    {organizationType === 'oppgave' && (
+      <Select>
+        <SelectTrigger>
+          <SelectValue placeholder="Velg oppgave" />
+        </SelectTrigger>
+        <SelectContent>
+          {oppgaver.map(o => (
+            <SelectItem key={o.id} value={o.id}>
+              Oppgave #{o.oppgave_nummer}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )}
+    <div className="flex items-center space-x-2">
+      <RadioGroupItem value="sjekkliste" id="sjekkliste" />
+      <Label htmlFor="sjekkliste">Sjekkliste</Label>
+    </div>
+  </RadioGroup>
+  
+  <DialogFooter>
+    <Button variant="outline" onClick={onClose}>Avbryt</Button>
+    <Button onClick={handleOrganize}>Flytt</Button>
+  </DialogFooter>
+</OrganizePhotoDialog>
+```
+
+**Implementasjon:**
+- Valgfritt steg - kun for bilder som trenger mer spesifikk organisering
+- Setter `oppgave_id`, `befaring_id`, eller `sjekkliste_id` hvis relevant
+- Bilde beholdes i fotobiblioteket, men er også knyttet til spesifikk kontekst
+
+---
+
+### **Fordeler med ny tilnærming:**
+
+✅ **Enklere for vanlig bruk** - 90% av bilder trenger bare å være i prosjektet  
+✅ **Mindre kognitiv belastning** - Færre valg = bedre UX  
+✅ **Progressive disclosure** - Vis bare det som er nødvendig nå  
+✅ **Fleksibilitet** - Kan gjøre detaljert organisering senere hvis nødvendig  
+✅ **Bedre oversikt** - Alle bilder i prosjektet først, deretter kategorisering  
+
+---
+
+### **Typisk bruk:**
+
+**90% av tilfeller:**
+```
+"Jeg tok et bilde av jobben" 
+→ Tag til prosjekt 
+→ Ferdig! ✅
+```
+
+**10% av tilfeller:**
+```
+"Dette bildet er spesifikt for oppgave #5" 
+→ Fra fotobiblioteket 
+→ Organiser → Oppgave #5
+```
+
+---
+
+### **Database endringer:**
+
+**Ingen endringer nødvendig!** Vi bruker eksisterende struktur:
+- `oppgave_bilder.prosjekt_id` - For fotobibliotek
+- `oppgave_bilder.oppgave_id` - For oppgaver
+- `oppgaver.befaring_id` - For befaringer (via oppgave)
+
+**Fremtidig:**
+- Kan legge til `sjekkliste_id` når sjekkliste-funksjonen implementeres
+
+---
+
 ## 📚 REFERANSEDOKUMENTER
 
 - `PROJEKT_INNBOKS_INTEGRATION_PLAN.md` - Original integration plan
 - `FIELDNOTE_DASHBOARD_PLAN.md` - Dashboard plan
 - `SESSION_SUMMARY_20251019.md` - Session summary
+- `DASHBOARD_WIREFRAME.md` - Dashboard wireframe
 
 ---
 
@@ -772,13 +944,20 @@ CREATE INDEX idx_oppgave_bilder_category ON oppgave_bilder(category);
 
 ### **Design Decisions:**
 - ✅ 3-lag system (Dashboard → Inbox → Library)
-- ✅ Drag & drop for enkel flytting
+- ✅ **Enkel tagging-flyt** - Bare velg prosjekt fra untaggede bilder
+- ✅ **Progressive disclosure** - Valgfri organisering fra fotobiblioteket
 - ✅ Kommentarer på flere nivåer
 - ✅ Folders for organisering
 - ✅ Bulk operations
 - ✅ Real-time updates
 
+### **Recent Changes:**
+- 🔄 **October 20, 2025:** Revidert arbeidsflyt - Enklere tagging-flyt
+  - Fjernet kompleks tagging med 3 valg fra untaggede bilder
+  - Ny tilnærming: Tag til prosjekt → Valgfri organisering fra fotobiblioteket
+  - Bedre UX med progressive disclosure
+
 ---
 
-*Last Updated: October 19, 2025*
+*Last Updated: October 20, 2025*
 
