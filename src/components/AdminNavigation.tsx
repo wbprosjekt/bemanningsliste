@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import ProjectPhotoUpload from "@/components/ProjectPhotoUpload";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +42,7 @@ import {
   Calendar,
   Bell,
   ClipboardCheck,
+  Camera,
 } from "lucide-react";
 
 interface AdminNavigationProps {
@@ -55,6 +58,8 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
   const { user, signOut } = useAuth();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [orgId, setOrgId] = useState<string>('');
 
   const handleLogout = async () => {
     try {
@@ -78,6 +83,25 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
   };
 
   const getCurrentYear = () => new Date().getFullYear();
+
+  // Load org_id
+  useEffect(() => {
+    const loadOrgId = async () => {
+      if (!user) return;
+      
+      const { data } = await supabase
+        .from('profiles')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (data) {
+        setOrgId(data.org_id);
+      }
+    };
+    
+    loadOrgId();
+  }, [user]);
 
   return (
     <>
@@ -146,6 +170,19 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               >
                 <ClipboardCheck className="h-5 w-5" />
                 <span className="hidden xl:inline">Befaring</span>
+              </button>
+
+              <button
+                onClick={() => setShowPhotoUpload(true)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  showPhotoUpload
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+                title="Last opp bilder til prosjekt"
+              >
+                <Camera className="h-5 w-5" />
+                <span className="hidden xl:inline">Foto</span>
               </button>
 
               <button
@@ -313,6 +350,18 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
             </Button>
 
             <Button
+              variant={showPhotoUpload ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                setShowPhotoUpload(true);
+                setMobileMenuOpen(false);
+              }}
+            >
+              <Camera className="h-4 w-4 mr-2" />
+              Foto
+            </Button>
+
+            <Button
               variant={isActive("/admin/rapporter") ? "default" : "ghost"}
               className="w-full justify-start"
               onClick={() => {
@@ -439,6 +488,15 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Photo Upload Dialog */}
+      {showPhotoUpload && orgId && (
+        <ProjectPhotoUpload
+          open={showPhotoUpload}
+          onOpenChange={setShowPhotoUpload}
+          orgId={orgId}
+        />
+      )}
     </>
   );
 }

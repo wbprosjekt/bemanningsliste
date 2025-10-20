@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import ProjectPhotoUpload from "@/components/ProjectPhotoUpload";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +39,7 @@ import {
   Menu,
   ClipboardCheck,
   Home,
+  Camera,
 } from "lucide-react";
 
 interface EmployeeNavigationProps {
@@ -52,6 +55,8 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
   const { user, signOut } = useAuth();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [orgId, setOrgId] = useState<string>('');
 
   const handleLogout = async () => {
     try {
@@ -75,6 +80,25 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
   };
 
   const getCurrentYear = () => new Date().getFullYear();
+
+  // Load org_id
+  useEffect(() => {
+    const loadOrgId = async () => {
+      if (!user) return;
+      
+      const { data } = await supabase
+        .from('profiles')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (data) {
+        setOrgId(data.org_id);
+      }
+    };
+    
+    loadOrgId();
+  }, [user]);
 
   return (
     <>
@@ -127,6 +151,19 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
               >
                 <ClipboardCheck className="h-4 w-4" />
                 <span className="hidden xl:inline">Befaring</span>
+              </button>
+
+              <button
+                onClick={() => setShowPhotoUpload(true)}
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                  showPhotoUpload
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+                title="Last opp bilder til prosjekt"
+              >
+                <Camera className="h-4 w-4" />
+                <span className="hidden xl:inline">Foto</span>
               </button>
 
               {/* User Menu */}
@@ -229,6 +266,18 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
               Befaring
             </Button>
 
+            <Button
+              variant={showPhotoUpload ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                setShowPhotoUpload(true);
+                setMobileMenuOpen(false);
+              }}
+            >
+              <Camera className="h-4 w-4 mr-2" />
+              Foto
+            </Button>
+
             {/* User menu */}
             <div className="border-t pt-4 mt-2">
               <p className="text-sm font-semibold text-muted-foreground mb-2 px-2">
@@ -291,6 +340,15 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Photo Upload Dialog */}
+      {showPhotoUpload && orgId && (
+        <ProjectPhotoUpload
+          open={showPhotoUpload}
+          onOpenChange={setShowPhotoUpload}
+          orgId={orgId}
+        />
+      )}
     </>
   );
 }
