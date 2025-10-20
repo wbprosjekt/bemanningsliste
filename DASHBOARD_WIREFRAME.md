@@ -62,30 +62,69 @@ Bilde er tagget
 - [☑️ Velg alle] [Tag til befaring →] [Tag til oppgave →]
 - [Behold som prosjekt-bilder →] [Slett valgte →]
 
-### **Database Strategy:**
-```sql
--- Dashboard Home: Top 6 bilder per prosjekt
-SELECT DISTINCT ON (prosjekt_id)
-  prosjekt_id,
-  COUNT(*) OVER (PARTITION BY prosjekt_id) as total_count,
-  array_agg(id) OVER (PARTITION BY prosjekt_id) as photo_ids
-FROM oppgave_bilder
-WHERE org_id = $1
-  AND is_tagged = false
-  AND prosjekt_id IS NOT NULL
-ORDER BY prosjekt_id, inbox_date DESC
-LIMIT 6;
+### **Database Strategy (REVIDERT):**
 
--- Dedicated Inbox: Alle bilder gruppert
+**Dashboard Home: Top 6 bilder per prosjekt (RIKTIG!)**
+```sql
+-- Bruk CTE + ROW_NUMBER() for å få 6 bilder PER prosjekt
+WITH ranked_photos AS (
+  SELECT 
+    id,
+    image_url,
+    prosjekt_id,
+    inbox_date,
+    comment,
+    ROW_NUMBER() OVER (PARTITION BY prosjekt_id ORDER BY inbox_date DESC) as rn
+  FROM oppgave_bilder
+  WHERE org_id = $1
+    AND is_tagged = false
+    AND prosjekt_id IS NOT NULL
+)
 SELECT 
-  prosjekt_id,
-  COUNT(*) as total_count,
-  array_agg(id) as photo_ids
-FROM oppgave_bilder
-WHERE org_id = $1
-  AND is_tagged = false
-GROUP BY prosjekt_id
-ORDER BY total_count DESC;
+  p.id,
+  p.image_url,
+  p.prosjekt_id,
+  p.inbox_date,
+  p.comment,
+  pc.project_name,
+  pc.project_number,
+  COUNT(*) OVER (PARTITION BY p.prosjekt_id) as total_count
+FROM ranked_photos p
+JOIN ttx_project_cache pc ON pc.id = p.prosjekt_id
+WHERE p.rn <= 6
+ORDER BY p.prosjekt_id, p.inbox_date DESC;
+```
+
+**Dedicated Inbox: Paginerte bilder (YTELSESOPTIMERT)**
+```sql
+-- Paginerte bilder (IKKE array_agg - blir for tungt!)
+SELECT 
+  ob.id,
+  ob.image_url,
+  ob.prosjekt_id,
+  ob.inbox_date,
+  ob.comment,
+  pc.project_name,
+  pc.project_number,
+  COUNT(*) OVER (PARTITION BY ob.prosjekt_id) as total_count
+FROM oppgave_bilder ob
+LEFT JOIN ttx_project_cache pc ON pc.id = ob.prosjekt_id
+WHERE ob.org_id = $1
+  AND ob.is_tagged = false
+ORDER BY ob.prosjekt_id, ob.inbox_date DESC
+LIMIT 50 OFFSET $2;  -- Pagination: 50 bilder per side
+```
+
+**Indekser for ytelse:**
+```sql
+-- Kritiske indekser for foto-innboks
+CREATE INDEX idx_oppgave_bilder_org_tagged 
+ON oppgave_bilder(org_id, is_tagged, inbox_date DESC)
+WHERE is_tagged = false;
+
+CREATE INDEX idx_oppgave_bilder_prosjekt_tagged 
+ON oppgave_bilder(prosjekt_id, is_tagged, inbox_date DESC)
+WHERE is_tagged = false AND prosjekt_id IS NOT NULL;
 ```
 
 ---
@@ -98,7 +137,9 @@ ORDER BY total_count DESC;
 
 ---
 
-## 📐 LAG 1: OVERSIKT (Dashboard Home)
+## 📐 LAG 1: OVERSIKT (Dashboard Home) - KONDENSERT VERSJON
+
+**Design-prinsipp:** Kompakt, fokusert, skalerbart
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -106,104 +147,65 @@ ORDER BY total_count DESC;
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  🎯 PROSJEKTVELGER                                                     │
+│  [Alle prosjekter ▾]  [Søk...] 🔍  [Filter ▾]  [⭐ Favoritter]         │
+│                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │ [Alle prosjekter ▾]  [Søk...] 🔍  [Filter ▾]  [⭐ Favoritter]     │ │
+│  │ 🚨 KREVER HANDLING (3 ting) [Vis alle →]                         │ │
+│  ├───────────────────────────────────────────────────────────────────┤ │
+│  │ 🔴 5 oppgaver > 7 dager (3 prosjekter)                           │ │
+│  │ 🟡 Befaring i morgen (1 prosjekt)                                │ │
+│  │ 📷 24 bilder venter på tagging                                    │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │ 🚨 KREVER HANDLING (Prioritert øverst)                           │ │
+│  │ 📷 FOTO-INNBOKS                                                   │ │
 │  ├───────────────────────────────────────────────────────────────────┤ │
-│  │ 🔴 5 oppgaver > 7 dager - ESKALERT                              │ │
-│  │    Prosjekt: Haugesund Bygg #1234                                │ │
-│  │    [Se detaljer →] [Tag oppgaver →]                              │ │
-│  │                                                                   │ │
-│  │ 🟡 Befaring i morgen - mangler crew                              │ │
-│  │    Prosjekt: Nedre Torg 5 #5678                                  │ │
-│  │    [Se detaljer →] [Tildel crew →]                               │ │
-│  │                                                                   │ │
-│  │ 📷 24 bilder venter på tagging (12 i Haugesund Bygg)            │ │
-│  │    [Se foto-innboks →]                                            │ │
-│  │                                                                   │ │
-│  │ 🟡 3 timer ikke sendt > 7 dager                                  │ │
-│  │    [Se timer →]                                                   │ │
-│  └───────────────────────────────────────────────────────────────────┘ │
-│                                                                         │
-│  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │ 📷 FOTO-INNBOKS (24 bilder totalt)                               │ │
-│  ├───────────────────────────────────────────────────────────────────┤ │
-│  │                                                                   │ │
-│  │ ┌─ Haugesund Bygg (12 bilder) ────────────────────────────────┐ │ │
-│  │ │ ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌────┐                 │ │ │
-│  │ │ │IMG │ │IMG │ │IMG │ │IMG │ │IMG │ │IMG │                 │ │ │
-│  │ │ └────┘ └────┘ └────┘ └────┘ └────┘ └────┘                 │ │ │
-│  │ │ [+ 6 flere]  [Tag alle →]  [Se alle →]                     │ │ │
-│  │ └─────────────────────────────────────────────────────────────┘ │ │
-│  │                                                                   │ │
-│  │ ┌─ Nedre Torg 5 (8 bilder) ──────────────────────────────────┐ │ │
-│  │ │ ┌────┐ ┌────┐ ┌────┐ ┌────┐                               │ │ │
-│  │ │ │IMG │ │IMG │ │IMG │ │IMG │                               │ │ │
-│  │ │ └────┘ └────┘ └────┘ └────┘                               │ │ │
-│  │ │ [+ 4 flere]  [Tag alle →]  [Se alle →]                     │ │ │
-│  │ └─────────────────────────────────────────────────────────────┘ │ │
-│  │                                                                   │ │
-│  │ ┌─ Uten prosjekt (4 bilder) ─────────────────────────────────┐ │ │
-│  │ │ ┌────┐ ┌────┐ ┌────┐ ┌────┐                               │ │ │
-│  │ │ │IMG │ │IMG │ │IMG │ │IMG │                               │ │ │
-│  │ │ └────┘ └────┘ └────┘ └────┘                               │ │ │
-│  │ │ [Tag til prosjekt →]  [Slett alle →]                       │ │ │
-│  │ └─────────────────────────────────────────────────────────────┘ │ │
+│  │ Haugesund Bygg: 12 bilder  [IMG] [Se alle →]                    │ │
+│  │ Nedre Torg 5: 8 bilder     [IMG] [Se alle →]                    │ │
+│  │ Uten prosjekt: 4 bilder    [IMG] [Se alle →]                    │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐ │
 │  │ 📊 KPI OVERVIEW                                                   │ │
 │  ├───────────────────────────────────────────────────────────────────┤ │
-│  │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │ │
-│  │ │ Aktive   │ │ Åpne     │ │ Befaring │ │ Utaggede │             │ │
-│  │ │ Prosjekter│ │ Oppgaver │ │ denne    │ │ Bilder   │             │ │
-│  │ │   12     │ │   45     │ │ uken: 8  │ │   12     │             │ │
-│  │ └──────────┘ └──────────┘ └──────────┘ └──────────┘             │ │
+│  │ [Aktive: 12] [Oppgaver: 45] [Befaringer: 8] [Bilder: 24]       │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐ │
 │  │ ⭐ FAVORITTER & MEST AKTIVE                                      │ │
 │  ├───────────────────────────────────────────────────────────────────┤ │
 │  │ [Haugesund Bygg] [Nedre Torg 5] [Storgt 15] [Bygata 7]          │ │
-│  │                                                                   │ │
-│  │ 🔥 MEST AKTIVE (siste 7 dager)                                  │ │
-│  │ 1. Haugesund Bygg        45 hendelser  [Se detaljer →]          │ │
-│  │ 2. Nedre Torg 5          32 hendelser  [Se detaljer →]          │ │
-│  │ 3. Storgt 15             18 hendelser  [Se detaljer →]          │ │
-│  │ 4. Bygata 7              12 hendelser  [Se detaljer →]          │ │
-│  │ 5. Torgt 1               8 hendelser   [Se detaljer →]          │ │
+│  │ 🔥 Top 3 mest aktive (siste 7 dager)                            │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
+│  📋 ALLE PROSJEKTER (247)  [Søk...] [Filter ▾] [Sorter: Aktivitet ▾] │
 │  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │ 📋 ALLE PROSJEKTER (247)                                          │ │
+│  │ Haugesund Bygg #1234                    [⭐] [Se detaljer →]     │ │
+│  │ 🔴 5 kritiske | 📊 45 hendelser | 📷 12 bilder                   │ │
 │  ├───────────────────────────────────────────────────────────────────┤ │
-│  │ [Søk...] [Filter: Alle ▾] [Sorter: Aktivitet ▾]                 │ │
-│  │                                                                   │ │
-│  │ ┌──────────────────────────────────────────────────────────────┐ │ │
-│  │ │ Haugesund Bygg #1234                    [⭐] [Se detaljer →] │ │ │
-│  │ │ Kunde: Haugesund Kommune                                     │ │ │
-│  │ │ 📊 45 hendelser | 📷 12 bilder | 📋 5 oppgaver              │ │ │
-│  │ │ 🔴 5 kritiske oppgaver                                       │ │ │
-│  │ └──────────────────────────────────────────────────────────────┘ │ │
-│  │                                                                   │ │
-│  │ ┌──────────────────────────────────────────────────────────────┐ │ │
-│  │ │ Nedre Torg 5 #5678                     [⭐] [Se detaljer →]  │ │ │
-│  │ │ Kunde: Oslo Eiendom                                           │ │ │
-│  │ │ 📊 32 hendelser | 📷 8 bilder | 📋 3 oppgaver               │ │ │
-│  │ │ 🟡 Befaring i morgen                                          │ │ │
-│  │ └──────────────────────────────────────────────────────────────┘ │ │
-│  │                                                                   │ │
+│  │ Nedre Torg 5 #5678                     [⭐] [Se detaljer →]     │ │
+│  │ 🟡 Befaring i morgen | 📊 32 hendelser | 📷 8 bilder             │ │
+│  ├───────────────────────────────────────────────────────────────────┤ │
+│  │ Storgt 15 #9012                          [Se detaljer →]       │ │
+│  │ 📊 18 hendelser | 📷 5 bilder | 📋 2 oppgaver                   │ │
+│  ├───────────────────────────────────────────────────────────────────┤ │
 │  │ [Vis 10 flere...]                                                │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+**Fordeler med kondenserte versjon:**
+- ✅ Alt synlig på én skjerm
+- ✅ Mindre scrolling
+- ✅ Raskere å skanne
+- ✅ Skalerbart til 500+ prosjekter
+- ✅ Klikk "Vis alle" for detaljer
+
 ---
 
-## 📐 LAG 2: PROSJEKT-DETALJER (Project Detail)
+## 📐 LAG 2: PROSJEKT-DETALJER (Project Detail) - KONDENSERT
+
+**Design-prinsipp:** Fokusert på dette prosjektet, ingen repetisjon
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -211,35 +213,20 @@ ORDER BY total_count DESC;
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  [← Tilbake til Dashboard]  Haugesund Bygg #1234  [⭐] [⚙️]           │
-│                                                                         │
-│  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │ 📊 PROSJEKT INFO                                                  │ │
-│  ├───────────────────────────────────────────────────────────────────┤ │
-│  │ Prosjekt: Haugesund Bygg                                          │ │
-│  │ Prosjektnummer: #1234                                             │ │
-│  │ Kunde: Haugesund Kommune                                          │ │
-│  │ Status: Aktiv                                                     │ │
-│  │ Sist oppdatert: 2 timer siden                                    │ │
-│  └───────────────────────────────────────────────────────────────────┘ │
+│  Kunde: Haugesund Kommune | Status: Aktiv | Sist oppdatert: 2t siden  │
 │                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐ │
 │  │ 🚨 KREVER HANDLING (for dette prosjektet)                        │ │
 │  ├───────────────────────────────────────────────────────────────────┤ │
-│  │ 🔴 5 oppgaver > 7 dager - ESKALERT                              │ │
-│  │    [Se oppgaver →] [Tag oppgaver →]                              │ │
-│  │                                                                   │ │
-│  │ 📷 12 bilder venter på tagging                                   │ │
-│  │    [Se foto-innboks →]                                            │ │
+│  │ 🔴 5 oppgaver > 7 dager - ESKALERT  [Se oppgaver →]             │ │
+│  │ 📷 12 bilder venter på tagging  [Se foto-innboks →]              │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │ 📊 KPI (for dette prosjektet)                                    │ │
+│  │ 📊 KPI                                                            │ │
 │  ├───────────────────────────────────────────────────────────────────┤ │
-│  │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │ │
-│  │ │ Befaring │ │ Oppgaver │ │ Bilder   │ │ Sjekklister│            │ │
-│  │ │    8     │ │   15     │ │   45     │ │    3      │             │ │
-│  │ │ (5 åpne) │ │ (5 kritiske)│ (12 utagged)│ (1 pending)│          │ │
-│  │ └──────────┘ └──────────┘ └──────────┘ └──────────┘             │ │
+│  │ [Befaringer: 8 (5 åpne)] [Oppgaver: 15 (5 kritiske)]            │ │
+│  │ [Bilder: 45 (12 utagged)] [Sjekklister: 3 (1 pending)]          │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐ │
@@ -252,13 +239,24 @@ ORDER BY total_count DESC;
 │  ┌───────────────────────────────────────────────────────────────────┐ │
 │  │ 📅 AKTIVITETSFEED (siste 24t)                                    │ │
 │  ├───────────────────────────────────────────────────────────────────┤ │
-│  │ • 2 timer siden - Ole Hansen la til 3 bilder                     │ │
-│  │ • 4 timer siden - Kari Nordmann opprettet oppgave #12            │ │
-│  │ • 6 timer siden - Lars Hansen fullførte befaring #5              │ │
-│  │ • 1 dag siden - Anne Berg opprettet sjekkliste "VVS"            │ │
+│  │ 🎨 Bilder (2 hendelser)                                          │ │
+│  │   • Ole Hansen la til 3 bilder (2t siden)                        │ │
+│  │   • Kari Nordmann la til 5 bilder (6t siden)                     │ │
+│  │                                                                   │ │
+│  │ 📋 Oppgaver (2 hendelser)                                        │ │
+│  │   • Kari Nordmann opprettet oppgave #12 (4t siden)               │ │
+│  │   • Lars Hansen fullførte oppgave #8 (8t siden)                  │ │
+│  │                                                                   │ │
+│  │ [Vis alle hendelser →]                                           │ │
 │  └───────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Fordeler:**
+- ✅ Ingen repetisjon fra dashboard
+- ✅ Fokusert på dette prosjektet
+- ✅ Grupperte hendelser i aktivitetsfeed
+- ✅ Kompakt og oversiktlig
 
 ---
 
@@ -468,71 +466,126 @@ GROUP BY p.id, p.project_name, p.project_number, p.org_id;
 
 ---
 
-## 🚀 IMPLEMENTERINGSPLAN:
+## 📊 METRIKKER & DEFINISJONER:
 
-### **Fase 1: Foundation (Dag 1-2)**
+### **"Mest aktive" definisjon:**
+```sql
+-- Aktivitetsscore (siste 7 dager)
+activity_score = (
+  images_uploaded * 3 +
+  tasks_created * 2 +
+  befaringer_completed * 2.5 +
+  hours_logged * 0.5
+)
+```
+
+### **Arkiverte prosjekter:**
+- Filtreres ut av "mest aktive"
+- Vises kun hvis eksplisitt valgt
+- `WHERE is_active = true`
+
+### **Prioritering:**
+- **🔴 Kritisk:** Oppgaver > 7 dager, befaringer uten crew
+- **🟡 Viktig:** Oppgaver > 3 dager, utaggede bilder
+- **🟢 Info:** Normal aktivitet
+
+---
+
+## ⚡ YTELSESPLAN:
+
+### **Database:**
+- ✅ Indekser på kritiske felt (se SQL over)
+- ✅ Materialiserte views for performance
+- ✅ Pagination (50 bilder per side)
+- ✅ CTE + ROW_NUMBER() for top N per gruppe
+
+### **Frontend:**
+- ✅ Lazy loading av bilder
+- ✅ Virtualisering for lange lister
+- ✅ React Query caching (5 min)
+- ✅ Debounce på søk (300ms)
+
+### **Backend:**
+- ✅ Supabase subscriptions for real-time
+- ✅ Batch operations for bulk tagging
+- ✅ Optimized queries med proper joins
+
+---
+
+## 🚀 IMPLEMENTERINGSPLAN (REVIDERT):
+
+### **Fase 1: Foundation + Basic Real-time (3-4 dager)**
 - [ ] Database-migreringer (favoritter, aktivitet, preferanser)
 - [ ] Views for performance (activity_summary, alerts)
+- [ ] Indekser for ytelse
 - [ ] API endpoints for favoritter
+- [ ] Basic real-time (Supabase subscriptions)
 
-### **Fase 2: Dashboard Home (Dag 3-4)**
-- [ ] "Krever handling" seksjon
+### **Fase 2: Dashboard Home (3-4 dager)**
+- [ ] "Krever handling" seksjon (kondensert)
 - [ ] KPI overview cards
 - [ ] Favoritter & mest aktive
 - [ ] Søk og filtrering
 - [ ] Prosjekt-liste med pagination
+- [ ] Real-time updates for dashboard
 
-### **Fase 3: Project Detail (Dag 5-6)**
+### **Fase 3: Project Detail (2-3 dager)**
 - [ ] Prosjekt-info card
 - [ ] KPI cards per prosjekt
 - [ ] Modul-navigasjon
-- [ ] Aktivitetsfeed
+- [ ] Aktivitetsfeed (grupperte hendelser)
 
-### **Fase 4: Moduler (Dag 7-10)**
+### **Fase 4: Moduler (4-5 dager)**
 - [ ] Befaringer-modul
 - [ ] Oppgaver-modul
 - [ ] Bilder-modul (foto-bibliotek)
 - [ ] Sjekklister-modul (fremtidig)
 
-### **Fase 5: Foto-innboks (Dag 11-13)**
+### **Fase 5: Foto-innboks (3-4 dager)**
 - [ ] `PhotoInboxMini` komponent (6 bilder per prosjekt)
 - [ ] Dedicated inbox page (`/photo-inbox`)
+- [ ] Pagination (50 bilder per side)
 - [ ] Bulk operations (tag alle, slett alle)
 - [ ] Integrer i Dashboard Home
 - [ ] Integrer i Prosjekt-detail
 
-### **Fase 6: Polish (Dag 14-15)**
-- [ ] Real-time updates
-- [ ] Notifikasjoner
-- [ ] Testing
+### **Fase 6: Advanced Notifikasjoner & Polish (3-4 dager)**
+- [ ] Advanced notifikasjoner (email, push)
+- [ ] Testing (brukertester, ytelsestester)
 - [ ] Dokumentasjon
+- [ ] Bug fixes og polish
+
+**Total estimert tid:** 18-24 dager (ikke 12!)
 
 ---
 
-## 🎯 ACCEPTANCE CRITERIA:
+## 🎯 ACCEPTANCE CRITERIA (RYDDET):
 
-### **Must Have:**
-- ✅ Dashboard viser "Krever handling" først
+### **Must Have (MVP):**
+- ✅ Dashboard viser "Krever handling" først (kondensert)
 - ✅ Favoritter & mest aktive synlige
 - ✅ Søk og filtrering fungerer
 - ✅ Klikk på prosjekt → viser detaljer
 - ✅ Moduler per prosjekt fungerer
 - ✅ Skalerbart til 500+ prosjekter
 - ✅ Foto-innboks: Mini inbox (6 bilder) på dashboard
-- ✅ Foto-innboks: Dedicated page med alle bilder
-- ✅ Foto-innboks: Bulk operations (tag alle, slett alle)
+- ✅ Foto-innboks: Dedicated page med pagination
+- ✅ Basic real-time updates (Supabase subscriptions)
 - ✅ Foto-innboks: Gruppert per prosjekt + "uten prosjekt"
 
-### **Should Have:**
-- ⏳ Real-time updates
-- ⏳ Notifikasjoner
+### **Should Have (Fase 2):**
+- ⏳ Bulk operations (tag alle, slett alle)
+- ⏳ Advanced notifikasjoner (email, push)
 - ⏳ Drag & drop for favoritter
-- ⏳ Bulk operations
+- ⏳ Grupperte hendelser i aktivitetsfeed
+- ⏳ Ytelsestesting og optimalisering
 
-### **Nice to Have:**
+### **Nice to Have (Fase 3):**
 - ⏳ AI-basert prioritering
 - ⏳ Automatiske alerts
 - ⏳ Advanced analytics
+- ⏳ Sjekklister-modul
+- ⏳ Rapporter-modul
 
 ---
 
@@ -540,13 +593,89 @@ GROUP BY p.id, p.project_name, p.project_number, p.org_id;
 
 - **Prioritet:** Høy (bedre UX, skalerbart)
 - **Kompleksitet:** Medium (UI + database + API)
-- **Estimat:** 12 dager
+- **Estimat:** 18-24 dager (realistisk)
 - **Avhengigheter:** Database migrasjoner
 - **Blokkerer:** Ingen
 
 ---
 
-**Status:** DESIGN COMPLETE  
+## 🧪 BRUKERTEST-PLAN:
+
+### **Test 1: Dashboard Navigation (5 min)**
+**Scenario:** Admin skal finne favoritt-prosjekt
+1. Åpne Dashboard
+2. Se "Favoritter" seksjon
+3. Klikk på prosjekt
+4. Se prosjekt-detaljer
+
+**Suksess-kriterier:**
+- ✅ Finner favoritt-prosjekt på < 5 sekunder
+- ✅ Ser "Krever handling" først
+- ✅ Kan navigere tilbake til dashboard
+
+### **Test 2: Foto-innboks Workflow (10 min)**
+**Scenario:** Admin skal tagge bilder
+1. Se "Foto-innboks" på dashboard
+2. Klikk "Se alle" på et prosjekt
+3. Se alle bilder for prosjektet
+4. Tag et bilde til befaring
+5. Se at bilde er tagget
+
+**Suksess-kriterier:**
+- ✅ Ser utaggede bilder på < 3 sekunder
+- ✅ Kan tagge bilde på < 10 sekunder
+- ✅ Bilde forsvinner fra innboks etter tagging
+
+### **Test 3: Søk og Filtrering (5 min)**
+**Scenario:** Admin skal finne spesifikt prosjekt
+1. Skriv "Haugesund" i søkefelt
+2. Se filtrerte resultater
+3. Klikk på prosjekt
+4. Se prosjekt-detaljer
+
+**Suksess-kriterier:**
+- ✅ Søkeresultater vises på < 1 sekund
+- ✅ Kan filtrere på status/kunde
+- ✅ Kan sortere på aktivitet/navn
+
+### **Test 4: Ytelse (5 min)**
+**Scenario:** Admin har 200+ prosjekter
+1. Åpne Dashboard
+2. Se alle prosjekter
+3. Scroll gjennom liste
+4. Søk etter prosjekt
+
+**Suksess-kriterier:**
+- ✅ Dashboard laster på < 2 sekunder
+- ✅ Smooth scrolling (60 FPS)
+- ✅ Søk responsiv (< 300ms debounce)
+
+---
+
+## 🎨 FIGMA-READY VERSJON:
+
+### **Komponenter:**
+1. **Dashboard Header** - Logo, søk, varsler, profil
+2. **Krever Handling Card** - Kondensert liste med "Vis alle"
+3. **Foto-innboks Card** - Enkelt rad per prosjekt
+4. **KPI Cards** - 4 kort med tall
+5. **Favoritter & Mest Aktive** - Chips + liste
+6. **Prosjekt-kort** - Kompakt versjon med status-badges
+
+### **States:**
+- **Empty state** - Ingen prosjekter/bilder
+- **Loading state** - Skeleton screens
+- **Error state** - Feilmeldinger
+- **Success state** - Bekreftelser
+
+### **Responsive Breakpoints:**
+- **Mobile:** < 640px - Stack vertikalt
+- **Tablet:** 640px - 1024px - 2 kolonner
+- **Desktop:** > 1024px - Full layout
+
+---
+
+**Status:** DESIGN COMPLETE (REVIDERT)  
 **Next Step:** Start Fase 1 - Database migrasjoner  
-**Estimated Time:** 12 dager
+**Estimated Time:** 18-24 dager
 
