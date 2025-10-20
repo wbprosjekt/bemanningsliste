@@ -34,7 +34,7 @@ interface Project {
   id: string;
   tripletex_project_id: number;
   project_name: string;
-  project_number: string;
+  project_number: string; // Always string after sanitization
   customer_name: string | null;
 }
 
@@ -74,7 +74,18 @@ export default function TagPhotoDialog({
       
       if (error) throw error;
       
-      setProjects(data || []);
+      // Sanitize and filter projects
+      const sanitizedProjects = (data || [])
+        .filter((project) => project.tripletex_project_id !== null)
+        .map((project) => ({
+          id: project.id,
+          tripletex_project_id: project.tripletex_project_id as number,
+          project_name: project.project_name ?? 'Uten navn',
+          project_number: String(project.project_number ?? '0'),
+          customer_name: project.customer_name,
+        }));
+      
+      setProjects(sanitizedProjects);
     } catch (error: any) {
       console.error('Error loading projects:', error);
       toast({

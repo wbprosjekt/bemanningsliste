@@ -58,7 +58,7 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
             id: project.id,
             tripletex_project_id: project.tripletex_project_id as number,
             project_name: project.project_name ?? 'Uten navn',
-            project_number: project.project_number ?? '0',
+            project_number: String(project.project_number ?? '0'),
             customer_name: project.customer_name,
           }));
         
