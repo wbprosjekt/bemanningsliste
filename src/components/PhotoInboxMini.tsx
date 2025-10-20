@@ -187,7 +187,9 @@ export default function PhotoInboxMini({
                     if (project.project_id) {
                       router.push(`/photo-inbox?project=${project.project_id}`);
                     } else {
-                      router.push('/photo-inbox?project=untagged');
+                      // Don't send query parameter for untagged photos
+                      // PhotoInbox will show all untagged photos by default
+                      router.push('/photo-inbox');
                     }
                   }}
                 >

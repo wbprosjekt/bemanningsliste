@@ -75,8 +75,8 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
 
       // Filter by org_id and projectId in JavaScript
       const filteredData = (data || []).filter((photo: any) => {
-        // If projectId is 'untagged', only show photos without project
-        if (projectId === 'untagged') {
+        // If projectId is not provided, only show photos without project
+        if (!projectId) {
           return !photo.prosjekt_id;
         }
         
