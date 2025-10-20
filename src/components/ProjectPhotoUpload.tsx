@@ -142,6 +142,17 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
 
     try {
       for (const file of selectedFiles) {
+        // Check file size before compression (max 50MB)
+        const maxSize = 50 * 1024 * 1024; // 50MB
+        if (file.size > maxSize) {
+          toast({
+            title: 'Fil for stor',
+            description: `${file.name} er for stor (${(file.size / 1024 / 1024).toFixed(2)}MB). Maksimal størrelse er 50MB.`,
+            variant: 'destructive'
+          });
+          continue;
+        }
+        
         // Compress image
         const compressedFile = await compressImage(file);
 
@@ -215,8 +226,9 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const maxWidth = 2048;
-          const maxHeight = 2048;
+          // Reduced from 2048x2048 to 1920x1920 for better mobile performance
+          const maxWidth = 1920;
+          const maxHeight = 1920;
           let width = img.width;
           let height = img.height;
 
@@ -237,16 +249,20 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
 
+          // Reduced quality from 0.85 to 0.75 for better compression
+          // This reduces file size by ~30-40% while maintaining good visual quality
           canvas.toBlob(
             (blob) => {
               if (blob) {
-                resolve(new File([blob], file.name, { type: 'image/webp' }));
+                const compressedFile = new File([blob], file.name, { type: 'image/webp' });
+                console.log(`📸 Compressed: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB (${Math.round((1 - compressedFile.size / file.size) * 100)}% reduction)`);
+                resolve(compressedFile);
               } else {
                 resolve(file);
               }
             },
             'image/webp',
-            0.85
+            0.75  // 75% quality - good balance between quality and file size
           );
         };
         img.src = e.target?.result as string;
@@ -397,7 +413,7 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
               className="hidden"
             />
             <p className="text-xs text-gray-500 mt-2">
-              Maksimal filstørrelse: 5MB per bilde
+              Maksimal filstørrelse: 50MB per bilde (komprimeres automatisk til WebP)
             </p>
           </div>
 
