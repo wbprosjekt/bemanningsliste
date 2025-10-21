@@ -69,7 +69,7 @@ export function getCorsHeaders(requestOrigin?: string): Record<string, string> {
   // Only set origin if it's allowed
   if (isAllowedOrigin) {
     corsHeaders['Access-Control-Allow-Origin'] = origin;
-  } else if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+  } else if (origin && typeof origin === 'string' && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) {
     // Allow any localhost port in development
     console.warn(`⚠️ CORS: Allowing localhost origin ${origin} for development`);
     corsHeaders['Access-Control-Allow-Origin'] = origin;

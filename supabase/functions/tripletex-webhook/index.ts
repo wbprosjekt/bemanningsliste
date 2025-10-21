@@ -22,6 +22,7 @@ if (Deno.serve) {
     }
 
     try {
+      console.log('🚀 Tripletex webhook function started');
       const { method } = req;
       
       if (method !== 'POST') {
@@ -29,20 +30,34 @@ if (Deno.serve) {
           JSON.stringify({ error: 'Method not allowed' }),
           { 
             status: 405, 
-            headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' }
           }
         );
       }
 
       // Parse webhook payload
-      const payload: TripletexWebhookPayload = await req.json();
+      let payload: TripletexWebhookPayload;
+      try {
+        payload = await req.json();
+        console.log('📥 Raw webhook payload received:', JSON.stringify(payload, null, 2));
+      } catch (error) {
+        console.error('❌ Failed to parse webhook payload:', error);
+        return new Response(
+          JSON.stringify({ error: 'Invalid JSON payload' }),
+          { 
+            status: 400, 
+            headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' }
+          }
+        );
+      }
       
       console.log('🔔 Tripletex webhook received:', {
         eventType: payload.eventType,
         entityId: payload.entityId,
         timestamp: payload.timestamp,
         hasChecksum: !!payload.checksum,
-        hasOrgId: !!payload.organizationId
+        hasOrgId: !!payload.organizationId,
+        fullPayload: JSON.stringify(payload, null, 2)
       });
 
       // Validate payload

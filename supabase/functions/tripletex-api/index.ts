@@ -1093,8 +1093,8 @@ Deno.serve(async (req) => {
         result = await exponentialBackoff(async () => {
           console.log(`🔔 Registering webhooks for org ${orgId}`);
           
-          // Get webhook URL (this would be your deployed webhook function URL)
-          const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/tripletex-webhook`;
+          // Get webhook URL (use fieldnote.no domain instead of direct Supabase URL)
+          const webhookUrl = `https://www.fieldnote.no/api/webhooks/tripletex`;
           
           // First, clean up existing webhooks for our URL to avoid duplicates
           console.log(`🧹 Cleaning up existing webhooks for URL: ${webhookUrl}`);
@@ -1147,7 +1147,8 @@ Deno.serve(async (req) => {
           // Employee webhook
           const employeeWebhook = await callTripletexAPI('/event/subscription', 'POST', {
             targetUrl: webhookUrl,
-            event: 'employee.create'
+            event: 'employee.create',
+            fields: '*'
           }, orgId);
           
           if (employeeWebhook.success) {
@@ -1174,7 +1175,8 @@ Deno.serve(async (req) => {
           // Project webhook
           const projectWebhook = await callTripletexAPI('/event/subscription', 'POST', {
             targetUrl: webhookUrl,
-            event: 'project.create'
+            event: 'project.create',
+            fields: '*'
           }, orgId);
           
           if (projectWebhook.success) {
@@ -1188,7 +1190,8 @@ Deno.serve(async (req) => {
           // Product webhook (since activity.create is not available in test environment)
           const productWebhook = await callTripletexAPI('/event/subscription', 'POST', {
             targetUrl: webhookUrl,
-            event: 'product.create'
+            event: 'product.create',
+            fields: '*'
           }, orgId);
           
           if (productWebhook.success) {
@@ -1202,7 +1205,8 @@ Deno.serve(async (req) => {
           // Customer webhook (since timesheetEntry is not available)
           const customerWebhook = await callTripletexAPI('/event/subscription', 'POST', {
             targetUrl: webhookUrl,
-            event: 'customer.create'
+            event: 'customer.create',
+            fields: '*'
           }, orgId);
           
           if (customerWebhook.success) {
