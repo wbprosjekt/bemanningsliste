@@ -45,7 +45,7 @@ if (Deno.serve) {
           JSON.stringify({ error: 'Invalid JSON payload' }),
           { 
             status: 400, 
-            headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' }
+            headers: { ...getCorsHeaders(req.headers.get('origin') || undefined), 'Content-Type': 'application/json' }
           }
         );
       }
@@ -65,7 +65,7 @@ if (Deno.serve) {
           JSON.stringify({ error: 'Invalid payload' }),
           { 
             status: 400, 
-            headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' }
+            headers: { ...getCorsHeaders(req.headers.get('origin') || undefined), 'Content-Type': 'application/json' }
           }
         );
       }
@@ -80,7 +80,7 @@ if (Deno.serve) {
           JSON.stringify({ success: true, message: 'Webhook processed' }),
           { 
             status: 200, 
-            headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' }
+            headers: { ...getCorsHeaders(req.headers.get('origin') || undefined), 'Content-Type': 'application/json' }
           }
         );
       } else {
@@ -89,7 +89,7 @@ if (Deno.serve) {
           JSON.stringify({ error: result.error }),
           { 
             status: 500, 
-            headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' }
+            headers: { ...getCorsHeaders(req.headers.get('origin') || undefined), 'Content-Type': 'application/json' }
           }
         );
       }
@@ -164,30 +164,64 @@ async function handleProjectWebhook(event: string, id: number, projectData?: any
     if (event === 'project.create' && projectData) {
       console.log(`🔄 Creating new project from webhook data for project ${id}:`, projectData.name);
       
-      // First, try to find existing project to get org_id
-      const { data: existingProject } = await supabase
+      // Get org_id from any existing project in the cache
+      const { data: existingProjects } = await supabase
         .from('ttx_project_cache')
         .select('org_id')
+        .limit(1);
+
+      const orgId = existingProjects?.[0]?.org_id || null;
+
+      // First check if project already exists
+      const { data: existingProject } = await supabase
+        .from('ttx_project_cache')
+        .select('id')
         .eq('tripletex_project_id', id)
         .single();
 
-      // Insert the project in cache using webhook data
-      await supabase
-        .from('ttx_project_cache')
-        .upsert({
-          tripletex_project_id: id,
-          project_name: projectData.name || 'Unknown',
-          project_number: projectData.number || '',
-          display_name: projectData.displayName || '',
-          customer_name: projectData.customer?.name || null,
-          is_active: !projectData.isClosed,
-          is_closed: projectData.isClosed || false,
-          last_synced: new Date().toISOString(),
-          needs_sync: false,
-          org_id: existingProject?.org_id || null // Use existing org_id or null
-        });
-      
-      console.log(`✅ Project ${id} created successfully from webhook data`);
+      if (existingProject) {
+        console.log(`ℹ️ Project ${id} already exists, updating instead of creating`);
+        
+        // Update existing project
+        const { error: updateError } = await supabase
+          .from('ttx_project_cache')
+          .update({
+            project_name: projectData.name || 'Unknown',
+            project_number: projectData.number || '',
+            customer_name: projectData.customer?.name || null,
+            is_active: !projectData.isClosed,
+            last_synced: new Date().toISOString(),
+            needs_sync: false
+          })
+          .eq('tripletex_project_id', id);
+        
+        if (updateError) {
+          console.error(`❌ Failed to update project ${id}:`, updateError);
+          return { success: false, error: updateError.message };
+        }
+        
+        console.log(`✅ Project ${id} updated successfully`);
+      } else {
+        // Insert new project
+        const { data: insertedData, error: insertError } = await supabase
+          .from('ttx_project_cache')
+          .insert({
+            tripletex_project_id: id,
+            project_name: projectData.name || 'Unknown',
+            project_number: projectData.number || '',
+            customer_name: projectData.customer?.name || null,
+            is_active: !projectData.isClosed,
+            last_synced: new Date().toISOString(),
+            org_id: orgId
+          });
+        
+        if (insertError) {
+          console.error(`❌ Failed to insert project ${id}:`, insertError);
+          return { success: false, error: insertError.message };
+        }
+        
+        console.log(`✅ Project ${id} created successfully from webhook data with org_id: ${orgId}`);
+      }
     } else {
       // For updates or when no project data is available, mark for re-sync
       await supabase

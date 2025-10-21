@@ -183,6 +183,29 @@ async function getTripletexConfig(orgId: string): Promise<TripletexConfig> {
   return fallbackConfig;
 }
 
+// Get last sync time for changesSince parameter
+async function getLastSyncTime(orgId: string, resourceType: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('tripletex_sync_state')
+      .select('last_synced')
+      .eq('org_id', orgId)
+      .eq('resource_type', resourceType)
+      .order('last_synced', { ascending: false })
+      .limit(1);
+    
+    if (error) {
+      console.warn('Failed to get last sync time:', error);
+      return null;
+    }
+    
+    return data?.[0]?.last_synced || null;
+  } catch (error) {
+    console.warn('Failed to get last sync time:', error);
+    return null;
+  }
+}
+
 // Create or reuse a Tripletex session token for this org
 async function getOrCreateSession(orgId: string): Promise<{ token: string; expirationDate: string; companyId: number }> {
   const config = await getTripletexConfig(orgId);
@@ -470,6 +493,10 @@ async function fetchAllTripletexEmployees(orgId: string) {
   const visitedPages = new Set<number>();
   let totalFromMeta: number | undefined;
   let pagesFetched = 0;
+  
+  // Get last sync time for changesSince parameter
+  const lastSyncTime = await getLastSyncTime(orgId, 'employee');
+  const changesSinceParam = lastSyncTime ? `&changesSince=${lastSyncTime}` : '';
 
   while (pagesFetched < 100) { // safety guard to avoid infinite loops
     if (visitedPages.has(currentPage)) {
@@ -480,7 +507,7 @@ async function fetchAllTripletexEmployees(orgId: string) {
     visitedPages.add(currentPage);
     pagesFetched += 1;
 
-    const response = await callTripletexAPI(`/employee?count=${pageSize}&page=${currentPage}&fields=id,firstName,lastName,email`, 'GET', undefined, orgId);
+    const response = await callTripletexAPI(`/employee?count=${pageSize}&page=${currentPage}&fields=id,firstName,lastName,email${changesSinceParam}`, 'GET', undefined, orgId);
     if (!response.success) {
       return {
         success: false,
@@ -959,7 +986,11 @@ Deno.serve(async (req) => {
 
       case 'sync-projects': {
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/project?count=100&fields=id,number,name,displayName,customer,department,projectManager', 'GET', undefined, orgId);
+          // Get last sync time for changesSince parameter
+          const lastSyncTime = await getLastSyncTime(orgId, 'project');
+          const changesSinceParam = lastSyncTime ? `&changesSince=${lastSyncTime}` : '';
+          
+          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,department,projectManager${changesSinceParam}`, 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             console.log(`Syncing ${response.data.values.length} projects for org ${orgId}`);
             
@@ -1045,7 +1076,11 @@ Deno.serve(async (req) => {
 
       case 'sync-activities': {
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/activity?count=1000&fields=id,name', 'GET', undefined, orgId);
+          // Get last sync time for changesSince parameter
+          const lastSyncTime = await getLastSyncTime(orgId, 'activity');
+          const changesSinceParam = lastSyncTime ? `&changesSince=${lastSyncTime}` : '';
+          
+          const response = await callTripletexAPI(`/activity?count=1000&fields=id,name${changesSinceParam}`, 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             // Process activities with checksum validation
             const activitiesToProcess = [];

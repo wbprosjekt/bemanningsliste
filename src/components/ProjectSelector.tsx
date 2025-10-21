@@ -5,9 +5,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Check, ChevronsUpDown, RefreshCw } from 'lucide-react';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 interface Project {
   id: string;
@@ -39,9 +38,7 @@ const ProjectSelector = ({
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const { toast } = useToast();
-  const isOnline = useOnlineStatus();
 
   const loadProjects = useCallback(async () => {
     if (!orgId) return;
@@ -96,53 +93,6 @@ const ProjectSelector = ({
     }
   }, [orgId, personId, toast, excludeProjectIds]);
 
-  const syncProjects = useCallback(async () => {
-    setSyncing(true);
-    console.log('🔄 Starting project sync...', { orgId });
-    try {
-      // Use Supabase client instead of manual fetch for proper auth
-      const { data, error } = await supabase.functions.invoke('tripletex-api', {
-        body: {
-          action: 'sync-projects',
-          orgId: orgId
-        }
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      const result = data;
-      console.log('📦 Response data:', result);
-
-      if (result?.success) {
-        // Log debug info to browser console
-        if (result.data?.debug) {
-          console.log('🔍 DEBUG: First 3 projects from Tripletex:', result.data.debug);
-          console.table(result.data.debug);
-        }
-        
-        toast({
-          title: "✓ Prosjekter oppdatert",
-          description: result.data?.count 
-            ? `${result.data.count} prosjekt(er) synkronisert!`
-            : "Prosjektlisten er oppdatert.",
-        });
-        await loadProjects();
-      } else {
-        throw new Error(result.error || 'Synkronisering feilet');
-      }
-    } catch (error) {
-      console.error('Error syncing projects:', error);
-      toast({
-        title: "Feil ved synkronisering",
-        description: error instanceof Error ? error.message : "Kunne ikke synkronisere.",
-        variant: "destructive"
-      });
-    } finally {
-      setSyncing(false);
-    }
-  }, [orgId, toast, loadProjects]);
 
   useEffect(() => {
     if (open) {
@@ -200,16 +150,6 @@ const ProjectSelector = ({
         <Command>
           <div className="flex items-center border-b px-3">
             <CommandInput placeholder="Søk prosjekter..." className="flex-1" />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={syncProjects}
-              disabled={syncing || loading || !isOnline}
-              className="ml-2 h-8 px-2"
-              title={!isOnline ? "Du er offline" : "Oppdater fra Tripletex"}
-            >
-              <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
-            </Button>
           </div>
           <CommandList className="max-h-[300px] overflow-y-auto">
             <CommandEmpty>
@@ -217,20 +157,10 @@ const ProjectSelector = ({
                 <div className="py-6 text-center text-sm">Laster prosjekter...</div>
               ) : projects.length === 0 ? (
                 <div className="py-6 px-4 text-center">
-                  <p className="text-sm font-medium mb-2">Ingen prosjekter funnet</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={syncProjects}
-                    disabled={syncing}
-                    className="mt-2"
-                  >
-                    {syncing ? (
-                      <><RefreshCw className="mr-2 h-3 w-3 animate-spin" />Synkroniserer...</>
-                    ) : (
-                      <><RefreshCw className="mr-2 h-3 w-3" />Hent fra Tripletex</>
-                    )}
-                  </Button>
+                  <p className="text-sm font-medium">Ingen prosjekter funnet</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Prosjekter oppdateres automatisk via webhooks
+                  </p>
                 </div>
               ) : (
                 <div className="py-6 text-center text-sm">Ingen prosjekter matcher søket</div>
