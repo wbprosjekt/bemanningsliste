@@ -64,7 +64,7 @@ type LoadingKey =
   | "employees"
   | "projects"
   | "activities"
-  | "webhooks"
+  | "register-webhooks"
   | "saveTokens"
   | "nightly";
 
@@ -219,7 +219,7 @@ const TripletexIntegrationPage = () => {
       "register-webhooks": "webhooks",
     } as const;
 
-    setLoadingState(type, true);
+    setLoadingState(type as LoadingKey, true);
     try {
       const result = await callTripletexAPI(actionMap[type]);
 
@@ -242,7 +242,7 @@ const TripletexIntegrationPage = () => {
         variant: "destructive",
       });
     } finally {
-      setLoadingState(type, false);
+      setLoadingState(type as LoadingKey, false);
     }
   };
 
@@ -622,8 +622,8 @@ const TripletexIntegrationPage = () => {
               </div>
 
               <div className="space-y-2">
-                <Button onClick={() => syncData("register-webhooks")} disabled={loading.webhooks} className="w-full" variant="outline">
-                  {loading.webhooks ? (
+                <Button onClick={() => syncData("register-webhooks")} disabled={loading["register-webhooks"]} className="w-full" variant="outline">
+                  {loading["register-webhooks"] ? (
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Bell className="mr-2 h-4 w-4" />
