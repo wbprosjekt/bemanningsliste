@@ -476,7 +476,7 @@ async function fetchAllTripletexEmployees(orgId: string) {
     visitedPages.add(currentPage);
     pagesFetched += 1;
 
-    const response = await callTripletexAPI(`/employee?count=${pageSize}&page=${currentPage}&fields=id,firstName,lastName,email,isActive`, 'GET', undefined, orgId);
+    const response = await callTripletexAPI(`/employee?count=${pageSize}&page=${currentPage}&fields=id,firstName,lastName,email`, 'GET', undefined, orgId);
     if (!response.success) {
       return {
         success: false,
@@ -598,7 +598,7 @@ async function ensureParticipant(orgId: string, projectId: number, employeeId: n
 }
 
 async function ensureActivityOnProject(orgId: string, projectId: number, activityId: number) {
-  const res = await callTripletexAPI(`/activity?project.id=${projectId}&count=1000&fields=id,name,isActive`, 'GET', undefined, orgId);
+  const res = await callTripletexAPI(`/activity?project.id=${projectId}&count=1000&fields=id,name`, 'GET', undefined, orgId);
   if (!res.success) return { ok: false, reason: res.error || 'activity_lookup_failed' };
   const list = res.data?.values || [];
   const found = list.some((a: unknown) => Number((a as { id: number })?.id) === Number(activityId));
@@ -955,7 +955,7 @@ Deno.serve(async (req) => {
 
       case 'sync-projects': {
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/project?count=100&fields=id,number,name,displayName,customer,department,projectManager,isActive', 'GET', undefined, orgId);
+          const response = await callTripletexAPI('/project?count=100&fields=id,number,name,displayName,customer,department,projectManager', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             console.log(`Syncing ${response.data.values.length} projects for org ${orgId}`);
             
@@ -1041,7 +1041,7 @@ Deno.serve(async (req) => {
 
       case 'sync-activities': {
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/activity?count=1000&fields=id,name,isActive,project', 'GET', undefined, orgId);
+          const response = await callTripletexAPI('/activity?count=1000&fields=id,name,project', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             // Process activities with checksum validation
             const activitiesToProcess = [];
@@ -1091,7 +1091,7 @@ Deno.serve(async (req) => {
 
       case 'search-projects': {
         const query = url.searchParams.get('q') || '';
-        result = await callTripletexAPI(`/project?count=50&displayName=${encodeURIComponent(query)}&fields=id,number,name,displayName,customer,isActive`, 'GET', undefined, orgId);
+        result = await callTripletexAPI(`/project?count=50&displayName=${encodeURIComponent(query)}&fields=id,number,name,displayName,customer`, 'GET', undefined, orgId);
         
         // Cache search results
         if (result.success && result.data?.values) {
@@ -1378,7 +1378,7 @@ Deno.serve(async (req) => {
             });
             
             // Look for existing overtime activities for this project
-            const overtimeActivities = await callTripletexAPI(`/activity?project.id=${project_id}&count=1000&fields=id,name,isActive`, 'GET', undefined, orgId);
+            const overtimeActivities = await callTripletexAPI(`/activity?project.id=${project_id}&count=1000&fields=id,name`, 'GET', undefined, orgId);
             
             if (overtimeActivities.success && overtimeActivities.data?.values) {
               const activities = overtimeActivities.data.values as Array<{ id: number; name?: string; isActive?: boolean }>;
@@ -1496,7 +1496,7 @@ Deno.serve(async (req) => {
             return { success: false, error: 'Tripletex-ID finnes ikke', missing: 'project', id: project_id };
           }
           if (activity_id) {
-            const activityCheck = await callTripletexAPI(`/activity/${activity_id}?fields=id,name,isActive`, 'GET', undefined, orgId);
+            const activityCheck = await callTripletexAPI(`/activity/${activity_id}?fields=id,name`, 'GET', undefined, orgId);
             if (!activityCheck.success) {
               return { success: false, error: 'Tripletex-ID finnes ikke', missing: 'activity', id: activity_id };
             }
@@ -1789,7 +1789,7 @@ Deno.serve(async (req) => {
 
         result = await exponentialBackoff(async () => {
           // Get project details
-          const projectResponse = await callTripletexAPI(`/project/${projectId}?fields=id,number,name,displayName,customer,department,projectManager,isActive`, 'GET', undefined, orgId);
+          const projectResponse = await callTripletexAPI(`/project/${projectId}?fields=id,number,name,displayName,customer,department,projectManager`, 'GET', undefined, orgId);
           
           if (!projectResponse.success) {
             return { success: false, error: 'Failed to fetch project details from Tripletex' };
