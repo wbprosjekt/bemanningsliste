@@ -459,6 +459,7 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
 }
 
 async function fetchAllTripletexEmployees(orgId: string) {
+  console.log(`🔍 fetchAllTripletexEmployees called for org ${orgId}`);
   const pageSize = 100;
   let currentPage = 0;
   const employees: TripletexEmployeeRecord[] = [];
@@ -552,6 +553,7 @@ async function fetchAllTripletexEmployees(orgId: string) {
     }
   }
 
+  console.log(`🔍 fetchAllTripletexEmployees returning ${employees.length} employees`);
   return {
     success: true,
     employees,
