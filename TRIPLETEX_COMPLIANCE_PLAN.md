@@ -2,23 +2,25 @@
 
 ## 🎯 **GODKJENT PLAN**
 
-### **Fase 1: Minimal compliance (4-6 timer)**
+### **Fase 1: Minimal compliance (4-6 timer)** ✅ **FULLFØRT**
 - ✅ Fields-filtrering i GET-kall (EMPLOYEE_FIELDS, PROJECT_FIELDS, ACTIVITY_FIELDS)
-- ✅ Basic checksum-støtte (changesSince parameter)
+- ✅ Basic checksum-støtte (lagring av checksums)
 - ✅ Oppdater sync-funksjoner med fields + checksum
 - ✅ Test mot Tripletex test-miljø
+- ✅ User-Agent og X-Requested-With headers
 
-### **Fase 2: Webhook-støtte (4-6 timer)**
-- ✅ Opprett webhook edge function
-- ✅ Registrer webhooks i Tripletex
-- ✅ Test webhook-flyt
-- ✅ Integrer med eksisterende sync
+### **Fase 2: Webhook-støtte (4-6 timer)** ⏳ **NESTE STEG**
+- ❌ Opprett webhook edge function
+- ❌ Registrer webhooks i Tripletex
+- ❌ Test webhook-flyt
+- ❌ Integrer med eksisterende sync
 
-### **Fase 3: Optimalisering (4-6 timer)**
-- ✅ Intelligent sync-intervaller
-- ✅ Avansert checksum-logikk
-- ✅ Performance-optimalisering
-- ✅ Omfattende testing
+### **Fase 3: Optimalisering (4-6 timer)** ⏳ **FREMOVER**
+- ❌ changesSince-parametere for differensielle kall
+- ❌ Intelligent sync-intervaller
+- ❌ Avansert checksum-logikk med Tripletex' egen mekanisme
+- ❌ Performance-optimalisering
+- ❌ Omfattende testing
 
 ---
 

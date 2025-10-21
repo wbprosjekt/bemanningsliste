@@ -1089,6 +1089,94 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'register-webhooks': {
+        result = await exponentialBackoff(async () => {
+          console.log(`🔔 Registering webhooks for org ${orgId}`);
+          
+          // Get webhook URL (this would be your deployed webhook function URL)
+          const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/tripletex-webhook`;
+          
+          // Register webhooks for different entity types
+          const webhookRegistrations = [];
+          
+          // Employee webhook
+          const employeeWebhook = await callTripletexAPI('/webhook', 'POST', {
+            url: webhookUrl,
+            eventTypes: ['created', 'updated', 'deleted'],
+            entityType: 'employee'
+          }, orgId);
+          
+          if (employeeWebhook.success) {
+            webhookRegistrations.push({ type: 'employee', success: true });
+            console.log('✅ Employee webhook registered');
+          } else {
+            webhookRegistrations.push({ type: 'employee', success: false, error: employeeWebhook.error });
+            console.error('❌ Employee webhook registration failed:', employeeWebhook.error);
+          }
+          
+          // Project webhook
+          const projectWebhook = await callTripletexAPI('/webhook', 'POST', {
+            url: webhookUrl,
+            eventTypes: ['created', 'updated', 'deleted'],
+            entityType: 'project'
+          }, orgId);
+          
+          if (projectWebhook.success) {
+            webhookRegistrations.push({ type: 'project', success: true });
+            console.log('✅ Project webhook registered');
+          } else {
+            webhookRegistrations.push({ type: 'project', success: false, error: projectWebhook.error });
+            console.error('❌ Project webhook registration failed:', projectWebhook.error);
+          }
+          
+          // Activity webhook
+          const activityWebhook = await callTripletexAPI('/webhook', 'POST', {
+            url: webhookUrl,
+            eventTypes: ['created', 'updated', 'deleted'],
+            entityType: 'activity'
+          }, orgId);
+          
+          if (activityWebhook.success) {
+            webhookRegistrations.push({ type: 'activity', success: true });
+            console.log('✅ Activity webhook registered');
+          } else {
+            webhookRegistrations.push({ type: 'activity', success: false, error: activityWebhook.error });
+            console.error('❌ Activity webhook registration failed:', activityWebhook.error);
+          }
+          
+          // Timesheet entry webhook
+          const timesheetWebhook = await callTripletexAPI('/webhook', 'POST', {
+            url: webhookUrl,
+            eventTypes: ['created', 'updated', 'deleted'],
+            entityType: 'timesheet/entry'
+          }, orgId);
+          
+          if (timesheetWebhook.success) {
+            webhookRegistrations.push({ type: 'timesheet/entry', success: true });
+            console.log('✅ Timesheet webhook registered');
+          } else {
+            webhookRegistrations.push({ type: 'timesheet/entry', success: false, error: timesheetWebhook.error });
+            console.error('❌ Timesheet webhook registration failed:', timesheetWebhook.error);
+          }
+          
+          const successCount = webhookRegistrations.filter(r => r.success).length;
+          const totalCount = webhookRegistrations.length;
+          
+          console.log(`🔔 Webhook registration complete: ${successCount}/${totalCount} successful`);
+          
+          return {
+            success: true,
+            data: { 
+              registrations: webhookRegistrations,
+              successCount,
+              totalCount,
+              webhookUrl
+            }
+          };
+        });
+        break;
+      }
+
       case 'search-projects': {
         const query = url.searchParams.get('q') || '';
         result = await callTripletexAPI(`/project?count=50&displayName=${encodeURIComponent(query)}&fields=id,number,name,displayName,customer`, 'GET', undefined, orgId);

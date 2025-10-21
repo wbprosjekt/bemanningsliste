@@ -18,6 +18,7 @@ import {
   Users,
   FolderOpen,
   Activity,
+  Bell,
   Clock,
   Settings,
   Eye,
@@ -63,6 +64,7 @@ type LoadingKey =
   | "employees"
   | "projects"
   | "activities"
+  | "webhooks"
   | "saveTokens"
   | "nightly";
 
@@ -202,17 +204,19 @@ const TripletexIntegrationPage = () => {
     }
   };
 
-  const syncData = async (type: "employees" | "projects" | "activities") => {
+  const syncData = async (type: "employees" | "projects" | "activities" | "register-webhooks") => {
     const actionMap = {
       employees: "sync-employees",
       projects: "sync-projects",
       activities: "sync-activities",
+      "register-webhooks": "register-webhooks",
     } as const;
 
     const titleMap = {
       employees: "ansatte",
       projects: "prosjekter",
       activities: "aktiviteter",
+      "register-webhooks": "webhooks",
     } as const;
 
     setLoadingState(type, true);
@@ -584,7 +588,7 @@ const TripletexIntegrationPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
               <div className="space-y-2">
                 <Button onClick={() => syncData("employees")} disabled={loading.employees} className="w-full" variant="outline">
                   {loading.employees ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
@@ -615,6 +619,18 @@ const TripletexIntegrationPage = () => {
                   Synk aktiviteter
                 </Button>
                 <p className="text-xs text-muted-foreground">Henter aktiviteter fra Tripletex og lagrer i lokal cache.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Button onClick={() => syncData("register-webhooks")} disabled={loading.webhooks} className="w-full" variant="outline">
+                  {loading.webhooks ? (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Bell className="mr-2 h-4 w-4" />
+                  )}
+                  Registrer webhooks
+                </Button>
+                <p className="text-xs text-muted-foreground">Registrerer webhooks for automatiske oppdateringer.</p>
               </div>
             </div>
           </CardContent>
