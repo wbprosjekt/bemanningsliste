@@ -58,7 +58,7 @@ export default function ProjectSelector({ open, onClose, onSelect, orgId }: Proj
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl">
+      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl flex flex-col">
         <SheetHeader>
           <SheetTitle>Velg prosjekt</SheetTitle>
         </SheetHeader>
@@ -76,7 +76,7 @@ export default function ProjectSelector({ open, onClose, onSelect, orgId }: Proj
         </div>
 
         {/* Projects List */}
-        <div className="mt-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+        <div className="mt-4 space-y-2 overflow-y-auto flex-1" style={{ maxHeight: 'calc(90vh - 200px)', minHeight: '200px' }}>
           {loading ? (
             <div className="text-center py-8 text-gray-400">Laster prosjekter...</div>
           ) : filteredProjects.length === 0 ? (
