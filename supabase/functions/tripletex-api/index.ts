@@ -1097,8 +1097,8 @@ Deno.serve(async (req) => {
         result = await exponentialBackoff(async () => {
           console.log(`🔔 Registering webhooks for org ${orgId}`);
           
-          // Get webhook URL (use fieldnote.no domain instead of direct Supabase URL)
-          const webhookUrl = `https://www.fieldnote.no/api/webhooks/tripletex`;
+          // Get webhook URL (use proxy URL for proper authentication)
+          const webhookUrl = 'https://www.fieldnote.no/api/webhooks/tripletex';
           
           // First, clean up existing webhooks for our URL to avoid duplicates
           console.log(`🧹 Cleaning up existing webhooks for URL: ${webhookUrl}`);
@@ -1107,8 +1107,10 @@ Deno.serve(async (req) => {
           let deletedCount = 0;
           let failedDeletions = 0;
           if (existingWebhooks.success && existingWebhooks.data?.values) {
+            // Clean up BOTH old direct Supabase URL and new proxy URL
+            const oldDirectUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/tripletex-webhook`;
             const ourExistingWebhooks = existingWebhooks.data.values.filter((webhook: any) => 
-              webhook.targetUrl === webhookUrl
+              webhook.targetUrl === webhookUrl || webhook.targetUrl === oldDirectUrl
             );
             
             console.log(`🗑️ Found ${ourExistingWebhooks.length} existing webhooks to clean up`);
@@ -1252,10 +1254,12 @@ Deno.serve(async (req) => {
           if (response.success && response.data?.values) {
             console.log(`📋 Found ${response.data.values.length} registered webhooks`);
             
-            // Filter webhooks for our URL
-            const webhookUrl = `https://www.fieldnote.no/api/webhooks/tripletex`;
+            // Filter webhooks for our URLs (both old and new)
+            const oldDirectUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/tripletex-webhook`;
+            const newProxyUrl = 'https://www.fieldnote.no/api/webhooks/tripletex';
+            const webhookUrl = newProxyUrl; // Use new proxy URL as primary
             const ourWebhooks = response.data.values.filter((webhook: any) => 
-              webhook.targetUrl === webhookUrl
+              webhook.targetUrl === oldDirectUrl || webhook.targetUrl === newProxyUrl
             );
             
             console.log(`🎯 Our webhooks: ${ourWebhooks.length}`);
