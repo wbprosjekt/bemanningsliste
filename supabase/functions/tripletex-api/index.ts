@@ -1041,7 +1041,7 @@ Deno.serve(async (req) => {
 
       case 'sync-activities': {
         result = await exponentialBackoff(async () => {
-          const response = await callTripletexAPI('/activity?count=1000&fields=id,name,project', 'GET', undefined, orgId);
+          const response = await callTripletexAPI('/activity?count=1000&fields=id,name', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
             // Process activities with checksum validation
             const activitiesToProcess = [];
