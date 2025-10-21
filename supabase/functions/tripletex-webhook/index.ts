@@ -7,11 +7,10 @@ const supabase = createClient(
 );
 
 interface TripletexWebhookPayload {
-  eventType: string;
-  entityId: number;
-  timestamp: string;
-  checksum?: string;
-  organizationId?: string;
+  event: string;
+  value: any;
+  id: number;
+  subscriptionId?: number;
 }
 
 // Handle CORS preflight
@@ -52,16 +51,15 @@ if (Deno.serve) {
       }
       
       console.log('🔔 Tripletex webhook received:', {
-        eventType: payload.eventType,
-        entityId: payload.entityId,
-        timestamp: payload.timestamp,
-        hasChecksum: !!payload.checksum,
-        hasOrgId: !!payload.organizationId,
+        event: payload.event,
+        id: payload.id,
+        subscriptionId: payload.subscriptionId,
+        hasValue: !!payload.value,
         fullPayload: JSON.stringify(payload, null, 2)
       });
 
       // Validate payload
-      if (!payload.eventType || !payload.entityId) {
+      if (!payload.event || !payload.id) {
         console.error('❌ Invalid webhook payload:', payload);
         return new Response(
           JSON.stringify({ error: 'Invalid payload' }),
@@ -76,7 +74,8 @@ if (Deno.serve) {
       const result = await handleWebhookEvent(payload);
 
       if (result.success) {
-        console.log(`✅ Webhook processed successfully: ${payload.entityType}:${payload.entityId}`);
+        const entityType = payload.event.split('.')[0];
+        console.log(`✅ Webhook processed successfully: ${entityType}:${payload.id}`);
         return new Response(
           JSON.stringify({ success: true, message: 'Webhook processed' }),
           { 
@@ -110,35 +109,26 @@ if (Deno.serve) {
 
 async function handleWebhookEvent(payload: TripletexWebhookPayload) {
   try {
-    const { eventType, entityId, timestamp, checksum } = payload;
+    const { event, id } = payload;
 
-    // Extract entity type from event type (e.g., 'employee.create' -> 'employee')
-    const entityType = eventType.split('.')[0];
+    // Extract entity type from event (e.g., 'project.create' -> 'project')
+    const entityType = event.split('.')[0];
 
-    // Update sync state to mark resource as changed
-    if (checksum) {
-      await supabase.rpc('update_tripletex_sync_state', {
-        p_org_id: payload.organizationId || null,
-        p_resource_type: entityType,
-        p_resource_id: entityId.toString(),
-        p_checksum: checksum,
-        p_last_modified: timestamp
-      });
-    }
+    console.log(`🔄 Processing webhook: ${event} for ${entityType} ID ${id}`);
 
     // Handle specific entity types
     switch (entityType) {
       case 'employee':
-        return await handleEmployeeWebhook(eventType, entityId, timestamp);
+        return await handleEmployeeWebhook(event, id);
       
       case 'project':
-        return await handleProjectWebhook(eventType, entityId, timestamp);
+        return await handleProjectWebhook(event, id, payload.value);
       
       case 'product':
-        return await handleProductWebhook(eventType, entityId, timestamp);
+        return await handleProductWebhook(event, id);
       
       case 'customer':
-        return await handleCustomerWebhook(eventType, entityId, timestamp);
+        return await handleCustomerWebhook(event, id);
       
       default:
         console.log(`ℹ️ Unhandled webhook entity type: ${entityType}`);
@@ -151,38 +141,74 @@ async function handleWebhookEvent(payload: TripletexWebhookPayload) {
   }
 }
 
-async function handleEmployeeWebhook(eventType: string, entityId: number, timestamp: string) {
-  console.log(`👤 Employee webhook: ${eventType} for employee ${entityId}`);
+async function handleEmployeeWebhook(event: string, id: number) {
+  console.log(`👤 Employee webhook: ${event} for employee ${id}`);
   
   // Mark employee for re-sync
   await supabase
     .from('ttx_employee_cache')
     .update({ 
-      last_synced: timestamp,
+      last_synced: new Date().toISOString(),
       needs_sync: true 
     })
-    .eq('tripletex_employee_id', entityId);
+    .eq('tripletex_employee_id', id);
 
   return { success: true };
 }
 
-async function handleProjectWebhook(eventType: string, entityId: number, timestamp: string) {
-  console.log(`📁 Project webhook: ${eventType} for project ${entityId}`);
+async function handleProjectWebhook(event: string, id: number, projectData?: any) {
+  console.log(`📁 Project webhook: ${event} for project ${id}`);
   
-  // Mark project for re-sync
-  await supabase
-    .from('ttx_project_cache')
-    .update({ 
-      last_synced: timestamp,
-      needs_sync: true 
-    })
-    .eq('tripletex_project_id', entityId);
+  try {
+    // For new projects, use the data from webhook payload
+    if (event === 'project.create' && projectData) {
+      console.log(`🔄 Creating new project from webhook data for project ${id}:`, projectData.name);
+      
+      // First, try to find existing project to get org_id
+      const { data: existingProject } = await supabase
+        .from('ttx_project_cache')
+        .select('org_id')
+        .eq('tripletex_project_id', id)
+        .single();
+
+      // Insert the project in cache using webhook data
+      await supabase
+        .from('ttx_project_cache')
+        .upsert({
+          tripletex_project_id: id,
+          project_name: projectData.name || 'Unknown',
+          project_number: projectData.number || '',
+          display_name: projectData.displayName || '',
+          customer_name: projectData.customer?.name || null,
+          is_active: !projectData.isClosed,
+          is_closed: projectData.isClosed || false,
+          last_synced: new Date().toISOString(),
+          needs_sync: false,
+          org_id: existingProject?.org_id || null // Use existing org_id or null
+        });
+      
+      console.log(`✅ Project ${id} created successfully from webhook data`);
+    } else {
+      // For updates or when no project data is available, mark for re-sync
+      await supabase
+        .from('ttx_project_cache')
+        .update({ 
+          last_synced: new Date().toISOString(),
+          needs_sync: true 
+        })
+        .eq('tripletex_project_id', id);
+      
+      console.log(`✅ Project ${id} marked for re-sync`);
+    }
+  } catch (error) {
+    console.error(`❌ Error handling project webhook for ${id}:`, error);
+  }
 
   return { success: true };
 }
 
-async function handleProductWebhook(eventType: string, entityId: number, timestamp: string) {
-  console.log(`📦 Product webhook: ${eventType} for product ${entityId}`);
+async function handleProductWebhook(event: string, id: number) {
+  console.log(`📦 Product webhook: ${event} for product ${id}`);
   
   // Mark product for re-sync if we have a product cache table
   // For now, just log the event
@@ -190,8 +216,8 @@ async function handleProductWebhook(eventType: string, entityId: number, timesta
   return { success: true };
 }
 
-async function handleCustomerWebhook(eventType: string, entityId: number, timestamp: string) {
-  console.log(`👤 Customer webhook: ${eventType} for customer ${entityId}`);
+async function handleCustomerWebhook(event: string, id: number) {
+  console.log(`👤 Customer webhook: ${event} for customer ${id}`);
   
   // Mark customer for re-sync if we have a customer cache table
   // For now, just log the event

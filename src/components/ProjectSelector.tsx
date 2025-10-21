@@ -148,7 +148,7 @@ const ProjectSelector = ({
     if (open) {
       loadProjects();
     }
-  }, [open, loadProjects]);
+  }, [open, orgId]); // Don't include loadProjects to avoid infinite loop
 
   // Polling for project updates (free alternative to Realtime)
   useEffect(() => {
@@ -167,7 +167,7 @@ const ProjectSelector = ({
       console.log('🔄 Cleaning up polling');
       clearInterval(interval);
     };
-  }, [open, orgId]);
+  }, [open, orgId]); // Don't include loadProjects to avoid infinite loop
 
   const selectedProject = projects.find(p => p.id === value);
 

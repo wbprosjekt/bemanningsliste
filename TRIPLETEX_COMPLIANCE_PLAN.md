@@ -9,11 +9,13 @@
 - ✅ Test mot Tripletex test-miljø
 - ✅ User-Agent og X-Requested-With headers
 
-### **Fase 2: Webhook-støtte (4-6 timer)** ⏳ **NESTE STEG**
-- ❌ Opprett webhook edge function
-- ❌ Registrer webhooks i Tripletex
-- ❌ Test webhook-flyt
-- ❌ Integrer med eksisterende sync
+### **Fase 2: Webhook-støtte (4-6 timer)** ✅ **FULLFØRT**
+- ✅ Opprett webhook edge function
+- ✅ Registrer webhooks i Tripletex
+- ✅ Test webhook-flyt
+- ✅ Integrer med eksisterende sync
+- ✅ Proxy-løsning for autentisering
+- ✅ Webhook-flyt fungerer for project.create events
 
 ### **Fase 3: Optimalisering (4-6 timer)** ⏳ **FREMOVER**
 - ❌ changesSince-parametere for differensielle kall
