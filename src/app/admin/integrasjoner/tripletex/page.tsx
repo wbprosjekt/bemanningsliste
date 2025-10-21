@@ -65,6 +65,7 @@ type LoadingKey =
   | "projects"
   | "activities"
   | "register-webhooks"
+  | "list-webhooks"
   | "saveTokens"
   | "nightly";
 
@@ -204,12 +205,13 @@ const TripletexIntegrationPage = () => {
     }
   };
 
-  const syncData = async (type: "employees" | "projects" | "activities" | "register-webhooks") => {
+  const syncData = async (type: "employees" | "projects" | "activities" | "register-webhooks" | "list-webhooks") => {
     const actionMap = {
       employees: "sync-employees",
       projects: "sync-projects",
       activities: "sync-activities",
       "register-webhooks": "register-webhooks",
+      "list-webhooks": "list-webhooks",
     } as const;
 
     const titleMap = {
@@ -217,6 +219,7 @@ const TripletexIntegrationPage = () => {
       projects: "prosjekter",
       activities: "aktiviteter",
       "register-webhooks": "webhooks",
+      "list-webhooks": "webhooks",
     } as const;
 
     setLoadingState(type as LoadingKey, true);
@@ -588,7 +591,7 @@ const TripletexIntegrationPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-5">
               <div className="space-y-2">
                 <Button onClick={() => syncData("employees")} disabled={loading.employees} className="w-full" variant="outline">
                   {loading.employees ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
@@ -631,6 +634,18 @@ const TripletexIntegrationPage = () => {
                   Registrer webhooks
                 </Button>
                 <p className="text-xs text-muted-foreground">Registrerer webhooks for automatiske oppdateringer.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Button onClick={() => syncData("list-webhooks")} disabled={loading["list-webhooks"]} className="w-full" variant="outline">
+                  {loading["list-webhooks"] ? (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Eye className="mr-2 h-4 w-4" />
+                  )}
+                  List webhooks
+                </Button>
+                <p className="text-xs text-muted-foreground">Viser registrerte webhooks i Tripletex.</p>
               </div>
             </div>
           </CardContent>

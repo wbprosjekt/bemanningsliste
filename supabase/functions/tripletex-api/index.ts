@@ -1177,6 +1177,45 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'list-webhooks': {
+        result = await exponentialBackoff(async () => {
+          console.log(`🔍 Listing registered webhooks for org ${orgId}`);
+          
+          const response = await callTripletexAPI('/webhook?count=100', 'GET', undefined, orgId);
+          
+          if (response.success && response.data?.values) {
+            console.log(`📋 Found ${response.data.values.length} registered webhooks`);
+            
+            // Filter webhooks for our URL
+            const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/tripletex-webhook`;
+            const ourWebhooks = response.data.values.filter((webhook: any) => 
+              webhook.url === webhookUrl
+            );
+            
+            console.log(`🎯 Our webhooks: ${ourWebhooks.length}`);
+            ourWebhooks.forEach((webhook: any) => {
+              console.log(`  - ${webhook.entityType}: ${webhook.eventTypes?.join(', ')} (ID: ${webhook.id})`);
+            });
+            
+            return {
+              success: true,
+              data: {
+                total: response.data.values.length,
+                ourWebhooks: ourWebhooks.length,
+                webhooks: ourWebhooks,
+                webhookUrl
+              }
+            };
+          }
+          
+          return {
+            success: false,
+            error: 'Failed to fetch webhooks'
+          };
+        });
+        break;
+      }
+
       case 'search-projects': {
         const query = url.searchParams.get('q') || '';
         result = await callTripletexAPI(`/project?count=50&displayName=${encodeURIComponent(query)}&fields=id,number,name,displayName,customer`, 'GET', undefined, orgId);
