@@ -142,11 +142,31 @@ export default function ProjectDashboard() {
       setFilteredProjects(sanitizedProjects);
       
       // Load untagged photos count
-      const { count: untaggedCount } = await supabase
+      // Note: oppgave_bilder doesn't have org_id, so we need to count via join
+      const { data: untaggedPhotos, error: countError } = await supabase
         .from('oppgave_bilder')
-        .select('*', { count: 'exact', head: true })
-        .eq('org_id', profile.org_id)
-        .eq('is_tagged', false);
+        .select(`
+          id,
+          oppgave_id,
+          ttx_project_cache:prosjekt_id(org_id)
+        `)
+        .is('is_tagged', false);  // Use .is() for boolean false
+      
+      // Filter by org_id and check if photo is truly untagged
+      const untaggedCount = (untaggedPhotos || []).filter((photo: any) => {
+        // A photo is untagged if oppgave_id is NULL
+        if (photo.oppgave_id) {
+          return false; // Skip photos that are already tagged to an oppgave
+        }
+        
+        // If photo has prosjekt_id, check if it matches org
+        if (photo.prosjekt_id && photo.ttx_project_cache?.org_id) {
+          return photo.ttx_project_cache.org_id === profile.org_id;
+        }
+        
+        // Include photos without project
+        return true;
+      }).length;
       
       // Calculate stats
       setStats({

@@ -4,9 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Image as ImageIcon, Eye, Tag, Loader2 } from 'lucide-react';
+import { Image as ImageIcon, Eye, Tag, Loader2, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useRouter } from 'next/navigation';
+import TagPhotoDialog from '@/components/TagPhotoDialog';
+import { useToast } from '@/hooks/use-toast';
 
 interface PhotoInboxMiniProps {
   orgId: string;
@@ -24,6 +26,10 @@ interface ProjectPhotos {
     id: string;
     image_url: string;
     inbox_date: string;
+    prosjekt_id: string | null;
+    comment: string | null;
+    uploaded_by: string | null;
+    uploaded_by_email: string | null;
   }>;
 }
 
@@ -36,7 +42,10 @@ export default function PhotoInboxMini({
   const [projects, setProjects] = useState<ProjectPhotos[]>([]);
   const [loading, setLoading] = useState(true);
   const [untaggedCount, setUntaggedCount] = useState(0);
+  const [taggingPhoto, setTaggingPhoto] = useState<any>(null);
+  const [isTagging, setIsTagging] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     loadPhotos();
@@ -53,6 +62,7 @@ export default function PhotoInboxMini({
           id,
           image_url,
           prosjekt_id,
+          oppgave_id,
           inbox_date,
           ttx_project_cache:prosjekt_id(project_name, project_number, org_id)
         `)
@@ -62,15 +72,20 @@ export default function PhotoInboxMini({
 
       if (error) throw error;
       
-      // Filter by org_id in JavaScript (since oppgave_bilder doesn't have org_id column)
+      // Filter by org_id and check if photo is truly untagged
       const filteredData = (data || []).filter((photo: any) => {
+        // A photo is untagged if oppgave_id is NULL
+        if (photo.oppgave_id) {
+          return false; // Skip photos that are already tagged to an oppgave
+        }
+        
         // If photo has prosjekt_id, check if it matches org
         if (photo.prosjekt_id && photo.ttx_project_cache?.org_id) {
           return photo.ttx_project_cache.org_id === orgId;
         }
-        // If no prosjekt_id, check if uploaded_by is in same org
-        // (This requires additional logic if we need to filter by org)
-        return true; // For now, show all untagged photos
+        
+        // If no prosjekt_id, show all untagged photos
+        return true;
       });
 
       // Group by project
@@ -90,7 +105,11 @@ export default function PhotoInboxMini({
           acc[key].photos.push({
             id: photo.id,
             image_url: photo.image_url,
-            inbox_date: photo.inbox_date
+            inbox_date: photo.inbox_date,
+            prosjekt_id: photo.prosjekt_id,
+            comment: photo.comment,
+            uploaded_by: photo.uploaded_by,
+            uploaded_by_email: photo.uploaded_by_email
           });
         }
         acc[key].total_count++;
@@ -113,6 +132,45 @@ export default function PhotoInboxMini({
     } else {
       router.push('/photo-inbox');
     }
+  };
+
+  const handleTagPhoto = (photo: any) => {
+    console.log('🔖 PhotoInboxMini: Tag photo clicked:', photo);
+    setTaggingPhoto(photo);
+    setIsTagging(true);
+  };
+
+  const handleDeletePhoto = async (photo: any) => {
+    if (!confirm('Er du sikker på at du vil slette dette bildet?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('oppgave_bilder')
+        .delete()
+        .eq('id', photo.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Bilde slettet',
+        description: 'Bildet er slettet fra innboksen.',
+      });
+
+      // Reload photos
+      loadPhotos();
+    } catch (error) {
+      console.error('Error deleting photo:', error);
+      toast({
+        title: 'Feil',
+        description: 'Kunne ikke slette bildet.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleTagSuccess = () => {
+    console.log('🔖 PhotoInboxMini: Tag success, reloading photos');
+    loadPhotos();
   };
 
   if (loading) {
@@ -148,6 +206,7 @@ export default function PhotoInboxMini({
   }
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -202,14 +261,39 @@ export default function PhotoInboxMini({
                 {project.photos.map((photo) => (
                   <div
                     key={photo.id}
-                    className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => router.push(`/photo-inbox?project=${project.project_id}`)}
+                    className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group"
                   >
                     <img
                       src={photo.image_url}
                       alt="Photo"
                       className="w-full h-full object-cover"
                     />
+                    
+                    {/* Action buttons - always visible for easy tagging */}
+                    <div className="absolute top-2 right-2 flex gap-2 z-10">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 w-8 p-0 bg-white/95 hover:bg-white shadow-lg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTagPhoto(photo);
+                        }}
+                      >
+                        <Tag className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-8 w-8 p-0 bg-red-500/95 hover:bg-red-600 shadow-lg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletePhoto(photo);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
                 {project.total_count > maxPhotos && (
@@ -226,6 +310,27 @@ export default function PhotoInboxMini({
         </div>
       </CardContent>
     </Card>
+    
+    {/* Tag Photo Dialog */}
+    {taggingPhoto && (
+      <>
+        {console.log('🔖 PhotoInboxMini: Rendering TagPhotoDialog with photo:', taggingPhoto)}
+        <TagPhotoDialog
+          open={isTagging}
+          onOpenChange={(open) => {
+            console.log('🔖 PhotoInboxMini: TagPhotoDialog open change:', open);
+            if (!open) {
+              setIsTagging(false);
+              setTaggingPhoto(null);
+            }
+          }}
+          photo={taggingPhoto}
+          orgId={orgId}
+          onSuccess={handleTagSuccess}
+        />
+      </>
+    )}
+  </>
   );
 }
 

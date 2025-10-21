@@ -52,6 +52,7 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
           id,
           image_url,
           prosjekt_id,
+          oppgave_id,
           comment,
           inbox_date,
           uploaded_by,
@@ -75,6 +76,11 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
 
       // Filter by org_id and projectId in JavaScript
       const filteredData = (data || []).filter((photo: any) => {
+        // A photo is untagged if oppgave_id is NULL
+        if (photo.oppgave_id) {
+          return false; // Skip photos that are already tagged to an oppgave
+        }
+        
         // If projectId is not provided, only show photos without project
         if (!projectId) {
           return !photo.prosjekt_id;
@@ -85,9 +91,8 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
           return photo.ttx_project_cache.org_id === orgId;
         }
         
-        // If no prosjekt_id, check if uploaded_by is in same org
-        // (This requires additional logic if we need to filter by org)
-        return true; // For now, show all untagged photos
+        // If no prosjekt_id, show all untagged photos
+        return true;
       });
 
       // Transform data to include project info
