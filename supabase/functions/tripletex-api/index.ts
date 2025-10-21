@@ -1249,7 +1249,7 @@ Deno.serve(async (req) => {
             console.log(`📋 Found ${response.data.values.length} registered webhooks`);
             
             // Filter webhooks for our URL
-            const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/tripletex-webhook`;
+            const webhookUrl = `https://www.fieldnote.no/api/webhooks/tripletex`;
             const ourWebhooks = response.data.values.filter((webhook: any) => 
               webhook.targetUrl === webhookUrl
             );
