@@ -240,7 +240,13 @@ const TripletexIntegrationPage = () => {
           }
         } else if (type === "list-webhooks") {
           count = result.data?.ourWebhooks || 0;
-          description = `${count} webhooks funnet.`;
+          const webhooks = result.data?.webhooks || [];
+          if (webhooks.length > 0) {
+            const urls = webhooks.map((w: any) => w.targetUrl).join(', ');
+            description = `${count} webhooks funnet. URLs: ${urls}`;
+          } else {
+            description = `${count} webhooks funnet.`;
+          }
         } else {
           count = result.data?.count || 0;
           description = `${count} ${titleMap[type]} ble synkronisert.`;
