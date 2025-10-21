@@ -34,8 +34,8 @@ export async function getCallerProfile(authHeader: string): Promise<CallerProfil
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-  // Create client with user's auth header to validate JWT
-  const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  // Create client with service role key to validate JWT
+  const supabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
     global: {
       headers: { Authorization: authHeader },
     },
