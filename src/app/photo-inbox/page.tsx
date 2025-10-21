@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PhotoInbox from '@/components/PhotoInbox';
 
-export default function PhotoInboxPage() {
+function PhotoInboxContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -99,6 +99,21 @@ export default function PhotoInboxPage() {
         </div>
       </div>
     </ProtectedRoute>
+  );
+}
+
+export default function PhotoInboxPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Laster...</p>
+        </div>
+      </div>
+    }>
+      <PhotoInboxContent />
+    </Suspense>
   );
 }
 
