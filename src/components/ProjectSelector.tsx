@@ -46,6 +46,7 @@ const ProjectSelector = ({
   const loadProjects = useCallback(async () => {
     if (!orgId) return;
     
+    console.log('🔄 loadProjects called', { orgId });
     setLoading(true);
     try {
       const query = supabase
@@ -156,7 +157,7 @@ const ProjectSelector = ({
     console.log('🔄 Setting up polling for project updates');
     
     const interval = setInterval(() => {
-      console.log('🔄 Polling for project updates...');
+      console.log('🔄 Polling for project updates...', { orgId, open });
       loadProjects();
     }, 30000); // Poll every 30 seconds
 
@@ -164,7 +165,7 @@ const ProjectSelector = ({
       console.log('🔄 Cleaning up polling');
       clearInterval(interval);
     };
-  }, [open, orgId, loadProjects]);
+  }, [open, orgId]);
 
   const selectedProject = projects.find(p => p.id === value);
 
