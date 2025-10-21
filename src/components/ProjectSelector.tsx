@@ -159,7 +159,9 @@ const ProjectSelector = ({
     const interval = setInterval(() => {
       console.log('🔄 Polling for project updates...', { orgId, open });
       loadProjects();
-    }, 30000); // Poll every 30 seconds
+    }, 5000); // Poll every 5 seconds for testing
+    
+    console.log('🔄 Polling interval set up:', interval);
 
     return () => {
       console.log('🔄 Cleaning up polling');
