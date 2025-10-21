@@ -1101,6 +1101,7 @@ Deno.serve(async (req) => {
           const existingWebhooks = await callTripletexAPI('/event/subscription?count=100', 'GET', undefined, orgId);
           
           let deletedCount = 0;
+          let failedDeletions = 0;
           if (existingWebhooks.success && existingWebhooks.data?.values) {
             const ourExistingWebhooks = existingWebhooks.data.values.filter((webhook: any) => 
               webhook.targetUrl === webhookUrl
@@ -1116,8 +1117,28 @@ Deno.serve(async (req) => {
                 deletedCount++;
               } else {
                 console.log(`⚠️ Failed to delete webhook: ${webhook.event} (ID: ${webhook.id})`);
+                failedDeletions++;
               }
             }
+            
+            // If we failed to delete any webhooks, warn about potential duplicates
+            if (failedDeletions > 0) {
+              console.log(`⚠️ WARNING: ${failedDeletions} webhooks could not be deleted - may result in duplicates!`);
+            }
+          }
+          
+          // Only proceed with registration if we successfully cleaned up or if there were no existing webhooks
+          if (failedDeletions > 0 && deletedCount === 0) {
+            console.log(`❌ Cannot proceed with webhook registration - failed to clean up existing webhooks`);
+            return {
+              success: false,
+              error: `Failed to clean up ${failedDeletions} existing webhooks. Cannot register new webhooks to avoid duplicates.`,
+              data: {
+                failedDeletions,
+                deletedCount: 0,
+                message: 'Webhook cleanup failed - registration aborted to prevent duplicates'
+              }
+            };
           }
           
           // Register webhooks for different entity types
@@ -1204,6 +1225,7 @@ Deno.serve(async (req) => {
               successCount,
               totalCount,
               deletedCount,
+              failedDeletions,
               webhookUrl
             }
           };
