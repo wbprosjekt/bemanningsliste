@@ -342,6 +342,7 @@ async function updateSyncState(orgId: string, resourceType: string, resourceId: 
 // Helper function to get stored checksum
 async function getStoredChecksum(orgId: string, resourceType: string, resourceId: string): Promise<string | null> {
   try {
+    console.log(`Getting checksum for ${resourceType}:${resourceId} in org ${orgId}`);
     const { data, error } = await supabase.rpc('get_tripletex_checksum', {
       p_org_id: orgId,
       p_resource_type: resourceType,
@@ -353,6 +354,7 @@ async function getStoredChecksum(orgId: string, resourceType: string, resourceId
       return null;
     }
     
+    console.log(`Retrieved checksum for ${resourceType}:${resourceId}: ${data}`);
     return data;
   } catch (error) {
     console.warn('Failed to get stored checksum:', error);
@@ -475,6 +477,8 @@ async function fetchAllTripletexEmployees(orgId: string) {
     for (const emp of pageEmployees) {
       const checksum = generateChecksum(emp);
       const storedChecksum = await getStoredChecksum(orgId, 'employee', emp.id.toString());
+      
+      console.log(`Employee ${emp.id}: stored=${storedChecksum}, current=${checksum}, changed=${storedChecksum !== checksum}`);
       
       // Only include if data has changed
       if (storedChecksum !== checksum) {

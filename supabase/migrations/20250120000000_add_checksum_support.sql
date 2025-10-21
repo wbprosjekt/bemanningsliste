@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS tripletex_sync_state (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  org_id uuid NOT NULL REFERENCES org(id) ON DELETE CASCADE,
   resource_type text NOT NULL, -- 'employee', 'project', 'activity', etc.
   resource_id text NOT NULL,   -- Tripletex ID as string
   checksum text,               -- MD5/SHA256 hash of resource data
@@ -89,9 +89,9 @@ ALTER TABLE tripletex_sync_state ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view sync state for their organization" ON tripletex_sync_state
   FOR SELECT USING (
     org_id IN (
-      SELECT id FROM organizations 
+      SELECT id FROM org 
       WHERE id IN (
-        SELECT organization_id FROM profiles WHERE id = auth.uid()
+        SELECT org_id FROM profiles WHERE id = auth.uid()
       )
     )
   );
