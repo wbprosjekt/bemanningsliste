@@ -227,9 +227,28 @@ const TripletexIntegrationPage = () => {
       const result = await callTripletexAPI(actionMap[type]);
 
       if (result?.success) {
+        let count = 0;
+        let description = "";
+        
+        if (type === "register-webhooks") {
+          count = result.data?.successCount || 0;
+          const deletedCount = result.data?.deletedCount || 0;
+          if (deletedCount > 0) {
+            description = `${deletedCount} gamle webhooks slettet, ${count} nye webhooks registrert.`;
+          } else {
+            description = `${count} webhooks registrert.`;
+          }
+        } else if (type === "list-webhooks") {
+          count = result.data?.ourWebhooks || 0;
+          description = `${count} webhooks funnet.`;
+        } else {
+          count = result.data?.count || 0;
+          description = `${count} ${titleMap[type]} ble synkronisert.`;
+        }
+        
         toast({
           title: "Synkronisering fullført",
-          description: `${result.data?.count || 0} ${titleMap[type]} ble synkronisert.`,
+          description: description,
         });
       } else {
         toast({

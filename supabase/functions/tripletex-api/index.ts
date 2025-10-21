@@ -1096,13 +1096,37 @@ Deno.serve(async (req) => {
           // Get webhook URL (this would be your deployed webhook function URL)
           const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/tripletex-webhook`;
           
+          // First, clean up existing webhooks for our URL to avoid duplicates
+          console.log(`🧹 Cleaning up existing webhooks for URL: ${webhookUrl}`);
+          const existingWebhooks = await callTripletexAPI('/event/subscription?count=100', 'GET', undefined, orgId);
+          
+          let deletedCount = 0;
+          if (existingWebhooks.success && existingWebhooks.data?.values) {
+            const ourExistingWebhooks = existingWebhooks.data.values.filter((webhook: any) => 
+              webhook.targetUrl === webhookUrl
+            );
+            
+            console.log(`🗑️ Found ${ourExistingWebhooks.length} existing webhooks to clean up`);
+            
+            // Delete existing webhooks
+            for (const webhook of ourExistingWebhooks) {
+              const deleteResponse = await callTripletexAPI(`/event/subscription/${webhook.id}`, 'DELETE', undefined, orgId);
+              if (deleteResponse.success) {
+                console.log(`✅ Deleted existing webhook: ${webhook.event} (ID: ${webhook.id})`);
+                deletedCount++;
+              } else {
+                console.log(`⚠️ Failed to delete webhook: ${webhook.event} (ID: ${webhook.id})`);
+              }
+            }
+          }
+          
           // Register webhooks for different entity types
           const webhookRegistrations = [];
           
           // Employee webhook
-          const employeeWebhook = await callTripletexAPI('/v2/event/subscription', 'POST', {
+          const employeeWebhook = await callTripletexAPI('/event/subscription', 'POST', {
             targetUrl: webhookUrl,
-            eventType: 'employee.create'
+            event: 'employee.create'
           }, orgId);
           
           if (employeeWebhook.success) {
@@ -1127,9 +1151,9 @@ Deno.serve(async (req) => {
           }
           
           // Project webhook
-          const projectWebhook = await callTripletexAPI('/v2/event/subscription', 'POST', {
+          const projectWebhook = await callTripletexAPI('/event/subscription', 'POST', {
             targetUrl: webhookUrl,
-            eventType: 'project.create'
+            event: 'project.create'
           }, orgId);
           
           if (projectWebhook.success) {
@@ -1140,38 +1164,38 @@ Deno.serve(async (req) => {
             console.error('❌ Project webhook registration failed:', projectWebhook.error);
           }
           
-          // Activity webhook
-          const activityWebhook = await callTripletexAPI('/v2/event/subscription', 'POST', {
+          // Product webhook (since activity.create is not available in test environment)
+          const productWebhook = await callTripletexAPI('/event/subscription', 'POST', {
             targetUrl: webhookUrl,
-            eventType: 'activity.create'
+            event: 'product.create'
           }, orgId);
           
-          if (activityWebhook.success) {
-            webhookRegistrations.push({ type: 'activity', success: true });
-            console.log('✅ Activity webhook registered');
+          if (productWebhook.success) {
+            webhookRegistrations.push({ type: 'product', success: true });
+            console.log('✅ Product webhook registered');
           } else {
-            webhookRegistrations.push({ type: 'activity', success: false, error: activityWebhook.error });
-            console.error('❌ Activity webhook registration failed:', activityWebhook.error);
+            webhookRegistrations.push({ type: 'product', success: false, error: productWebhook.error });
+            console.error('❌ Product webhook registration failed:', productWebhook.error);
           }
           
-          // Timesheet entry webhook
-          const timesheetWebhook = await callTripletexAPI('/v2/event/subscription', 'POST', {
+          // Customer webhook (since timesheetEntry is not available)
+          const customerWebhook = await callTripletexAPI('/event/subscription', 'POST', {
             targetUrl: webhookUrl,
-            eventType: 'timesheetEntry.create'
+            event: 'customer.create'
           }, orgId);
           
-          if (timesheetWebhook.success) {
-            webhookRegistrations.push({ type: 'timesheetEntry', success: true });
-            console.log('✅ Timesheet webhook registered');
+          if (customerWebhook.success) {
+            webhookRegistrations.push({ type: 'customer', success: true });
+            console.log('✅ Customer webhook registered');
           } else {
-            webhookRegistrations.push({ type: 'timesheetEntry', success: false, error: timesheetWebhook.error });
-            console.error('❌ Timesheet webhook registration failed:', timesheetWebhook.error);
+            webhookRegistrations.push({ type: 'customer', success: false, error: customerWebhook.error });
+            console.error('❌ Customer webhook registration failed:', customerWebhook.error);
           }
           
           const successCount = webhookRegistrations.filter(r => r.success).length;
           const totalCount = webhookRegistrations.length;
           
-          console.log(`🔔 Webhook registration complete: ${successCount}/${totalCount} successful`);
+          console.log(`🔔 Webhook registration complete: ${successCount}/${totalCount} new webhooks registered successfully`);
           
           return {
             success: true,
@@ -1179,6 +1203,7 @@ Deno.serve(async (req) => {
               registrations: webhookRegistrations,
               successCount,
               totalCount,
+              deletedCount,
               webhookUrl
             }
           };
@@ -1190,7 +1215,9 @@ Deno.serve(async (req) => {
         result = await exponentialBackoff(async () => {
           console.log(`🔍 Listing registered webhooks for org ${orgId}`);
           
-          const response = await callTripletexAPI('/v2/event/subscription?count=100', 'GET', undefined, orgId);
+          const response = await callTripletexAPI('/event/subscription?count=100', 'GET', undefined, orgId);
+          
+          console.log('🔍 Webhook API response:', JSON.stringify(response, null, 2));
           
           if (response.success && response.data?.values) {
             console.log(`📋 Found ${response.data.values.length} registered webhooks`);
@@ -1203,7 +1230,7 @@ Deno.serve(async (req) => {
             
             console.log(`🎯 Our webhooks: ${ourWebhooks.length}`);
             ourWebhooks.forEach((webhook: any) => {
-              console.log(`  - ${webhook.eventType}: ${webhook.status} (ID: ${webhook.id})`);
+              console.log(`  - ${webhook.event}: ${webhook.status} (ID: ${webhook.id})`);
             });
             
             return {
@@ -1225,11 +1252,26 @@ Deno.serve(async (req) => {
                 message: 'Tripletex API does not support webhook endpoints'
               }
             };
+          } else if (response.success && response.data && !response.data.values) {
+            console.log(`📋 Webhook API returned data but no values array:`, response.data);
+            return {
+              success: true,
+              data: {
+                total: 0,
+                ourWebhooks: 0,
+                webhooks: [],
+                webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/tripletex-webhook`,
+                message: 'No webhooks found or API returned unexpected format'
+              }
+            };
           }
           
           return {
             success: false,
-            error: response.error || 'Failed to fetch webhooks'
+            error: response.error || 'Failed to fetch webhooks',
+            data: {
+              response: response
+            }
           };
         });
         break;

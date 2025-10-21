@@ -119,11 +119,11 @@ async function handleWebhookEvent(payload: TripletexWebhookPayload) {
       case 'project':
         return await handleProjectWebhook(eventType, entityId, timestamp);
       
-      case 'activity':
-        return await handleActivityWebhook(eventType, entityId, timestamp);
+      case 'product':
+        return await handleProductWebhook(eventType, entityId, timestamp);
       
-      case 'timesheetEntry':
-        return await handleTimesheetWebhook(eventType, entityId, timestamp);
+      case 'customer':
+        return await handleCustomerWebhook(eventType, entityId, timestamp);
       
       default:
         console.log(`ℹ️ Unhandled webhook entity type: ${entityType}`);
@@ -166,26 +166,20 @@ async function handleProjectWebhook(eventType: string, entityId: number, timesta
   return { success: true };
 }
 
-async function handleActivityWebhook(eventType: string, entityId: number, timestamp: string) {
-  console.log(`⚡ Activity webhook: ${eventType} for activity ${entityId}`);
+async function handleProductWebhook(eventType: string, entityId: number, timestamp: string) {
+  console.log(`📦 Product webhook: ${eventType} for product ${entityId}`);
   
-  // Mark activity for re-sync
-  await supabase
-    .from('ttx_activity_cache')
-    .update({ 
-      last_synced: timestamp,
-      needs_sync: true 
-    })
-    .eq('ttx_id', entityId);
-
+  // Mark product for re-sync if we have a product cache table
+  // For now, just log the event
+  
   return { success: true };
 }
 
-async function handleTimesheetWebhook(eventType: string, entityId: number, timestamp: string) {
-  console.log(`⏰ Timesheet webhook: ${eventType} for entry ${entityId}`);
+async function handleCustomerWebhook(eventType: string, entityId: number, timestamp: string) {
+  console.log(`👤 Customer webhook: ${eventType} for customer ${entityId}`);
   
-  // For timesheet entries, we might want to trigger a re-sync of related data
-  // or update specific timesheet cache if we have one
+  // Mark customer for re-sync if we have a customer cache table
+  // For now, just log the event
   
   return { success: true };
 }
