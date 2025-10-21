@@ -489,7 +489,9 @@ async function fetchAllTripletexEmployees(orgId: string) {
       : [];
 
     // Process employees with checksum validation
+    console.log(`Processing ${pageEmployees.length} employees with checksum validation`);
     for (const emp of pageEmployees) {
+      console.log(`Processing employee ${emp.id} (${emp.firstName} ${emp.lastName})`);
       const checksum = generateChecksum(emp);
       const storedChecksum = await getStoredChecksum(orgId, 'employee', emp.id.toString());
       
