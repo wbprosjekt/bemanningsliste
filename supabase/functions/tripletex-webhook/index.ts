@@ -8,7 +8,6 @@ const supabase = createClient(
 
 interface TripletexWebhookPayload {
   eventType: string;
-  entityType: string;
   entityId: number;
   timestamp: string;
   checksum?: string;
@@ -40,7 +39,6 @@ if (Deno.serve) {
       
       console.log('🔔 Tripletex webhook received:', {
         eventType: payload.eventType,
-        entityType: payload.entityType,
         entityId: payload.entityId,
         timestamp: payload.timestamp,
         hasChecksum: !!payload.checksum,
@@ -48,7 +46,7 @@ if (Deno.serve) {
       });
 
       // Validate payload
-      if (!payload.eventType || !payload.entityType || !payload.entityId) {
+      if (!payload.eventType || !payload.entityId) {
         console.error('❌ Invalid webhook payload:', payload);
         return new Response(
           JSON.stringify({ error: 'Invalid payload' }),
@@ -97,7 +95,10 @@ if (Deno.serve) {
 
 async function handleWebhookEvent(payload: TripletexWebhookPayload) {
   try {
-    const { eventType, entityType, entityId, timestamp, checksum } = payload;
+    const { eventType, entityId, timestamp, checksum } = payload;
+
+    // Extract entity type from event type (e.g., 'employee.create' -> 'employee')
+    const entityType = eventType.split('.')[0];
 
     // Update sync state to mark resource as changed
     if (checksum) {
@@ -121,7 +122,7 @@ async function handleWebhookEvent(payload: TripletexWebhookPayload) {
       case 'activity':
         return await handleActivityWebhook(eventType, entityId, timestamp);
       
-      case 'timesheet/entry':
+      case 'timesheetEntry':
         return await handleTimesheetWebhook(eventType, entityId, timestamp);
       
       default:
