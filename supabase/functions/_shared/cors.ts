@@ -20,6 +20,8 @@ function getCorsConfig(): CorsConfig {
   const productionOrigins = [
     'https://bemanningsliste.vercel.app',
     'https://bemanningsliste-next.vercel.app',
+    'https://www.fieldnote.no',
+    'https://fieldnote.no',
     // Add your production domains here
   ];
   
