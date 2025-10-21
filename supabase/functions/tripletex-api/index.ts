@@ -327,13 +327,25 @@ function generateChecksum(data: unknown): string {
 // Helper function to update sync state
 async function updateSyncState(orgId: string, resourceType: string, resourceId: string, checksum: string, lastModified?: string) {
   try {
-    await supabase.rpc('update_tripletex_sync_state', {
-      p_org_id: orgId,
-      p_resource_type: resourceType,
-      p_resource_id: resourceId.toString(),
-      p_checksum: checksum,
-      p_last_modified: lastModified ? new Date(lastModified).toISOString() : null
-    });
+    console.log(`Updating sync state for ${resourceType}:${resourceId} with checksum ${checksum}`);
+    const { error } = await supabase
+      .from('tripletex_sync_state')
+      .upsert({
+        org_id: orgId,
+        resource_type: resourceType,
+        resource_id: resourceId.toString(),
+        checksum: checksum,
+        last_modified: lastModified ? new Date(lastModified).toISOString() : null,
+        last_synced: new Date().toISOString()
+      }, {
+        onConflict: 'org_id,resource_type,resource_id'
+      });
+    
+    if (error) {
+      console.error('Failed to update sync state:', error);
+    } else {
+      console.log(`Successfully updated sync state for ${resourceType}:${resourceId}`);
+    }
   } catch (error) {
     console.warn('Failed to update sync state:', error);
   }
@@ -343,19 +355,22 @@ async function updateSyncState(orgId: string, resourceType: string, resourceId: 
 async function getStoredChecksum(orgId: string, resourceType: string, resourceId: string): Promise<string | null> {
   try {
     console.log(`Getting checksum for ${resourceType}:${resourceId} in org ${orgId}`);
-    const { data, error } = await supabase.rpc('get_tripletex_checksum', {
-      p_org_id: orgId,
-      p_resource_type: resourceType,
-      p_resource_id: resourceId.toString()
-    });
+    const { data, error } = await supabase
+      .from('tripletex_sync_state')
+      .select('checksum')
+      .eq('org_id', orgId)
+      .eq('resource_type', resourceType)
+      .eq('resource_id', resourceId.toString())
+      .maybeSingle();
     
     if (error) {
       console.warn('Failed to get stored checksum:', error);
       return null;
     }
     
-    console.log(`Retrieved checksum for ${resourceType}:${resourceId}: ${data}`);
-    return data;
+    const checksum = data?.checksum || null;
+    console.log(`Retrieved checksum for ${resourceType}:${resourceId}: ${checksum}`);
+    return checksum;
   } catch (error) {
     console.warn('Failed to get stored checksum:', error);
     return null;
