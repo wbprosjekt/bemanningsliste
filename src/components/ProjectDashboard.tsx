@@ -193,6 +193,23 @@ export default function ProjectDashboard() {
     }
   }, [profile?.org_id]);
 
+  // Polling for project updates (free alternative to Realtime)
+  useEffect(() => {
+    if (!profile?.org_id) return;
+
+    console.log('🔄 Setting up polling for project updates');
+    
+    const interval = setInterval(() => {
+      console.log('🔄 Polling for project updates...');
+      loadProjects();
+    }, 60000); // Poll every 60 seconds (less frequent for dashboard)
+
+    return () => {
+      console.log('🔄 Cleaning up polling');
+      clearInterval(interval);
+    };
+  }, [profile?.org_id]);
+
   // Also try to load when profile changes from null to having data
   useEffect(() => {
     if (profile && profile.org_id && projects.length === 0) {

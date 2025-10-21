@@ -25,6 +25,23 @@ export default function ProjectSelector({ open, onClose, onSelect, orgId }: Proj
     }
   }, [open, orgId]);
 
+  // Polling for project updates (free alternative to Realtime)
+  useEffect(() => {
+    if (!open || !orgId) return;
+
+    console.log('🔄 Setting up polling for project updates');
+    
+    const interval = setInterval(() => {
+      console.log('🔄 Polling for project updates...');
+      loadProjects();
+    }, 30000); // Poll every 30 seconds
+
+    return () => {
+      console.log('🔄 Cleaning up polling');
+      clearInterval(interval);
+    };
+  }, [open, orgId]);
+
   useEffect(() => {
     if (searchQuery) {
       const filtered = projects.filter(project =>
