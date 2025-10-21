@@ -415,10 +415,14 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
 
     const text = await response.text();
     let responseData: unknown = {};
-    try { 
-      responseData = JSON.parse(text); 
-    } catch (error) {
-      console.debug('Failed to parse JSON response:', error);
+    
+    // Only try to parse JSON if there's content and it's not a 204 (No Content) response
+    if (text && response.status !== 204) {
+      try { 
+        responseData = JSON.parse(text); 
+      } catch (error) {
+        console.debug('Failed to parse JSON response:', error);
+      }
     }
 
     console.log('Tripletex API response', { status: response.status, url });

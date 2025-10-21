@@ -12,6 +12,12 @@ export async function POST(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     
+    console.log('🔧 Environment check:', {
+      hasSupabaseUrl: !!supabaseUrl,
+      hasServiceKey: !!supabaseServiceKey,
+      serviceKeyLength: supabaseServiceKey?.length || 0
+    });
+    
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error('❌ Missing Supabase configuration');
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
