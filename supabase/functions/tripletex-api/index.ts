@@ -311,6 +311,55 @@ async function getOrCreateSession(orgId: string): Promise<{ token: string; expir
   return { token: String(token), expirationDate: String(exp), companyId: Number(companyId) };
 }
 
+// Helper function to generate checksum for data
+function generateChecksum(data: unknown): string {
+  const str = JSON.stringify(data, Object.keys(data as Record<string, unknown>).sort());
+  // Simple hash function (in production, consider using crypto.subtle)
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return hash.toString(16);
+}
+
+// Helper function to update sync state
+async function updateSyncState(orgId: string, resourceType: string, resourceId: string, checksum: string, lastModified?: string) {
+  try {
+    await supabase.rpc('update_tripletex_sync_state', {
+      p_org_id: orgId,
+      p_resource_type: resourceType,
+      p_resource_id: resourceId.toString(),
+      p_checksum: checksum,
+      p_last_modified: lastModified ? new Date(lastModified).toISOString() : null
+    });
+  } catch (error) {
+    console.warn('Failed to update sync state:', error);
+  }
+}
+
+// Helper function to get stored checksum
+async function getStoredChecksum(orgId: string, resourceType: string, resourceId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_tripletex_checksum', {
+      p_org_id: orgId,
+      p_resource_type: resourceType,
+      p_resource_id: resourceId.toString()
+    });
+    
+    if (error) {
+      console.warn('Failed to get stored checksum:', error);
+      return null;
+    }
+    
+    return data;
+  } catch (error) {
+    console.warn('Failed to get stored checksum:', error);
+    return null;
+  }
+}
+
 async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: unknown, orgId?: string): Promise<TripletexResponse> {
   const config = await getTripletexConfig(orgId || '');
   if (!config.consumerToken || !config.employeeToken) {
@@ -319,8 +368,10 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
   const url = `${config.baseUrl}${endpoint}`;
   let headers: Record<string, string> = { 
   'Content-Type': 'application/json',
-  'Accept': 'application/json'
-};;
+  'Accept': 'application/json',
+  'User-Agent': 'FieldNote/1.0 (Tripletex Integration)',
+  'X-Requested-With': 'XMLHttpRequest'
+};
 
   // Use session token for all non-session endpoints
   if (!endpoint.startsWith('/token/session')) {
@@ -420,7 +471,17 @@ async function fetchAllTripletexEmployees(orgId: string) {
       ? (response.data.values as TripletexEmployeeRecord[])
       : [];
 
-    employees.push(...pageEmployees);
+    // Process employees with checksum validation
+    for (const emp of pageEmployees) {
+      const checksum = generateChecksum(emp);
+      const storedChecksum = await getStoredChecksum(orgId, 'employee', emp.id.toString());
+      
+      // Only include if data has changed
+      if (storedChecksum !== checksum) {
+        employees.push(emp);
+        await updateSyncState(orgId, 'employee', emp.id.toString(), checksum);
+      }
+    }
 
     const meta = response.data?.meta as TripletexListMeta | undefined;
     const links = (response.data?.links || response.data?._links) as { next?: string | null } | undefined;
@@ -874,8 +935,23 @@ Deno.serve(async (req) => {
           if (response.success && response.data?.values) {
             console.log(`Syncing ${response.data.values.length} projects for org ${orgId}`);
             
+            // Process projects with checksum validation
+            const projectsToProcess = [];
+            for (const proj of response.data.values) {
+              const checksum = generateChecksum(proj);
+              const storedChecksum = await getStoredChecksum(orgId, 'project', proj.id.toString());
+              
+              // Only process if data has changed
+              if (storedChecksum !== checksum) {
+                projectsToProcess.push(proj);
+                await updateSyncState(orgId, 'project', proj.id.toString(), checksum);
+              }
+            }
+            
+            console.log(`Processing ${projectsToProcess.length} changed projects (out of ${response.data.values.length} total)`);
+            
             // Debug: Log ALL projects with full details (for debugging closed projects)
-            const debugProjects = response.data.values.map((p: unknown) => {
+            const debugProjects = projectsToProcess.map((p: unknown) => {
               const proj = p as any;
               return {
                 id: proj.id,
@@ -888,12 +964,12 @@ Deno.serve(async (req) => {
                 projectCategoryId: proj.projectCategoryId
               };
             });
-            console.log('DEBUG: ALL projects from Tripletex:', debugProjects);
+            console.log('DEBUG: Changed projects from Tripletex:', debugProjects);
             console.log('DEBUG: Closed projects:', debugProjects.filter((p: any) => p.isClosed === true));
             console.log('DEBUG: Projects with end date passed:', debugProjects.filter((p: any) => p.endDate && new Date(p.endDate) < new Date()));
             
-            // Cache projects in database
-            const projects = response.data.values.map((proj: unknown) => {
+            // Cache only changed projects in database
+            const projects = projectsToProcess.map((proj: unknown) => {
               const project = proj as { id: number; number?: string; displayName?: string; name?: string; customer?: { name?: string }; isActive?: boolean; isClosed?: boolean; endDate?: string };
               
               // Check multiple conditions to determine if project is truly active
@@ -943,8 +1019,23 @@ Deno.serve(async (req) => {
         result = await exponentialBackoff(async () => {
           const response = await callTripletexAPI('/activity?count=1000&fields=id,name,isActive,project', 'GET', undefined, orgId);
           if (response.success && response.data?.values) {
-            // Cache activities in database
-            const activities = response.data.values.map((act: unknown) => {
+            // Process activities with checksum validation
+            const activitiesToProcess = [];
+            for (const act of response.data.values) {
+              const checksum = generateChecksum(act);
+              const storedChecksum = await getStoredChecksum(orgId, 'activity', act.id.toString());
+              
+              // Only process if data has changed
+              if (storedChecksum !== checksum) {
+                activitiesToProcess.push(act);
+                await updateSyncState(orgId, 'activity', act.id.toString(), checksum);
+              }
+            }
+            
+            console.log(`Processing ${activitiesToProcess.length} changed activities (out of ${response.data.values.length} total)`);
+            
+            // Cache only changed activities in database
+            const activities = activitiesToProcess.map((act: unknown) => {
               const activity = act as { id: number; name?: string; isActive?: boolean };
               return {
                 org_id: orgId,
