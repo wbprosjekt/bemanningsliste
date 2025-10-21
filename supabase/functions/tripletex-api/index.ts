@@ -821,6 +821,7 @@ Deno.serve(async (req) => {
       }
 
       case 'sync-employees': {
+        console.log(`🚀 SYNC-EMPLOYEES STARTED - Version 0.2.126`);
         result = await exponentialBackoff(async () => {
           const employeeFetch = await fetchAllTripletexEmployees(orgId);
           if (!employeeFetch.success) {
