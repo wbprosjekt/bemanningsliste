@@ -45,6 +45,8 @@ interface TripletexResponse {
   success: boolean;
   data?: unknown;
   error?: string;
+  status?: number;
+  headers?: Record<string, string>;
 }
 
 interface TripletexEmployeeRecord {
@@ -203,6 +205,51 @@ async function getLastSyncTime(orgId: string, resourceType: string): Promise<str
   } catch (error) {
     console.warn('Failed to get last sync time:', error);
     return null;
+  }
+}
+
+async function getStoredTripletexMarkers(orgId: string, resourceType: string, resourceId: string): Promise<{ tripletex_checksum: string | null, tripletex_last_modified: string | null } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('tripletex_sync_state')
+      .select('tripletex_checksum, tripletex_last_modified')
+      .eq('org_id', orgId)
+      .eq('resource_type', resourceType)
+      .eq('resource_id', resourceId)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') {
+      console.warn('Failed to get stored Tripletex markers:', error);
+      return null;
+    }
+    
+    return data || null;
+  } catch (error) {
+    console.warn('Failed to get stored Tripletex markers:', error);
+    return null;
+  }
+}
+
+async function updateTripletexSyncState(orgId: string, resourceType: string, resourceId: string, tripletexChecksum: string, tripletexLastModified: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('tripletex_sync_state')
+      .upsert({
+        org_id: orgId,
+        resource_type: resourceType,
+        resource_id: resourceId,
+        tripletex_checksum: tripletexChecksum,
+        tripletex_last_modified: tripletexLastModified,
+        last_synced: new Date().toISOString()
+      });
+    
+    if (error) {
+      console.error('Failed to update Tripletex sync state:', error);
+    } else {
+      console.log(`Updated Tripletex sync state for ${resourceType}:${resourceId} with checksum ${tripletexChecksum}`);
+    }
+  } catch (error) {
+    console.error('Failed to update Tripletex sync state:', error);
   }
 }
 
@@ -392,7 +439,7 @@ async function getStoredChecksum(orgId: string, resourceType: string, resourceId
     }
     
     const checksum = data?.checksum || null;
-    console.log(`Retrieved checksum for ${resourceType}:${resourceId}: ${checksum}`);
+    console.log(`Retrieved checksum for ${resourceType}:${resourceId}:`, checksum);
     return checksum;
   } catch (error) {
     console.warn('Failed to get stored checksum:', error);
@@ -400,7 +447,7 @@ async function getStoredChecksum(orgId: string, resourceType: string, resourceId
   }
 }
 
-async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: unknown, orgId?: string): Promise<TripletexResponse> {
+async function callTripletexAPI(endpoint: string, method: string = 'GET', body?: unknown, orgId?: string, customHeaders?: Record<string, string>): Promise<TripletexResponse> {
   const config = await getTripletexConfig(orgId || '');
   if (!config.consumerToken || !config.employeeToken) {
     return { success: false, error: 'Tripletex tokens not configured for this organization' };
@@ -410,7 +457,8 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
   'Content-Type': 'application/json',
   'Accept': 'application/json',
   'User-Agent': 'FieldNote/1.0 (Tripletex Integration)',
-  'X-Requested-With': 'XMLHttpRequest'
+  'X-Requested-With': 'XMLHttpRequest',
+  ...customHeaders
 };
 
   // Use session token for all non-session endpoints
@@ -474,11 +522,18 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
       
       return { 
         success: false, 
-        error: errorMessage
+        error: errorMessage,
+        status: response.status,
+        headers: Object.fromEntries(response.headers.entries())
       };
     }
 
-    return { success: true, data: responseData };
+    return { 
+      success: true, 
+      data: responseData, 
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries())
+    };
   } catch (error: unknown) {
     console.error('Network error calling Tripletex API:', error);
     return { success: false, error: error.message ?? String(error) };
@@ -496,7 +551,11 @@ async function fetchAllTripletexEmployees(orgId: string) {
   
   // Get last sync time for changesSince parameter
   const lastSyncTime = await getLastSyncTime(orgId, 'employee');
-  const changesSinceParam = lastSyncTime ? `&changesSince=${lastSyncTime}` : '';
+  const changesSinceParam = lastSyncTime ? `&changesSince=${encodeURIComponent(lastSyncTime)}` : '';
+  
+  // Get stored checksum for employee list
+  const storedChecksum = await getStoredChecksum(orgId, 'employee', 'list');
+  const headers = storedChecksum ? { 'If-None-Match': storedChecksum } : {};
 
   while (pagesFetched < 100) { // safety guard to avoid infinite loops
     if (visitedPages.has(currentPage)) {
@@ -507,7 +566,14 @@ async function fetchAllTripletexEmployees(orgId: string) {
     visitedPages.add(currentPage);
     pagesFetched += 1;
 
-    const response = await callTripletexAPI(`/employee?count=${pageSize}&page=${currentPage}&fields=id,firstName,lastName,email${changesSinceParam}`, 'GET', undefined, orgId);
+    const response = await callTripletexAPI(`/employee?count=${pageSize}&page=${currentPage}&fields=id,firstName,lastName,email${changesSinceParam}`, 'GET', undefined, orgId, headers);
+    
+    // Check if we got a 304 Not Modified response (only on first page)
+    if (currentPage === 0 && response.status === 304) {
+      console.log(`✅ No changes detected for employees (304 Not Modified)`);
+      return { success: true, data: [], count: 0 };
+    }
+    
     if (!response.success) {
       return {
         success: false,
@@ -520,21 +586,17 @@ async function fetchAllTripletexEmployees(orgId: string) {
       ? (response.data.values as TripletexEmployeeRecord[])
       : [];
 
-    // Process employees with checksum validation
-    console.log(`Processing ${pageEmployees.length} employees with checksum validation`);
-    for (const emp of pageEmployees) {
-      console.log(`Processing employee ${emp.id} (${emp.firstName} ${emp.lastName})`);
-      const checksum = generateChecksum(emp);
-      const storedChecksum = await getStoredChecksum(orgId, 'employee', emp.id.toString());
-      
-      console.log(`Employee ${emp.id}: stored=${storedChecksum}, current=${checksum}, changed=${storedChecksum !== checksum}`);
-      
-      // Only include if data has changed
-      if (storedChecksum !== checksum) {
-        employees.push(emp);
-        await updateSyncState(orgId, 'employee', emp.id.toString(), checksum);
+    // Store ETag checksum from first page
+    if (currentPage === 0) {
+      const newChecksum = response.headers?.['etag'] || response.data?.versionDigest;
+      if (newChecksum) {
+        await updateSyncState(orgId, 'employee', 'list', newChecksum);
+        console.log(`✅ Updated ETag checksum for employee list: ${newChecksum}`);
       }
     }
+    
+    // Process all employees since we got new data
+    employees.push(...pageEmployees);
 
     const meta = response.data?.meta as TripletexListMeta | undefined;
     const links = (response.data?.links || response.data?._links) as { next?: string | null } | undefined;
@@ -988,24 +1050,42 @@ Deno.serve(async (req) => {
         result = await exponentialBackoff(async () => {
           // Get last sync time for changesSince parameter
           const lastSyncTime = await getLastSyncTime(orgId, 'project');
-          const changesSinceParam = lastSyncTime ? `&changesSince=${lastSyncTime}` : '';
+          const changesSinceParam = lastSyncTime ? `&changesSince=${encodeURIComponent(lastSyncTime)}` : '';
           
-          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,department,projectManager${changesSinceParam}`, 'GET', undefined, orgId);
+          // Get stored checksum for this endpoint
+          const storedChecksum = await getStoredChecksum(orgId, 'project', 'list');
+          
+          // Add If-None-Match header if we have a stored checksum
+          const headers = storedChecksum ? { 'If-None-Match': storedChecksum } : {};
+          console.log('🔍 Sending headers:', headers);
+          console.log('🔍 Stored checksum:', storedChecksum);
+          
+          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,department,projectManager${changesSinceParam}`, 'GET', undefined, orgId, headers);
+          
+          // Check if we got a 304 Not Modified response
+          if (response.status === 304) {
+            console.log(`✅ No changes detected for projects (304 Not Modified)`);
+            return { success: true, message: 'No changes detected', count: 0 };
+          }
+          
           if (response.success && response.data?.values) {
             console.log(`Syncing ${response.data.values.length} projects for org ${orgId}`);
             
-            // Process projects with checksum validation
-            const projectsToProcess = [];
-            for (const proj of response.data.values) {
-              const checksum = generateChecksum(proj);
-              const storedChecksum = await getStoredChecksum(orgId, 'project', proj.id.toString());
-              
-              // Only process if data has changed
-              if (storedChecksum !== checksum) {
-                projectsToProcess.push(proj);
-                await updateSyncState(orgId, 'project', proj.id.toString(), checksum);
-              }
+            // Store the new ETag checksum from response
+            console.log('🔍 Response headers:', Object.keys(response.headers || {}));
+            console.log('🔍 ETag header:', response.headers?.['etag']);
+            console.log('🔍 VersionDigest:', response.data?.versionDigest);
+            
+            const newChecksum = response.data?.versionDigest || response.headers?.['etag'];
+            if (newChecksum) {
+              await updateSyncState(orgId, 'project', 'list', newChecksum);
+              console.log(`✅ Updated ETag checksum for project list: ${newChecksum}`);
+            } else {
+              console.log('⚠️ No ETag found in response');
             }
+            
+            // Process all projects since we got new data
+            const projectsToProcess = response.data.values;
             
             console.log(`Processing ${projectsToProcess.length} changed projects (out of ${response.data.values.length} total)`);
             
@@ -1078,22 +1158,30 @@ Deno.serve(async (req) => {
         result = await exponentialBackoff(async () => {
           // Get last sync time for changesSince parameter
           const lastSyncTime = await getLastSyncTime(orgId, 'activity');
-          const changesSinceParam = lastSyncTime ? `&changesSince=${lastSyncTime}` : '';
+          const changesSinceParam = lastSyncTime ? `&changesSince=${encodeURIComponent(lastSyncTime)}` : '';
           
-          const response = await callTripletexAPI(`/activity?count=1000&fields=id,name${changesSinceParam}`, 'GET', undefined, orgId);
+          // Get stored checksum for activity list
+          const storedChecksum = await getStoredChecksum(orgId, 'activity', 'list');
+          const headers = storedChecksum ? { 'If-None-Match': storedChecksum } : {};
+          
+          const response = await callTripletexAPI(`/activity?count=1000&fields=id,name${changesSinceParam}`, 'GET', undefined, orgId, headers);
+          
+          // Check if we got a 304 Not Modified response
+          if (response.status === 304) {
+            console.log(`✅ No changes detected for activities (304 Not Modified)`);
+            return { success: true, message: 'No changes detected', count: 0 };
+          }
+          
           if (response.success && response.data?.values) {
-            // Process activities with checksum validation
-            const activitiesToProcess = [];
-            for (const act of response.data.values) {
-              const checksum = generateChecksum(act);
-              const storedChecksum = await getStoredChecksum(orgId, 'activity', act.id.toString());
-              
-              // Only process if data has changed
-              if (storedChecksum !== checksum) {
-                activitiesToProcess.push(act);
-                await updateSyncState(orgId, 'activity', act.id.toString(), checksum);
-              }
+            // Store the new ETag checksum from response
+            const newChecksum = response.headers?.['etag'] || response.data?.versionDigest;
+            if (newChecksum) {
+              await updateSyncState(orgId, 'activity', 'list', newChecksum);
+              console.log(`✅ Updated ETag checksum for activity list: ${newChecksum}`);
             }
+            
+            // Process all activities since we got new data
+            const activitiesToProcess = response.data.values;
             
             console.log(`Processing ${activitiesToProcess.length} changed activities (out of ${response.data.values.length} total)`);
             

@@ -34,10 +34,52 @@ if (Deno.serve) {
         );
       }
 
+      // Validate webhook signature for security
+      const signature = req.headers.get('X-Tripletex-Signature') || req.headers.get('X-Hub-Signature-256');
+      const webhookSecret = Deno.env.get('TRIPLETEX_WEBHOOK_SECRET');
+      
+      // Get raw body for signature validation
+      const rawBody = await req.text();
+      
+      // Log the origin for debugging
+      const origin = req.headers.get('origin');
+      console.log('🔍 Webhook origin:', origin);
+      
+      if (webhookSecret && !signature) {
+        console.warn('⚠️ Webhook signature missing but secret configured');
+        return new Response(
+          JSON.stringify({ error: 'Webhook signature required' }),
+          { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
+      if (webhookSecret && signature) {
+        // Validate signature (Tripletex typically uses HMAC-SHA256)
+        const crypto = await import('https://deno.land/std@0.208.0/crypto/mod.ts');
+        const expectedSignature = await crypto.hmac('sha256', webhookSecret, rawBody, 'hex');
+        const providedSignature = signature.replace('sha256=', '');
+        
+        if (expectedSignature !== providedSignature) {
+          console.warn('⚠️ Invalid webhook signature');
+          return new Response(
+            JSON.stringify({ error: 'Invalid signature' }),
+            { 
+              status: 401, 
+              headers: { 'Content-Type': 'application/json' }
+            }
+          );
+        }
+        
+        console.log('✅ Webhook signature validated');
+      }
+
       // Parse webhook payload
       let payload: TripletexWebhookPayload;
       try {
-        payload = await req.json();
+        payload = JSON.parse(rawBody);
         console.log('📥 Raw webhook payload received:', JSON.stringify(payload, null, 2));
       } catch (error) {
         console.error('❌ Failed to parse webhook payload:', error);
@@ -116,19 +158,22 @@ async function handleWebhookEvent(payload: TripletexWebhookPayload) {
 
     console.log(`🔄 Processing webhook: ${event} for ${entityType} ID ${id}`);
 
-    // Handle specific entity types
+    // Handle specific entity types and events
     switch (entityType) {
       case 'employee':
-        return await handleEmployeeWebhook(event, id);
+        return await handleEmployeeWebhook(event, id, payload.value);
       
       case 'project':
         return await handleProjectWebhook(event, id, payload.value);
       
       case 'product':
-        return await handleProductWebhook(event, id);
+        return await handleProductWebhook(event, id, payload.value);
       
       case 'customer':
-        return await handleCustomerWebhook(event, id);
+        return await handleCustomerWebhook(event, id, payload.value);
+      
+      case 'timesheetEntry':
+        return await handleTimesheetWebhook(event, id, payload.value);
       
       default:
         console.log(`ℹ️ Unhandled webhook entity type: ${entityType}`);
@@ -141,18 +186,56 @@ async function handleWebhookEvent(payload: TripletexWebhookPayload) {
   }
 }
 
-async function handleEmployeeWebhook(event: string, id: number) {
+async function handleEmployeeWebhook(event: string, id: number, employeeData?: any) {
   console.log(`👤 Employee webhook: ${event} for employee ${id}`);
   
-  // Mark employee for re-sync
-  await supabase
-    .from('ttx_employee_cache')
-    .update({ 
-      last_synced: new Date().toISOString(),
-      needs_sync: true 
-    })
-    .eq('tripletex_employee_id', id);
+  try {
+    if (event === 'employee.create' && employeeData) {
+      console.log(`🔄 Creating new employee from webhook data for employee ${id}:`, employeeData.firstName, employeeData.lastName);
+      
+      // Get org_id from any existing employee in the cache
+      const { data: existingEmployees } = await supabase
+        .from('ttx_employee_cache')
+        .select('org_id')
+        .limit(1);
 
+      const orgId = existingEmployees?.[0]?.org_id || null;
+
+      // Insert the employee in cache using webhook data
+      const { error: insertError } = await supabase
+        .from('ttx_employee_cache')
+        .insert({
+          tripletex_employee_id: id,
+          first_name: employeeData.firstName || 'Unknown',
+          last_name: employeeData.lastName || 'Unknown',
+          email: employeeData.email || null,
+          is_active: true,
+          last_synced: new Date().toISOString(),
+          needs_sync: false,
+          org_id: orgId
+        });
+      
+      if (insertError) {
+        console.error(`❌ Failed to insert employee ${id}:`, insertError);
+      } else {
+        console.log(`✅ Employee ${id} created successfully from webhook data`);
+      }
+    } else {
+      // For updates or deletes, mark for re-sync
+      await supabase
+        .from('ttx_employee_cache')
+        .update({ 
+          last_synced: new Date().toISOString(),
+          needs_sync: true 
+        })
+        .eq('tripletex_employee_id', id);
+      
+      console.log(`✅ Employee ${id} marked for re-sync`);
+    }
+  } catch (error) {
+    console.error(`❌ Error handling employee webhook for ${id}:`, error);
+  }
+  
   return { success: true };
 }
 
@@ -250,11 +333,50 @@ async function handleProductWebhook(event: string, id: number) {
   return { success: true };
 }
 
-async function handleCustomerWebhook(event: string, id: number) {
+async function handleCustomerWebhook(event: string, id: number, customerData?: any) {
   console.log(`👤 Customer webhook: ${event} for customer ${id}`);
   
   // Mark customer for re-sync if we have a customer cache table
   // For now, just log the event
+  
+  return { success: true };
+}
+
+async function handleTimesheetWebhook(event: string, id: number, timesheetData?: any) {
+  console.log(`⏰ Timesheet webhook: ${event} for timesheet entry ${id}`);
+  
+  try {
+    // For timesheet entries, we typically don't cache them
+    // but we can log the event and mark related projects/employees for re-sync
+    
+    if (timesheetData?.project?.id) {
+      // Mark related project for re-sync
+      await supabase
+        .from('ttx_project_cache')
+        .update({ 
+          last_synced: new Date().toISOString(),
+          needs_sync: true 
+        })
+        .eq('tripletex_project_id', timesheetData.project.id);
+      
+      console.log(`✅ Project ${timesheetData.project.id} marked for re-sync due to timesheet update`);
+    }
+    
+    if (timesheetData?.employee?.id) {
+      // Mark related employee for re-sync
+      await supabase
+        .from('ttx_employee_cache')
+        .update({ 
+          last_synced: new Date().toISOString(),
+          needs_sync: true 
+        })
+        .eq('tripletex_employee_id', timesheetData.employee.id);
+      
+      console.log(`✅ Employee ${timesheetData.employee.id} marked for re-sync due to timesheet update`);
+    }
+  } catch (error) {
+    console.error(`❌ Error handling timesheet webhook for ${id}:`, error);
+  }
   
   return { success: true };
 }
