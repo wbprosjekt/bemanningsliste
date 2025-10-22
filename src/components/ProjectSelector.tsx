@@ -184,12 +184,9 @@ const ProjectSelector = ({
                   />
                   <div className="flex flex-col gap-1 min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-medium truncate">{project.project_name}</span>
-                      {project.project_number && (
-                        <Badge variant="secondary" className="text-xs shrink-0">
-                          #{project.project_number}
-                        </Badge>
-                      )}
+                      <span className="font-medium truncate">
+                        {project.project_number ? `${project.project_number} ${project.project_name}` : project.project_name}
+                      </span>
                     </div>
                     {project.customer_name && (
                       <span className="text-sm text-muted-foreground truncate">
