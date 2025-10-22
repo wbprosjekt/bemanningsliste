@@ -108,7 +108,7 @@ export default function ProjectSelector({ open, onClose, onSelect, orgId }: Proj
                 className="w-full p-4 bg-purple-600 hover:bg-purple-700 rounded-lg text-left transition-colors"
               >
                 <div className="font-medium text-white">
-                  {project.project_number} {project.project_name}
+                  {project.project_name}
                 </div>
                 {project.customer && (
                   <div className="text-sm text-purple-100 mt-1">

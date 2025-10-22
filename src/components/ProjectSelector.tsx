@@ -185,7 +185,7 @@ const ProjectSelector = ({
                   <div className="flex flex-col gap-1 min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="font-medium truncate">
-                        {project.project_number ? `${project.project_number} ${project.project_name}` : project.project_name}
+                        {project.project_name}
                       </span>
                     </div>
                     {project.customer_name && (
