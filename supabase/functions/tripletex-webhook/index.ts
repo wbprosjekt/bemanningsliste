@@ -266,11 +266,19 @@ async function handleProjectWebhook(event: string, id: number, projectData?: any
         console.log(`ℹ️ Project ${id} already exists, updating instead of creating`);
         
         // Update existing project
+        const projectName = projectData.name || 'Unknown';
+        const projectNumber = projectData.number || '';
+        
+        // Combine number and name if number is not already in the name
+        const displayName = projectNumber && !projectName.startsWith(projectNumber) 
+          ? `${projectNumber} ${projectName}` 
+          : projectName;
+        
         const { error: updateError } = await supabase
           .from('ttx_project_cache')
           .update({
-            project_name: projectData.name || 'Unknown',
-            project_number: projectData.number || '',
+            project_name: displayName,
+            project_number: projectNumber,
             customer_name: projectData.customer?.name || null,
             is_active: !projectData.isClosed,
             last_synced: new Date().toISOString(),
@@ -286,12 +294,20 @@ async function handleProjectWebhook(event: string, id: number, projectData?: any
         console.log(`✅ Project ${id} updated successfully`);
       } else {
         // Insert new project
+        const projectName = projectData.name || 'Unknown';
+        const projectNumber = projectData.number || '';
+        
+        // Combine number and name if number is not already in the name
+        const displayName = projectNumber && !projectName.startsWith(projectNumber) 
+          ? `${projectNumber} ${projectName}` 
+          : projectName;
+        
         const { data: insertedData, error: insertError } = await supabase
           .from('ttx_project_cache')
           .insert({
             tripletex_project_id: id,
-            project_name: projectData.name || 'Unknown',
-            project_number: projectData.number || '',
+            project_name: displayName,
+            project_number: projectNumber,
             customer_name: projectData.customer?.name || null,
             is_active: !projectData.isClosed,
             last_synced: new Date().toISOString(),

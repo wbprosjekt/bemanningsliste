@@ -6,23 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Search, 
   Star, 
-  Clock, 
-  Building, 
   Plus,
   Filter,
-  Grid3X3,
-  List,
-  Calendar,
-  Image as ImageIcon,
-  AlertCircle
+  Building
 } from 'lucide-react';
-import PhotoInboxMini from '@/components/PhotoInboxMini';
+import TagPhotoDialog from '@/components/TagPhotoDialog';
 
 interface Project {
   id: string;
@@ -42,6 +35,21 @@ interface ProjectStats {
   untagged_photos: number;
 }
 
+interface ProjectWithActivity extends Project {
+  activity_score: number;
+  recent_activities: number;
+}
+
+interface UntaggedPhoto {
+  id: string;
+  image_url: string;
+  prosjekt_id: string | null;
+  inbox_date: string;
+  comment: string | null;
+  project_name?: string;
+  project_number?: string;
+}
+
 export default function ProjectDashboard() {
   const { user } = useAuth();
   const router = useRouter();
@@ -57,16 +65,18 @@ export default function ProjectDashboard() {
   });
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+  const [mostActiveProjects, setMostActiveProjects] = useState<ProjectWithActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [stats, setStats] = useState<ProjectStats>({
     total_projects: 0,
     active_projects: 0,
     recent_projects: 0,
     untagged_photos: 0
   });
-  const [showPhotoInbox, setShowPhotoInbox] = useState(false);
+  const [untaggedPhotos, setUntaggedPhotos] = useState<UntaggedPhoto[]>([]);
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+  const [showBulkTagDialog, setShowBulkTagDialog] = useState(false);
 
   // Load profile when user is available
   useEffect(() => {
@@ -108,6 +118,69 @@ export default function ProjectDashboard() {
     }
   };
 
+  const loadMostActiveProjects = async (projects: Project[]) => {
+    try {
+      // Get activity data for each project from the last 7 days
+      const projectIds = projects.map(p => p.id);
+      
+      // Query project_activity table for recent activities
+      const { data: activities, error: activityError } = await supabase
+        .from('project_activity')
+        .select(`
+          project_id,
+          activity_type,
+          created_at
+        `)
+        .in('project_id', projectIds)
+        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) // Last 7 days
+        .order('created_at', { ascending: false });
+
+      if (activityError) {
+        console.warn('Could not load project activities:', activityError);
+        // Fallback: use projects as-is without activity data
+        setMostActiveProjects(projects.slice(0, 3).map(p => ({
+          ...p,
+          activity_score: 0,
+          recent_activities: 0
+        })));
+        return;
+      }
+
+      // Calculate activity scores
+      const activityMap = new Map<string, number>();
+      activities?.forEach(activity => {
+        const current = activityMap.get(activity.project_id || '') || 0;
+        // Weight different activity types
+        const weight = activity.activity_type.includes('image') ? 1 : 
+                      activity.activity_type.includes('befaring') ? 3 : 
+                      activity.activity_type.includes('oppgave') ? 2 : 1;
+        activityMap.set(activity.project_id || '', current + weight);
+      });
+
+      // Create project with activity data
+      const projectsWithActivity: ProjectWithActivity[] = projects
+        .map(project => ({
+          ...project,
+          activity_score: activityMap.get(project.id) || 0,
+          recent_activities: activities?.filter(a => a.project_id === project.id).length || 0
+        }))
+        .sort((a, b) => b.activity_score - a.activity_score)
+        .slice(0, 3); // Top 3 most active
+
+      console.log('✅ Loaded most active projects:', projectsWithActivity.length);
+      setMostActiveProjects(projectsWithActivity);
+
+    } catch (error) {
+      console.error('Error loading most active projects:', error);
+      // Fallback: use first 3 projects
+      setMostActiveProjects(projects.slice(0, 3).map(p => ({
+        ...p,
+        activity_score: 0,
+        recent_activities: 0
+      })));
+    }
+  };
+
   const loadProjects = async () => {
     if (!profile?.org_id) {
       console.log('❌ ProjectDashboard: No profile.org_id available, waiting...', { profile });
@@ -140,20 +213,28 @@ export default function ProjectDashboard() {
       console.log('✅ ProjectDashboard: Loaded projects:', sanitizedProjects.length);
       setProjects(sanitizedProjects);
       setFilteredProjects(sanitizedProjects);
+
+      // Load most active projects with activity data
+      await loadMostActiveProjects(sanitizedProjects);
       
-      // Load untagged photos count
-      // Note: oppgave_bilder doesn't have org_id, so we need to count via join
-      const { data: untaggedPhotos, error: countError } = await supabase
+      // Load untagged photos with project info
+      const { data: untaggedPhotosData, error: countError } = await supabase
         .from('oppgave_bilder')
         .select(`
           id,
+          image_url,
+          prosjekt_id,
+          inbox_date,
+          comment,
           oppgave_id,
-          ttx_project_cache:prosjekt_id(org_id)
+          ttx_project_cache:prosjekt_id(org_id, project_name, project_number)
         `)
-        .is('is_tagged', false);  // Use .is() for boolean false
+        .is('is_tagged', false)
+        .order('inbox_date', { ascending: false })
+        .limit(12); // Top 12 for dashboard preview
       
       // Filter by org_id and check if photo is truly untagged
-      const untaggedCount = (untaggedPhotos || []).filter((photo: any) => {
+      const filteredUntaggedPhotos = (untaggedPhotosData || []).filter((photo: any) => {
         // A photo is untagged if oppgave_id is NULL
         if (photo.oppgave_id) {
           return false; // Skip photos that are already tagged to an oppgave
@@ -166,7 +247,21 @@ export default function ProjectDashboard() {
         
         // Include photos without project
         return true;
-      }).length;
+      });
+
+      // Transform data for display
+      const transformedPhotos: UntaggedPhoto[] = filteredUntaggedPhotos.map((photo: any) => ({
+        id: photo.id,
+        image_url: photo.image_url,
+        prosjekt_id: photo.prosjekt_id,
+        inbox_date: photo.inbox_date,
+        comment: photo.comment,
+        project_name: photo.ttx_project_cache?.project_name || null,
+        project_number: photo.ttx_project_cache?.project_number || null
+      }));
+
+      setUntaggedPhotos(transformedPhotos);
+      const untaggedCount = filteredUntaggedPhotos.length;
       
       // Calculate stats
       setStats({
@@ -244,10 +339,10 @@ export default function ProjectDashboard() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
+      {/* Header - Kondensert versjon */}
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Prosjekt Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">🏗️ FieldNote Dashboard</h1>
           <p className="text-muted-foreground">
             Oversikt over alle aktive prosjekter
           </p>
@@ -261,94 +356,317 @@ export default function ProjectDashboard() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Totalt prosjekter</CardTitle>
-            <Building className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total_projects}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Aktive prosjekter</CardTitle>
-            <Star className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.active_projects}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Nylig oppdatert</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.recent_projects}</div>
-          </CardContent>
-        </Card>
-        
-        <Card 
-          className={`cursor-pointer hover:shadow-md transition-shadow ${stats.untagged_photos > 0 ? 'border-orange-500 bg-orange-50' : ''}`}
-          onClick={() => setShowPhotoInbox(!showPhotoInbox)}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Utaggede bilder</CardTitle>
-            <ImageIcon className={`h-4 w-4 ${stats.untagged_photos > 0 ? 'text-orange-600' : 'text-muted-foreground'}`} />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">{stats.untagged_photos}</div>
-              {stats.untagged_photos > 0 && (
-                <AlertCircle className="h-4 w-4 text-orange-600" />
+      {/* 🎯 PROSJEKTVELGER - Fra LAG 1 plan */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
+            <div className="flex-1">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium">Prosjekt:</span>
+                <select className="px-3 py-2 border rounded-md bg-background">
+                  <option value="all">Alle prosjekter</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.project_name} #{project.project_number}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Søk..."
+                  className="pl-10 w-48"
+                />
+              </div>
+              <Button variant="outline" size="sm">
+                <Filter className="h-4 w-4 mr-1" />
+                Filter
+              </Button>
+              <Button variant="outline" size="sm">
+                <Star className="h-4 w-4 mr-1" />
+                Favoritter
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 🚨 KREVER HANDLING - Øverst som prioritert */}
+      <Card className="border-red-200 bg-red-50">
+        <CardHeader>
+          <CardTitle className="text-red-700 flex items-center">
+            🚨 KREVER HANDLING (3 ting) 
+            <Button variant="link" className="ml-auto text-red-600">
+              Vis alle →
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="text-red-600">🔴</span>
+            <span className="text-xs">Kritiske oppgaver som krever oppmerksomhet</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-yellow-600">🟡</span>
+            <span className="text-xs">Befaringer som trenger planlegging</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-orange-600">📷</span>
+            <span className="text-xs">{stats.untagged_photos} bilder venter på tagging</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 📷 FOTO-INNBOKS - Hybrid strategi */}
+      <Card className="border-orange-200 bg-orange-50">
+        <CardHeader>
+          <CardTitle className="text-orange-700 flex items-center">
+            📷 FOTO-INNBOKS
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {stats.untagged_photos > 0 ? (
+            <div className="space-y-3">
+              
+              {/* Show untagged photos */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Uten prosjekt: {stats.untagged_photos} bilder</span>
+                  <div className="flex items-center space-x-2">
+                    {selectedPhotos.size > 0 && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs"
+                        onClick={() => setShowBulkTagDialog(true)}
+                      >
+                        Tag {selectedPhotos.size} bilder
+                      </Button>
+                    )}
+                    <Button 
+                      variant="link" 
+                      size="sm" 
+                      className="text-orange-600 text-xs"
+                      onClick={() => router.push('/photo-inbox')}
+                    >
+                      Se alle →
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-6 gap-2">
+                  {untaggedPhotos.slice(0, 6).map((photo) => (
+                    <div
+                      key={photo.id}
+                      className={`aspect-square rounded border-2 overflow-hidden relative group cursor-pointer ${
+                        selectedPhotos.has(photo.id) 
+                          ? 'border-orange-500 bg-orange-100' 
+                          : 'border-orange-200 hover:border-orange-300'
+                      }`}
+                      onClick={() => {
+                        const newSelected = new Set(selectedPhotos);
+                        if (newSelected.has(photo.id)) {
+                          newSelected.delete(photo.id);
+                        } else {
+                          newSelected.add(photo.id);
+                        }
+                        setSelectedPhotos(newSelected);
+                      }}
+                    >
+                      <img
+                        src={photo.image_url}
+                        alt="Untagged photo"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f3f4f6';
+                          e.currentTarget.style.display = 'flex';
+                          e.currentTarget.style.alignItems = 'center';
+                          e.currentTarget.style.justifyContent = 'center';
+                          e.currentTarget.innerHTML = '📷';
+                        }}
+                      />
+                      
+                      {/* Selection checkbox */}
+                      <div className="absolute top-1 left-1">
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                          selectedPhotos.has(photo.id)
+                            ? 'bg-orange-500 border-orange-500 text-white'
+                            : 'bg-white border-gray-300'
+                        }`}>
+                          {selectedPhotos.has(photo.id) && '✓'}
+                        </div>
+                      </div>
+                      
+                      {/* Quick actions - vises på hover */}
+                      <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-1">
+                        <button
+                          className="w-5 h-5 bg-green-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-green-600 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPhotos(new Set([photo.id]));
+                            setShowBulkTagDialog(true);
+                          }}
+                          title="Tag til prosjekt"
+                        >
+                          🏷️
+                        </button>
+                        <button
+                          className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // TODO: Delete photo
+                            console.log('Delete photo:', photo.id);
+                          }}
+                          title="Slett bilde"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="text-xs text-muted-foreground">
+                Klikk for å velge bilder, eller hover for hurtigtagging
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <div className="text-sm text-muted-foreground">
+                Ingen utaggede bilder - alt er organisert! 🎉
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 📊 KPI OVERVIEW - Kondensert versjon */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">📊 KPI OVERVIEW</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{stats.active_projects}</div>
+              <div className="text-sm text-muted-foreground">Aktive</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">-</div>
+              <div className="text-sm text-muted-foreground">Oppgaver</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">-</div>
+              <div className="text-sm text-muted-foreground">Befaringer</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">{stats.untagged_photos}</div>
+              <div className="text-sm text-muted-foreground">Bilder</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ⭐ FAVORITTER & MEST AKTIVE */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">⭐ FAVORITTER & MEST AKTIVE</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Favoritter chips */}
+          <div className="space-y-2">
+            <div className="text-sm font-medium text-muted-foreground">⭐ Favoritter</div>
+            <div className="flex flex-wrap gap-2">
+              {projects.slice(0, 4).map((project) => (
+                  <Button 
+                    key={project.id}
+                    variant="outline" 
+                    size="sm" 
+                    className="bg-blue-50 border-blue-200"
+                    onClick={() => router.push(`/prosjekt/${project.id}`)}
+                  >
+                    <Star className="h-4 w-4 mr-1 text-blue-600" />
+                    {project.project_name}
+                  </Button>
+              ))}
+              {projects.length === 0 && (
+                <div className="text-sm text-muted-foreground">
+                  Ingen favoritter satt ennå
+                </div>
               )}
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+          
+          {/* Mest aktive prosjekter */}
+          <div className="space-y-2">
+            <div className="text-sm font-medium text-muted-foreground">🔥 Mest aktive prosjekter (7 dager)</div>
+            <div className="space-y-1">
+              {mostActiveProjects.map((project, index) => (
+                <div 
+                  key={project.id} 
+                  className="flex items-center justify-between p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => router.push(`/prosjekt/${project.id}`)}
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium">{index + 1}. {project.project_name}</span>
+                    {project.activity_score > 0 && (
+                      <Badge variant="secondary" className="text-xs">
+                        {project.recent_activities} aktiviteter
+                      </Badge>
+                    )}
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {project.activity_score > 0 ? `${project.activity_score} pts` : 'Ingen aktivitet'}
+                  </span>
+                  <Button 
+                    variant="link" 
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/prosjekt/${project.id}`);
+                    }}
+                  >
+                    Velg →
+                  </Button>
+                </div>
+              ))}
+              {mostActiveProjects.length === 0 && (
+                <div className="text-sm text-muted-foreground">
+                  Ingen aktivitet de siste 7 dagene
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Photo Inbox Section */}
-      {showPhotoInbox && profile && (
-        <PhotoInboxMini 
-          orgId={profile.org_id} 
-          projectId={null}
-          maxPhotos={6}
-          onViewAll={() => router.push('/photo-inbox')}
-        />
-      )}
-
-      {/* Search and Filters */}
-      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Søk prosjekter..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <Button
-            variant={viewMode === 'grid' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('grid')}
-          >
-            <Grid3X3 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-          >
-            <List className="h-4 w-4" />
-          </Button>
+      {/* 📋 ALLE PROSJEKTER - Kondensert versjon */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">📋 ALLE PROSJEKTER ({stats.total_projects})</h2>
+          <div className="flex items-center space-x-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Søk..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-48"
+              />
+            </div>
+            <Button variant="outline" size="sm">
+              <Filter className="h-4 w-4 mr-1" />
+              Filter
+            </Button>
+            <Button variant="outline" size="sm">
+              Sorter: Aktivitet
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -367,53 +685,73 @@ export default function ProjectDashboard() {
           </CardContent>
         </Card>
       ) : (
-        <div className={viewMode === 'grid' 
-          ? "grid gap-4 md:grid-cols-2 lg:grid-cols-3" 
-          : "space-y-4"
-        }>
-          {filteredProjects.map((project) => (
-            <Card key={project.id} className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-lg">
-                      {project.project_name}
-                    </CardTitle>
-                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                      <Badge variant="outline">
-                        #{project.project_number}
-                      </Badge>
-                      {project.customer_name && (
-                        <span>• {project.customer_name}</span>
-                      )}
-                    </div>
-                  </div>
-                  <Badge variant="secondary">
-                    Aktiv
-                  </Badge>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="pt-0">
+        <div className="space-y-2">
+          {filteredProjects.slice(0, 10).map((project) => (
+            <Card 
+              key={project.id} 
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => router.push(`/prosjekt/${project.id}`)}
+            >
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
-                    Oppdatert {new Date(project.updated_at).toLocaleDateString('no-NO')}
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2">
+                      <Star className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium">{project.project_name}</span>
+                    </div>
+                    <Badge variant="outline">#{project.project_number}</Badge>
                   </div>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Befaringer
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Oppgaver
+                  
+                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                    <span>📊 Aktivt prosjekt</span>
+                    <span>📷 {stats.untagged_photos} bilder</span>
+                    <Button 
+                      variant="link" 
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/prosjekt/${project.id}`);
+                      }}
+                    >
+                      Se detaljer →
                     </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))}
+          
+          {filteredProjects.length > 10 && (
+            <Card>
+              <CardContent className="p-4 text-center">
+                <Button variant="outline">
+                  Vis {filteredProjects.length - 10} flere...
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
+      )}
+
+      {/* Bulk Tag Dialog */}
+      {showBulkTagDialog && selectedPhotos.size > 0 && (
+        <TagPhotoDialog
+          open={showBulkTagDialog}
+          onOpenChange={(open) => {
+            setShowBulkTagDialog(open);
+            if (!open) {
+              setSelectedPhotos(new Set());
+            }
+          }}
+          photo={untaggedPhotos.find(p => selectedPhotos.has(p.id)) || untaggedPhotos[0]}
+          orgId={profile?.org_id}
+          photoIds={Array.from(selectedPhotos)}
+          onSuccess={() => {
+            setSelectedPhotos(new Set());
+            setShowBulkTagDialog(false);
+            loadProjects(); // Reload photos after tagging
+          }}
+        />
       )}
     </div>
   );
