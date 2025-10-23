@@ -1203,10 +1203,10 @@ Deno.serve(async (req) => {
                 project_manager_name: project.projectManager ? 
                   `${project.projectManager.firstName || ''} ${project.projectManager.lastName || ''}`.trim() : null,
                 project_manager_email: project.projectManager?.email || null,
-                project_manager_phone: project.projectManager?.phoneNumber || null,
-                project_description: project.description || null,
-                start_date: project.startDate || null,
-                end_date: project.endDate || null,
+                project_manager_phone: project.projectManager?.phoneNumberMobile || project.projectManager?.phoneNumberWork || project.projectManager?.phoneNumberHome || null,
+                project_description: null, // Not available in Tripletex API
+                start_date: null, // Not available in Tripletex API
+                end_date: null, // Not available in Tripletex API
                 is_active: isActive,
                 is_closed: project.isClosed || false,
                 last_synced: new Date().toISOString()
