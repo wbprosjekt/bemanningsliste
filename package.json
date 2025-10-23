@@ -1,6 +1,6 @@
 {
   "name": "bemanningsliste-next",
-  "version": "0.2.156",
+  "version": "0.2.157",
   "private": true,
   "engines": {
     "node": ">=20.0.0",

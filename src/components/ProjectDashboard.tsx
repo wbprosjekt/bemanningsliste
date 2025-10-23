@@ -16,6 +16,8 @@ import {
   Building
 } from 'lucide-react';
 import TagPhotoDialog from '@/components/TagPhotoDialog';
+import MoveToProjectDialog from '@/components/fri-befaring/MoveToProjectDialog';
+import GlobalSearchBar from '@/components/GlobalSearchBar';
 
 interface Project {
   id: string;
@@ -33,6 +35,7 @@ interface ProjectStats {
   active_projects: number;
   recent_projects: number;
   untagged_photos: number;
+  untagged_befaringer: number;
 }
 
 interface ProjectWithActivity extends Project {
@@ -48,6 +51,15 @@ interface UntaggedPhoto {
   comment: string | null;
   project_name?: string;
   project_number?: string;
+}
+
+interface UntaggedBefaring {
+  id: string;
+  title: string;
+  description: string | null;
+  befaring_date: string | null;
+  created_at: string;
+  status: 'aktiv' | 'signert' | 'arkivert';
 }
 
 export default function ProjectDashboard() {
@@ -72,11 +84,15 @@ export default function ProjectDashboard() {
     total_projects: 0,
     active_projects: 0,
     recent_projects: 0,
-    untagged_photos: 0
+    untagged_photos: 0,
+    untagged_befaringer: 0
   });
   const [untaggedPhotos, setUntaggedPhotos] = useState<UntaggedPhoto[]>([]);
+  const [untaggedBefaringer, setUntaggedBefaringer] = useState<UntaggedBefaring[]>([]);
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+  const [selectedBefaringer, setSelectedBefaringer] = useState<Set<string>>(new Set());
   const [showBulkTagDialog, setShowBulkTagDialog] = useState(false);
+  const [showBulkMoveDialog, setShowBulkMoveDialog] = useState(false);
 
   // Load profile when user is available
   useEffect(() => {
@@ -227,6 +243,7 @@ export default function ProjectDashboard() {
           inbox_date,
           comment,
           oppgave_id,
+          befaring_punkt_id,
           ttx_project_cache:prosjekt_id(org_id, project_name, project_number)
         `)
         .is('is_tagged', false)
@@ -235,9 +252,9 @@ export default function ProjectDashboard() {
       
       // Filter by org_id and check if photo is truly untagged
       const filteredUntaggedPhotos = (untaggedPhotosData || []).filter((photo: any) => {
-        // A photo is untagged if oppgave_id is NULL
-        if (photo.oppgave_id) {
-          return false; // Skip photos that are already tagged to an oppgave
+        // A photo is untagged if BOTH oppgave_id AND befaring_punkt_id are NULL
+        if (photo.oppgave_id || photo.befaring_punkt_id) {
+          return false; // Skip photos that are already tagged to an oppgave or befaring punkt
         }
         
         // If photo has prosjekt_id, check if it matches org
@@ -261,7 +278,38 @@ export default function ProjectDashboard() {
       }));
 
       setUntaggedPhotos(transformedPhotos);
-      const untaggedCount = filteredUntaggedPhotos.length;
+      const untaggedPhotosCount = filteredUntaggedPhotos.length;
+      
+      // Load untagged befaringer
+      const { data: untaggedBefaringerData, error: befaringerError } = await supabase
+        .from('fri_befaringer' as any)
+        .select(`
+          id,
+          title,
+          description,
+          befaring_date,
+          created_at,
+          status
+        `)
+        .eq('org_id', profile.org_id)
+        .is('tripletex_project_id', null)
+        .eq('status', 'aktiv')
+        .order('created_at', { ascending: false })
+        .limit(6); // Top 6 for dashboard preview
+
+      if (befaringerError) {
+        console.warn('Could not load untagged befaringer:', befaringerError);
+      } else {
+        const transformedBefaringer: UntaggedBefaring[] = (untaggedBefaringerData || []).map((befaring: any) => ({
+          id: befaring.id,
+          title: befaring.title,
+          description: befaring.description,
+          befaring_date: befaring.befaring_date,
+          created_at: befaring.created_at,
+          status: befaring.status
+        }));
+        setUntaggedBefaringer(transformedBefaringer);
+      }
       
       // Calculate stats
       setStats({
@@ -271,7 +319,8 @@ export default function ProjectDashboard() {
           const daysSinceUpdate = (Date.now() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60 * 24);
           return daysSinceUpdate <= 7;
         }).length,
-        untagged_photos: untaggedCount || 0
+        untagged_photos: untaggedPhotosCount || 0,
+        untagged_befaringer: untaggedBefaringerData?.length || 0
       });
     } catch (error) {
       console.error('❌ ProjectDashboard: Error loading projects:', error);
@@ -356,32 +405,18 @@ export default function ProjectDashboard() {
         </div>
       </div>
 
-      {/* 🎯 PROSJEKTVELGER - Fra LAG 1 plan */}
+      {/* 🔍 GLOBAL SEARCH - Supersøk */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
             <div className="flex-1">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium">Prosjekt:</span>
-                <select className="px-3 py-2 border rounded-md bg-background">
-                  <option value="all">Alle prosjekter</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.project_name} #{project.project_number}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <GlobalSearchBar 
+                className="w-full"
+                placeholder="Søk i alle prosjekter, befaringer og brukere..."
+              />
             </div>
             
             <div className="flex items-center space-x-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Søk..."
-                  className="pl-10 w-48"
-                />
-              </div>
               <Button variant="outline" size="sm">
                 <Filter className="h-4 w-4 mr-1" />
                 Filter
@@ -399,7 +434,7 @@ export default function ProjectDashboard() {
       <Card className="border-red-200 bg-red-50">
         <CardHeader>
           <CardTitle className="text-red-700 flex items-center">
-            🚨 KREVER HANDLING (3 ting) 
+            🚨 KREVER HANDLING ({stats.untagged_photos + stats.untagged_befaringer} ting) 
             <Button variant="link" className="ml-auto text-red-600">
               Vis alle →
             </Button>
@@ -417,6 +452,10 @@ export default function ProjectDashboard() {
           <div className="flex items-center space-x-2">
             <span className="text-orange-600">📷</span>
             <span className="text-xs">{stats.untagged_photos} bilder venter på tagging</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-blue-600">📋</span>
+            <span className="text-xs">{stats.untagged_befaringer} befaringer venter på prosjekt</span>
           </div>
         </CardContent>
       </Card>
@@ -545,13 +584,140 @@ export default function ProjectDashboard() {
         </CardContent>
       </Card>
 
+      {/* 📋 UNTAGGED BEFARINGER - Tilsvarende foto-innboks */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="text-blue-700 flex items-center">
+            📋 UNTAGGED BEFARINGER
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {stats.untagged_befaringer > 0 ? (
+            <div className="space-y-3">
+              
+              {/* Show untagged befaringer */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Uten prosjekt: {stats.untagged_befaringer} befaringer</span>
+                  <div className="flex items-center space-x-2">
+                    {selectedBefaringer.size > 0 && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs"
+                        onClick={() => setShowBulkMoveDialog(true)}
+                      >
+                        Flytt {selectedBefaringer.size} til prosjekt
+                      </Button>
+                    )}
+                    <Button 
+                      variant="link" 
+                      size="sm" 
+                      className="text-blue-600 text-xs"
+                      onClick={() => router.push('/befaring?filter=uten_prosjekt')}
+                    >
+                      Se alle →
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {untaggedBefaringer.slice(0, 6).map((befaring) => (
+                    <div
+                      key={befaring.id}
+                      className={`p-3 rounded border-2 cursor-pointer transition-colors group ${
+                        selectedBefaringer.has(befaring.id) 
+                          ? 'border-blue-500 bg-blue-100' 
+                          : 'border-blue-200 hover:border-blue-300 bg-white'
+                      }`}
+                      onClick={() => {
+                        const newSelected = new Set(selectedBefaringer);
+                        if (newSelected.has(befaring.id)) {
+                          newSelected.delete(befaring.id);
+                        } else {
+                          newSelected.add(befaring.id);
+                        }
+                        setSelectedBefaringer(newSelected);
+                      }}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-medium text-sm line-clamp-1">{befaring.title}</h4>
+                        <div className={`w-3 h-3 rounded-full flex items-center justify-center text-xs ${
+                          selectedBefaringer.has(befaring.id)
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-200'
+                        }`}>
+                          {selectedBefaringer.has(befaring.id) && '✓'}
+                        </div>
+                      </div>
+                      
+                      {befaring.description && (
+                        <p className="text-xs text-gray-600 line-clamp-2 mb-2">
+                          {befaring.description}
+                        </p>
+                      )}
+                      
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>{befaring.befaring_date ? new Date(befaring.befaring_date).toLocaleDateString('no-NO') : 'Ikke satt'}</span>
+                        <span className="capitalize">{befaring.status}</span>
+                      </div>
+                      
+                      {/* Quick actions - vises på hover */}
+                      <div className="mt-2 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <MoveToProjectDialog
+                          befaringId={befaring.id}
+                          befaringTitle={befaring.title}
+                          currentProjectId={null}
+                          onSuccess={() => {
+                            // Reload data after successful move
+                            if (profile?.org_id) {
+                              loadProjects();
+                            }
+                          }}
+                        >
+                          <button
+                            className="flex-1 px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            🏷️ Flytt til prosjekt
+                          </button>
+                        </MoveToProjectDialog>
+                        <button
+                          className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/fri-befaring/${befaring.id}`);
+                          }}
+                        >
+                          👁️ Se
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="text-xs text-muted-foreground">
+                Klikk for å velge befaringer, eller hover for hurtigflytting
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <div className="text-sm text-muted-foreground">
+                Ingen untaggede befaringer - alt er organisert! 🎉
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* 📊 KPI OVERVIEW - Kondensert versjon */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">📊 KPI OVERVIEW</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-5">
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">{stats.active_projects}</div>
               <div className="text-sm text-muted-foreground">Aktive</div>
@@ -567,6 +733,10 @@ export default function ProjectDashboard() {
             <div className="text-center">
               <div className="text-2xl font-bold text-orange-600">{stats.untagged_photos}</div>
               <div className="text-sm text-muted-foreground">Bilder</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{stats.untagged_befaringer}</div>
+              <div className="text-sm text-muted-foreground">Untagged</div>
             </div>
           </div>
         </CardContent>
@@ -752,6 +922,22 @@ export default function ProjectDashboard() {
             loadProjects(); // Reload photos after tagging
           }}
         />
+      )}
+
+      {/* Bulk Move Dialog for Befaringer */}
+      {showBulkMoveDialog && selectedBefaringer.size > 0 && (
+        <MoveToProjectDialog
+          befaringId={Array.from(selectedBefaringer)[0]} // Use first selected for dialog
+          befaringTitle={`${selectedBefaringer.size} befaringer`}
+          currentProjectId={null}
+          onSuccess={() => {
+            setSelectedBefaringer(new Set());
+            setShowBulkMoveDialog(false);
+            loadProjects(); // Reload befaringer after moving
+          }}
+        >
+          <div /> {/* Hidden trigger */}
+        </MoveToProjectDialog>
       )}
     </div>
   );

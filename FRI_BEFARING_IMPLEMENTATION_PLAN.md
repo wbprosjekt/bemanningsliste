@@ -246,3 +246,5 @@ ADD COLUMN befaring_punkt_id uuid REFERENCES befaring_punkter(id);
 **Dato opprettet:** 22. januar 2025  
 **Status:** Planlagt  
 **Neste steg:** Start med STEG 1 - Grunnleggende struktur
+
+

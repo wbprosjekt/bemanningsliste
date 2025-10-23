@@ -53,6 +53,7 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
           image_url,
           prosjekt_id,
           oppgave_id,
+          befaring_punkt_id,
           comment,
           inbox_date,
           uploaded_by,
@@ -76,9 +77,9 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
 
       // Filter by org_id and projectId in JavaScript
       const filteredData = (data || []).filter((photo: any) => {
-        // A photo is untagged if oppgave_id is NULL
-        if (photo.oppgave_id) {
-          return false; // Skip photos that are already tagged to an oppgave
+        // A photo is untagged if BOTH oppgave_id AND befaring_punkt_id are NULL
+        if (photo.oppgave_id || photo.befaring_punkt_id) {
+          return false; // Skip photos that are already tagged to an oppgave or befaring punkt
         }
         
         // If projectId is not provided, only show photos without project

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import CreateBefaringDialog from './CreateBefaringDialog';
+import FriBefaringDialog from '../fri-befaring/FriBefaringDialog';
 import { 
   Search, 
   FileText, 
@@ -20,7 +20,8 @@ import {
   X,
   Grid3X3,
   List,
-  Trash2
+  Trash2,
+  Plus
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -43,6 +44,7 @@ interface Befaring {
   status: string | null;
   created_at: string | null;
   tripletex_project_id: number | null;
+  type: 'plantegning' | 'fri'; // New field to distinguish befaring types
   _oppgaver_count?: {
     total: number;
     apen: number;
@@ -67,12 +69,13 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
   const [befaringer, setBefaringer] = useState<Befaring[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<'alle' | 'aktiv' | 'arkivert'>('aktiv');
+  const [filter, setFilter] = useState<'alle' | 'aktiv' | 'uten_prosjekt' | 'arkivert'>('aktiv');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [befaringToDelete, setBefaringToDelete] = useState<Befaring | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showBefaringDialog, setShowBefaringDialog] = useState(false);
   const { toast } = useToast();
 
   // Generer søkeforslag basert på befaringer
@@ -109,6 +112,11 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
         suggestions.add(befaring.befaring_type);
       }
       
+      // Befaring type (plantegning/fri)
+      if (befaring.type && befaring.type.toLowerCase().includes(loweredQuery)) {
+        suggestions.add(befaring.type === 'fri' ? 'Fri befaring' : 'Plantegning');
+      }
+      
       // Beskrivelse
       if (befaring.description?.toLowerCase().includes(searchQuery.toLowerCase())) {
         // Ta første del av beskrivelsen
@@ -127,88 +135,193 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
   const loadBefaringer = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('befaringer')
-        .select(`
-          id,
-          title,
-          description,
-          adresse,
-          befaring_date,
-          befaring_type,
-          status,
-          created_at,
-          tripletex_project_id
-        `)
-        .eq('org_id', orgId)
-        .order('befaring_date', { ascending: false });
+      const allBefaringer: Befaring[] = [];
 
-      // Filter på status
-      if (filter !== 'alle') {
-        query = query.eq('status', filter);
-      }
+      // Load befaringer with plantegning (existing functionality)
+      if (filter === 'alle' || filter === 'aktiv' || filter === 'arkivert') {
+        let query = supabase
+          .from('befaringer')
+          .select(`
+            id,
+            title,
+            description,
+            adresse,
+            befaring_date,
+            befaring_type,
+            status,
+            created_at,
+            tripletex_project_id
+          `)
+          .eq('org_id', orgId)
+          .order('befaring_date', { ascending: false });
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      // Hent ekte oppgavetall for hver befaring
-      const befaringerMedStats = await Promise.all((data || []).map(async (befaring) => {
-        // Hent oppgavestatistikk
-        const { data: oppgaverData } = await supabase
-          .from('oppgaver')
-          .select('status, frist')
-          .eq('befaring_id', befaring.id);
-
-        // Hent plantegningstall
-        const { count: plantegningerCount } = await supabase
-          .from('plantegninger')
-          .select('*', { count: 'exact', head: true })
-          .eq('befaring_id', befaring.id);
-
-        // Hent prosjektinfo hvis tilgjengelig
-        let project_info = null;
-        if (befaring.tripletex_project_id) {
-          const { data: projectData } = await supabase
-            .from('ttx_project_cache')
-            .select('project_number, project_name')
-            .eq('tripletex_project_id', befaring.tripletex_project_id)
-            .eq('org_id', orgId)
-            .single();
-          
-          if (projectData) {
-            project_info = {
-              project_number: projectData.project_number,
-              project_name: projectData.project_name
-            };
-          }
+        // Filter på status
+        if (filter !== 'alle') {
+          query = query.eq('status', filter);
         }
 
-        // Beregn oppgavestatistikk
-        const oppgaver = oppgaverData || [];
-        const oppgaver_count = {
-          total: oppgaver.length,
-          apen: oppgaver.filter(o => o.status === 'åpen').length,
-          under_arbeid: oppgaver.filter(o => o.status === 'under_arbeid').length,
-          lukket: oppgaver.filter(o => o.status === 'lukket').length,
-          kritisk_frist: oppgaver.filter(o => {
-            if (!o.frist) return false;
-            const frist = new Date(o.frist);
-            const today = new Date();
-            const diffDays = Math.ceil((frist.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-            return diffDays <= 7 && diffDays >= 0;
-          }).length,
-        };
+        const { data: befaringerData, error: befaringerError } = await query;
+        if (befaringerError) throw befaringerError;
 
-        return {
-          ...befaring,
-          _oppgaver_count: oppgaver_count,
-          _plantegninger_count: plantegningerCount || 0,
-          _project_info: project_info,
-        };
-      }));
+        // Process befaringer with plantegning
+        const befaringerMedStats = await Promise.all((befaringerData || []).map(async (befaring) => {
+          // Hent oppgavestatistikk
+          const { data: oppgaverData } = await supabase
+            .from('oppgaver')
+            .select('status, frist')
+            .eq('befaring_id', befaring.id);
 
-      setBefaringer(befaringerMedStats);
+          // Hent plantegningstall
+          const { count: plantegningerCount } = await supabase
+            .from('plantegninger')
+            .select('*', { count: 'exact', head: true })
+            .eq('befaring_id', befaring.id);
+
+          // Hent prosjektinfo hvis tilgjengelig
+          let project_info = null;
+          if (befaring.tripletex_project_id) {
+            const { data: projectData } = await supabase
+              .from('ttx_project_cache')
+              .select('project_number, project_name')
+              .eq('tripletex_project_id', befaring.tripletex_project_id)
+              .eq('org_id', orgId)
+              .single();
+            
+            if (projectData) {
+              project_info = {
+                project_number: projectData.project_number,
+                project_name: projectData.project_name
+              };
+            }
+          }
+
+          // Beregn oppgavestatistikk
+          const oppgaver = (oppgaverData || []) as any[];
+          const oppgaver_count = {
+            total: oppgaver.length,
+            apen: oppgaver.filter(o => o.status === 'åpen').length,
+            under_arbeid: oppgaver.filter(o => o.status === 'under_arbeid').length,
+            lukket: oppgaver.filter(o => o.status === 'lukket').length,
+            kritisk_frist: oppgaver.filter(o => {
+              if (!o.frist) return false;
+              const frist = new Date(o.frist);
+              const today = new Date();
+              const diffDays = Math.ceil((frist.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              return diffDays <= 7 && diffDays >= 0;
+            }).length,
+          };
+
+          return {
+            ...befaring,
+            type: 'plantegning' as const,
+            _oppgaver_count: oppgaver_count,
+            _plantegninger_count: plantegningerCount || 0,
+            _project_info: project_info,
+          };
+        }));
+
+        allBefaringer.push(...befaringerMedStats);
+      }
+
+      // Load fri befaringer
+      if (filter === 'alle' || filter === 'uten_prosjekt' || filter === 'arkivert' || filter === 'aktiv') {
+        let friQuery = supabase
+          .from('fri_befaringer' as any)
+          .select(`
+            id,
+            title,
+            description,
+            befaring_date,
+            status,
+            created_at,
+            tripletex_project_id
+          `)
+          .eq('org_id', orgId)
+          .order('created_at', { ascending: false });
+
+        // Filter logic for fri befaringer
+        if (filter === 'uten_prosjekt') {
+          friQuery = friQuery.is('tripletex_project_id', null).eq('status', 'aktiv');
+        } else if (filter === 'arkivert') {
+          friQuery = friQuery.eq('status', 'arkivert');
+        } else if (filter === 'aktiv') {
+          friQuery = friQuery.eq('status', 'aktiv').not('tripletex_project_id', 'is', null);
+        }
+        // For 'alle' filter, don't add any additional filters
+
+        const { data: friBefaringerData, error: friError } = await friQuery;
+        if (friError) throw friError;
+
+        // Process fri befaringer
+        const friBefaringerMedStats = await Promise.all((friBefaringerData || []).map(async (friBefaring: any) => {
+          // Hent oppgavestatistikk for fri befaringer (from befaring_oppgaver)
+          const { data: oppgaverData } = await supabase
+            .from('befaring_oppgaver' as any)
+            .select('status, frist')
+            .eq('fri_befaring_id', friBefaring.id);
+
+          // Hent prosjektinfo hvis tilgjengelig
+          let project_info = null;
+          if (friBefaring.tripletex_project_id) {
+            const { data: projectData } = await supabase
+              .from('ttx_project_cache')
+              .select('project_number, project_name')
+              .eq('tripletex_project_id', friBefaring.tripletex_project_id)
+              .eq('org_id', orgId)
+              .single();
+            
+            if (projectData) {
+              project_info = {
+                project_number: projectData.project_number,
+                project_name: projectData.project_name
+              };
+            }
+          }
+
+          // Beregn oppgavestatistikk
+          const oppgaver = (oppgaverData || []) as any[];
+          const oppgaver_count = {
+            total: oppgaver.length,
+            apen: oppgaver.filter(o => o.status === 'åpen').length,
+            under_arbeid: oppgaver.filter(o => o.status === 'under_arbeid').length,
+            lukket: oppgaver.filter(o => o.status === 'lukket').length,
+            kritisk_frist: oppgaver.filter(o => {
+              if (!o.frist) return false;
+              const frist = new Date(o.frist);
+              const today = new Date();
+              const diffDays = Math.ceil((frist.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              return diffDays <= 7 && diffDays >= 0;
+            }).length,
+          };
+
+          return {
+            id: friBefaring.id,
+            title: friBefaring.title,
+            description: friBefaring.description,
+            adresse: null, // Fri befaringer har ikke adresse
+            befaring_date: friBefaring.befaring_date,
+            befaring_type: 'fri_befaring',
+            status: friBefaring.status,
+            created_at: friBefaring.created_at,
+            tripletex_project_id: friBefaring.tripletex_project_id,
+            type: 'fri' as const,
+            _oppgaver_count: oppgaver_count,
+            _plantegninger_count: 0, // Fri befaringer har ingen plantegninger
+            _project_info: project_info,
+          };
+        }));
+
+        allBefaringer.push(...friBefaringerMedStats);
+      }
+
+      // Sort combined results by date
+      allBefaringer.sort((a, b) => {
+        const dateA = a.befaring_date ? new Date(a.befaring_date).getTime() : new Date(a.created_at || 0).getTime();
+        const dateB = b.befaring_date ? new Date(b.befaring_date).getTime() : new Date(b.created_at || 0).getTime();
+        return dateB - dateA;
+      });
+
+      setBefaringer(allBefaringer);
     } catch (error) {
       console.error('Error loading befaringer:', error);
       toast({
@@ -219,10 +332,6 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCreateBefaringSuccess = () => {
-    loadBefaringer(); // Reload the list
   };
 
   const handleDeleteBefaring = async () => {
@@ -330,7 +439,9 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
       b._project_info?.project_name?.toLowerCase().includes(query) ||
       b.adresse?.toLowerCase().includes(query) ||
       b.description?.toLowerCase().includes(query) ||
-      (b.befaring_type && b.befaring_type.toLowerCase().includes(query))
+      (b.befaring_type && b.befaring_type.toLowerCase().includes(query)) ||
+      (b.type === 'fri' && 'fri befaring'.includes(query)) ||
+      (b.type === 'plantegning' && 'plantegning'.includes(query))
     );
   });
 
@@ -368,12 +479,15 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
             Oversikt over alle befaringer i din organisasjon
           </p>
         </div>
-        <CreateBefaringDialog 
-          orgId={orgId} 
-          userId={userId} 
-          onSuccess={handleCreateBefaringSuccess}
-          variant="header"
-        />
+        <Button 
+          size="lg"
+          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 
+                     shadow-lg hover:shadow-xl transition-all whitespace-nowrap"
+          onClick={() => setShowBefaringDialog(true)}
+        >
+          <Plus className="h-5 w-5 mr-2" />
+          Ny befaring
+        </Button>
       </div>
 
       {/* Søk og Filter */}
@@ -381,7 +495,7 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
           <Input
-            placeholder="Søk etter prosjektnummer, befaring, adresse, type eller beskrivelse..."
+            placeholder="Søk etter prosjektnummer, befaring, adresse, type (plantegning/fri) eller beskrivelse..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -437,6 +551,14 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
               Aktive
             </Button>
             <Button
+              variant={filter === 'uten_prosjekt' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('uten_prosjekt')}
+              className="bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100"
+            >
+              Uten prosjekt
+            </Button>
+            <Button
               variant={filter === 'arkivert' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilter('arkivert')}
@@ -488,12 +610,14 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
                 : 'Kom i gang ved å opprette din første befaring.'}
             </p>
             {!searchQuery && (
-              <CreateBefaringDialog 
-                orgId={orgId} 
-                userId={userId} 
-                onSuccess={handleCreateBefaringSuccess}
-                variant="inline"
-              />
+              <Button 
+                size="lg"
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                onClick={() => setShowBefaringDialog(true)}
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Opprett din første befaring
+              </Button>
             )}
           </CardContent>
         </Card>
@@ -524,14 +648,21 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
               <Card
                 key={befaring.id}
                 className="hover:shadow-xl transition-all duration-200 hover:scale-105 cursor-pointer"
-                onClick={() => router.push(`/befaring/${befaring.id}`)}
+                onClick={() => router.push(befaring.type === 'fri' ? `/fri-befaring/${befaring.id}` : `/befaring/${befaring.id}`)}
               >
                 <CardHeader className="pb-4">
                   <div className="flex items-center justify-between mb-3">
                     <FileText className="h-6 w-6 text-blue-600" />
-                    <Badge variant="outline">
-                      {plantegningCount} plantegn.
-                    </Badge>
+                    <div className="flex gap-2">
+                      <Badge variant="outline" className={befaring.type === 'fri' ? 'bg-orange-50 text-orange-700 border-orange-300' : 'bg-blue-50 text-blue-700 border-blue-300'}>
+                        {befaring.type === 'fri' ? 'Fri befaring' : 'Plantegning'}
+                      </Badge>
+                      {plantegningCount > 0 && (
+                        <Badge variant="outline">
+                          {plantegningCount} plantegn.
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -660,7 +791,7 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
                       variant="outline"
                       onClick={(e) => {
                         e.stopPropagation();
-                        router.push(`/befaring/${befaring.id}`);
+                        router.push(befaring.type === 'fri' ? `/fri-befaring/${befaring.id}` : `/befaring/${befaring.id}`);
                       }}
                     >
                       Åpne befaring →
@@ -691,7 +822,7 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
             <Card
               key={befaring.id}
               className="hover:shadow-lg transition-all duration-200 cursor-pointer"
-              onClick={() => router.push(`/befaring/${befaring.id}`)}
+              onClick={() => router.push(befaring.type === 'fri' ? `/fri-befaring/${befaring.id}` : `/befaring/${befaring.id}`)}
             >
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -716,9 +847,16 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
                           </p>
                         )}
                       </div>
-                      <Badge variant="outline" className="flex-shrink-0">
-                        {befaring._plantegninger_count ?? 0} plantegn.
-                      </Badge>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <Badge variant="outline" className={befaring.type === 'fri' ? 'bg-orange-50 text-orange-700 border-orange-300' : 'bg-blue-50 text-blue-700 border-blue-300'}>
+                          {befaring.type === 'fri' ? 'Fri befaring' : 'Plantegning'}
+                        </Badge>
+                        {befaring._plantegninger_count && befaring._plantegninger_count > 0 && (
+                          <Badge variant="outline">
+                            {befaring._plantegninger_count} plantegn.
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     
                     <div className="flex items-center gap-6 text-sm text-gray-600 mb-3">
@@ -817,7 +955,7 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          router.push(`/befaring/${befaring.id}`);
+                          router.push(befaring.type === 'fri' ? `/fri-befaring/${befaring.id}` : `/befaring/${befaring.id}`);
                         }}
                       >
                         Åpne →
@@ -869,6 +1007,17 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Fri Befaring Dialog */}
+      <FriBefaringDialog
+        isOpen={showBefaringDialog}
+        onClose={() => setShowBefaringDialog(false)}
+        orgId={orgId}
+        userId={userId}
+        onSuccess={() => {
+          loadBefaringer(); // Reload befaringer when new one is created
+        }}
+      />
     </div>
   );
 }
