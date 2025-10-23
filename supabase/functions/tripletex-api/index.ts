@@ -1090,8 +1090,8 @@ Deno.serve(async (req) => {
           console.log('🔍 Sending headers:', headers);
           console.log('🔍 Stored checksum:', storedChecksum);
           
-          // Test with only known valid fields
-          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,projectManager${changesSinceParam}`, 'GET', undefined, orgId, headers);
+          // Include description field explicitly as per Tripletex API documentation
+          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,projectManager,description${changesSinceParam}`, 'GET', undefined, orgId, headers);
           
           // Check if we got a 304 Not Modified response
           if (response.status === 304) {
@@ -1204,7 +1204,7 @@ Deno.serve(async (req) => {
                   `${project.projectManager.firstName || ''} ${project.projectManager.lastName || ''}`.trim() : null,
                 project_manager_email: project.projectManager?.email || null,
                 project_manager_phone: project.projectManager?.phoneNumberMobile || project.projectManager?.phoneNumberWork || project.projectManager?.phoneNumberHome || null,
-                project_description: null, // Not available in Tripletex API
+                project_description: project.description || null,
                 start_date: null, // Not available in Tripletex API
                 end_date: null, // Not available in Tripletex API
                 is_active: isActive,
