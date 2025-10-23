@@ -18,7 +18,11 @@ import {
   Star,
   Settings,
   Plus,
-  Trash2
+  Trash2,
+  Building,
+  User,
+  Phone,
+  Mail
 } from 'lucide-react';
 import ImageGallery from '@/components/ImageGallery';
 
@@ -33,6 +37,32 @@ interface Project {
   customer_name: string | null;
   tripletex_project_id: number | null;
   last_synced: string | null;
+}
+
+interface TripletexProjectDetails {
+  id: number;
+  name: string;
+  number: string;
+  customer: {
+    id: number;
+    name: string;
+    email?: string;
+    phoneNumber?: string;
+  };
+  projectManager: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phoneNumber?: string;
+  };
+  startDate: string;
+  endDate?: string;
+  status: string;
+  isActive: boolean;
+  isClosed: boolean;
+  displayName: string;
+  description?: string;
 }
 
 interface ProjectStats {
@@ -82,6 +112,7 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
+  const [tripletexDetails, setTripletexDetails] = useState<TripletexProjectDetails | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState<ProjectStats>({
     total_befaringer: 0,
@@ -303,6 +334,26 @@ export default function ProjectDetailPage() {
 
       if (projectError) throw projectError;
       setProject(projectData);
+
+      // Load Tripletex project details if we have a tripletex_project_id
+      if (projectData.tripletex_project_id) {
+        try {
+          const { data: tripletexData, error: tripletexError } = await supabase.functions.invoke('tripletex-api', {
+            body: {
+              action: 'get_project_details',
+              project_id: projectData.tripletex_project_id,
+              orgId: projectData.org_id
+            }
+          });
+
+          if (!tripletexError && tripletexData?.success) {
+            setTripletexDetails(tripletexData.data);
+          }
+        } catch (error) {
+          console.error('Error loading Tripletex details:', error);
+          // Don't throw - this is not critical
+        }
+      }
 
       // Load project stats with real data (pass projectData directly)
       await loadProjectStatsWithData(projectData);
@@ -1054,20 +1105,144 @@ export default function ProjectDetailPage() {
             <CardHeader>
               <CardTitle className="text-lg">Prosjektinfo</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">Status:</span>
-                <Badge variant={project.is_active ? "default" : "secondary"}>
-                  {project.is_active ? "Aktivt" : "Inaktivt"}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">Opprettet:</span>
-                <span className="text-xs">{new Date(project.created_at).toLocaleDateString('no-NO')}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-muted-foreground">Sist oppdatert:</span>
-                <span className="text-xs">{new Date(project.updated_at).toLocaleDateString('no-NO')}</span>
+            <CardContent className="space-y-4">
+              {/* Project Overview */}
+              {tripletexDetails && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm">Prosjektnavn:</span>
+                    <span className="text-sm break-words text-right">{tripletexDetails.displayName}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm">Prosjektnummer:</span>
+                    <span className="text-sm">{tripletexDetails.number}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm">Prosjekt-ID:</span>
+                    <span className="text-sm">{tripletexDetails.id}</span>
+                  </div>
+                  
+                  {tripletexDetails.description && (
+                    <div className="w-full">
+                      <span className="font-medium text-sm">Beskrivelse:</span>
+                      <p className="text-sm text-muted-foreground mt-1 break-all overflow-wrap-anywhere word-break-break-all leading-relaxed whitespace-pre-wrap">{tripletexDetails.description}</p>
+                    </div>
+                  )}
+
+                  {(tripletexDetails.startDate || tripletexDetails.endDate) && (
+                    <div className="flex items-center gap-4 text-sm">
+                      <Calendar className="h-4 w-4" />
+                      <div className="flex gap-4">
+                        {tripletexDetails.startDate && (
+                          <div>
+                            <span className="font-medium">Start:</span>
+                            <span className="ml-1">{new Date(tripletexDetails.startDate).toLocaleDateString('no-NO')}</span>
+                          </div>
+                        )}
+                        {tripletexDetails.endDate && (
+                          <div>
+                            <span className="font-medium">Slutt:</span>
+                            <span className="ml-1">{new Date(tripletexDetails.endDate).toLocaleDateString('no-NO')}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Customer Information */}
+              {tripletexDetails?.customer && (
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="flex items-center gap-2">
+                    <Building className="h-4 w-4" />
+                    <span className="font-medium text-sm">Kundeinformasjon</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm">Kunde:</span>
+                    <span className="text-sm">{tripletexDetails.customer.name}</span>
+                  </div>
+                  
+                  {tripletexDetails.customer.email && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 flex-shrink-0" />
+                      <a 
+                        href={`mailto:${tripletexDetails.customer.email}`}
+                        className="text-blue-600 hover:text-blue-800 underline break-all text-sm"
+                      >
+                        {tripletexDetails.customer.email}
+                      </a>
+                    </div>
+                  )}
+                  
+                  {tripletexDetails.customer.phoneNumber && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 flex-shrink-0" />
+                      <a 
+                        href={`tel:${tripletexDetails.customer.phoneNumber}`}
+                        className="text-blue-600 hover:text-blue-800 underline text-sm"
+                      >
+                        {tripletexDetails.customer.phoneNumber}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Project Manager */}
+              {tripletexDetails?.projectManager && (
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    <span className="font-medium text-sm">Prosjektleder</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm">Navn:</span>
+                    <span className="text-sm">{tripletexDetails.projectManager.firstName} {tripletexDetails.projectManager.lastName}</span>
+                  </div>
+                  
+                  {tripletexDetails.projectManager.email && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 flex-shrink-0" />
+                      <a 
+                        href={`mailto:${tripletexDetails.projectManager.email}`}
+                        className="text-blue-600 hover:text-blue-800 underline break-all text-sm"
+                      >
+                        {tripletexDetails.projectManager.email}
+                      </a>
+                    </div>
+                  )}
+                  
+                  {tripletexDetails.projectManager.phoneNumber && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 flex-shrink-0" />
+                      <a 
+                        href={`tel:${tripletexDetails.projectManager.phoneNumber}`}
+                        className="text-blue-600 hover:text-blue-800 underline text-sm"
+                      >
+                        {tripletexDetails.projectManager.phoneNumber}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* System Info */}
+              <div className="space-y-3 pt-3 border-t">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Status:</span>
+                  <Badge variant={project.is_active ? "default" : "secondary"}>
+                    {project.is_active ? "Aktivt" : "Inaktivt"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Opprettet:</span>
+                  <span className="text-xs">{new Date(project.created_at).toLocaleDateString('no-NO')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Sist oppdatert:</span>
+                  <span className="text-xs">{new Date(project.updated_at).toLocaleDateString('no-NO')}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
