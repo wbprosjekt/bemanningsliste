@@ -1090,7 +1090,8 @@ Deno.serve(async (req) => {
           console.log('🔍 Sending headers:', headers);
           console.log('🔍 Stored checksum:', storedChecksum);
           
-          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,projectManager${changesSinceParam}`, 'GET', undefined, orgId, headers);
+          // Test with all possible fields to see what's actually available
+          const response = await callTripletexAPI(`/project?count=1&fields=id,number,name,displayName,customer,projectManager,description,startDate,endDate,isActive,isClosed,mainProjectId,projectCategoryId${changesSinceParam}`, 'GET', undefined, orgId, headers);
           
           // Check if we got a 304 Not Modified response
           if (response.status === 304) {
@@ -1103,7 +1104,16 @@ Deno.serve(async (req) => {
             
             // Debug: Log the first project to see what fields are actually available
             if (response.data.values.length > 0) {
-              console.log('🔍 DEBUG: First project from Tripletex:', JSON.stringify(response.data.values[0], null, 2));
+              const firstProject = response.data.values[0];
+              console.log('🔍 DEBUG: First project from Tripletex:', JSON.stringify(firstProject, null, 2));
+              console.log('🔍 DEBUG: Available fields:', Object.keys(firstProject));
+              console.log('🔍 DEBUG: Customer object:', firstProject.customer);
+              console.log('🔍 DEBUG: ProjectManager object:', firstProject.projectManager);
+              console.log('🔍 DEBUG: Description field:', firstProject.description);
+              console.log('🔍 DEBUG: StartDate field:', firstProject.startDate);
+              console.log('🔍 DEBUG: EndDate field:', firstProject.endDate);
+              console.log('🔍 DEBUG: IsActive field:', firstProject.isActive);
+              console.log('🔍 DEBUG: IsClosed field:', firstProject.isClosed);
             }
             
             // Store the new ETag checksum from response
