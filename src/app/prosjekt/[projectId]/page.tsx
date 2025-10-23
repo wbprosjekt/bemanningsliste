@@ -20,6 +20,7 @@ import {
   Plus,
   Trash2
 } from 'lucide-react';
+import ImageGallery from '@/components/ImageGallery';
 
 interface Project {
   id: string;
@@ -58,7 +59,14 @@ interface ProjectPhoto {
   uploaded_by_email: string | null;
   created_at: string | null;
   oppgave_id: string | null;
-  // befaring_id will be added when befaringer are fully implemented
+  prosjekt_id: string | null;
+  oppgave_info?: {
+    id: string;
+    title: string | null;
+    fag: string | null;
+    status: string | null;
+    oppgave_nummer: number | null;
+  };
 }
 
 interface ProjectComment {
@@ -95,6 +103,12 @@ export default function ProjectDetailPage() {
   const [comments, setComments] = useState<ProjectComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
+  
+  // Image Gallery state
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryPhotos, setGalleryPhotos] = useState<ProjectPhoto[]>([]);
+  const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
+  const [galleryOppgaveInfo, setGalleryOppgaveInfo] = useState<any>(null);
 
   const projectId = params.projectId as string;
 
@@ -176,41 +190,90 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const loadProjectStats = async (projectId: string) => {
+  const loadProjectStatsWithData = async (projectData: Project) => {
     try {
-      // Count befaringer
-      const { count: befaringerCount, error: befaringerError } = await supabase
-        .from('befaringer')
-        .select('*', { count: 'exact', head: true })
-        .eq('tripletex_project_id', project?.tripletex_project_id || 0);
+      // Count befaringer (both regular and fri befaring)
+      const [befaringerResult, friBefaringerResult] = await Promise.all([
+        supabase
+          .from('befaringer')
+          .select('*', { count: 'exact', head: true })
+          .eq('tripletex_project_id', projectData.tripletex_project_id!),
+        
+        supabase
+          .from('fri_befaringer')
+          .select('*', { count: 'exact', head: true })
+          .eq('tripletex_project_id', projectData.tripletex_project_id!)
+      ]);
 
-      // Count oppgaver (via plantegninger -> befaringer)
-      const { count: oppgaverCount, error: oppgaverError } = await supabase
-        .from('oppgaver')
-        .select(`
-          id,
-          plantegninger:plantegning_id(
-            befaringer:befaring_id(tripletex_project_id)
-          )
-        `, { count: 'exact', head: true })
-        .eq('plantegninger.befaringer.tripletex_project_id', project?.tripletex_project_id || 0);
+      const totalBefaringer = (befaringerResult.count || 0) + (friBefaringerResult.count || 0);
+
+      // Count oppgaver from both regular befaringer and fri befaringer
+      const [regularOppgaverResult, friOppgaverResult] = await Promise.all([
+        // Oppgaver from regular befaringer (step-by-step approach)
+        (async () => {
+          // First get befaringer for this project
+          const { data: befaringerData } = await supabase
+            .from('befaringer')
+            .select('id')
+            .eq('tripletex_project_id', projectData.tripletex_project_id!);
+          
+          if (!befaringerData || befaringerData.length === 0) {
+            return { count: 0 };
+          }
+          
+          // Then get plantegninger for these befaringer
+          const befaringIds = befaringerData.map(b => b.id);
+          const { data: plantegningerData } = await supabase
+            .from('plantegninger')
+            .select('id')
+            .in('befaring_id', befaringIds);
+          
+          if (!plantegningerData || plantegningerData.length === 0) {
+            return { count: 0 };
+          }
+          
+          // Finally count oppgaver for these plantegninger
+          const plantegningIds = plantegningerData.map(p => p.id);
+          const { count } = await supabase
+            .from('oppgaver')
+            .select('*', { count: 'exact', head: true })
+            .in('plantegning_id', plantegningIds);
+          
+          return { count: count || 0 };
+        })(),
+        
+        // Oppgaver from fri befaringer (via befaring_punkter -> fri_befaringer)
+        supabase
+          .from('befaring_oppgaver')
+          .select(`
+            id,
+            befaring_punkter!inner(
+              fri_befaringer:befaring_punkter.fri_befaring_id(
+                tripletex_project_id
+              )
+            )
+          `, { count: 'exact', head: true })
+          .eq('befaring_punkter.fri_befaringer.tripletex_project_id', projectData.tripletex_project_id!)
+      ]);
+
+      const totalOppgaver = (regularOppgaverResult.count || 0) + (friOppgaverResult.count || 0);
 
       // Count all project images
       const { count: totalBilderCount, error: totalBilderError } = await supabase
         .from('oppgave_bilder')
         .select('*', { count: 'exact', head: true })
-        .eq('prosjekt_id', projectId);
+        .eq('prosjekt_id', projectData.id);
 
       // Count untagged project images
       const { count: untaggedBilderCount, error: untaggedBilderError } = await supabase
         .from('oppgave_bilder')
         .select('*', { count: 'exact', head: true })
-        .eq('prosjekt_id', projectId)
+        .eq('prosjekt_id', projectData.id)
         .is('oppgave_id', null);
 
       setStats({
-        total_befaringer: befaringerCount || 0,
-        total_oppgaver: oppgaverCount || 0,
+        total_befaringer: totalBefaringer,
+        total_oppgaver: totalOppgaver,
         total_bilder: totalBilderCount || 0,
         untagged_bilder: untaggedBilderCount || 0
       });
@@ -241,14 +304,14 @@ export default function ProjectDetailPage() {
       if (projectError) throw projectError;
       setProject(projectData);
 
-      // Load project stats with real data
-      await loadProjectStats(projectId);
+      // Load project stats with real data (pass projectData directly)
+      await loadProjectStatsWithData(projectData);
 
       // Load ALL project photos from multiple sources:
       // 1. Direct project photos (prosjekt_id)
       // 2. Befaring photos (via oppgave -> plantegning -> befaring -> tripletex_project_id)
       
-      // First: Direct project photos
+      // First: Direct project photos with oppgave info
       const { data: directPhotosData, error: directPhotosError } = await supabase
         .from('oppgave_bilder')
         .select(`
@@ -258,9 +321,16 @@ export default function ProjectDetailPage() {
           uploaded_by_email,
           created_at,
           oppgave_id,
-          prosjekt_id
+          prosjekt_id,
+          oppgaver(
+            id,
+            title,
+            fag,
+            status,
+            oppgave_nummer
+          )
         `)
-        .eq('prosjekt_id', projectId)
+        .eq('prosjekt_id', projectData.id)
         .order('created_at', { ascending: false });
 
       // Second: Get befaring photos via RPC function or simpler approach
@@ -277,6 +347,10 @@ export default function ProjectDetailPage() {
           prosjekt_id,
           oppgaver!inner(
             id,
+            title,
+            fag,
+            status,
+            oppgave_nummer,
             plantegning_id,
             plantegninger!inner(
               id,
@@ -289,7 +363,7 @@ export default function ProjectDetailPage() {
           )
         `)
         .not('oppgave_id', 'is', null)
-        .eq('oppgaver.plantegninger.befaringer.tripletex_project_id', project?.tripletex_project_id || 0)
+        .eq('oppgaver.plantegninger.befaringer.tripletex_project_id', projectData.tripletex_project_id!)
         .order('created_at', { ascending: false });
 
       // Combine both results
@@ -314,11 +388,22 @@ export default function ProjectDetailPage() {
 
         allPhotosData.forEach(photo => {
           if (photo.oppgave_id) {
-            // Photo belongs to an oppgave
+            // Photo belongs to an oppgave - add oppgave info
+            const photoWithInfo = {
+              ...photo,
+              oppgave_info: photo.oppgaver ? {
+                id: photo.oppgaver.id,
+                title: photo.oppgaver.title,
+                fag: photo.oppgaver.fag,
+                status: photo.oppgaver.status,
+                oppgave_nummer: photo.oppgaver.oppgave_nummer
+              } : undefined
+            };
+            
             if (!organizedPhotos.oppgaver[photo.oppgave_id]) {
               organizedPhotos.oppgaver[photo.oppgave_id] = [];
             }
-            organizedPhotos.oppgaver[photo.oppgave_id].push(photo);
+            organizedPhotos.oppgaver[photo.oppgave_id].push(photoWithInfo);
           } else {
             // Photo is untagged (belongs to project but not to specific task)
             // NOTE: For now, we don't have befaring_id in oppgave_bilder table
@@ -446,6 +531,20 @@ export default function ProjectDetailPage() {
     } catch (error) {
       console.error('Error deleting photo:', error);
     }
+  };
+
+  const openImageGallery = (photos: ProjectPhoto[], initialIndex: number, oppgaveInfo?: any) => {
+    setGalleryPhotos(photos);
+    setGalleryInitialIndex(initialIndex);
+    setGalleryOppgaveInfo(oppgaveInfo);
+    setGalleryOpen(true);
+  };
+
+  const closeImageGallery = () => {
+    setGalleryOpen(false);
+    setGalleryPhotos([]);
+    setGalleryInitialIndex(0);
+    setGalleryOppgaveInfo(null);
   };
 
   const handleDeleteComment = async (commentId: string) => {
@@ -701,13 +800,14 @@ export default function ProjectDetailPage() {
                         <Badge variant="secondary">{photosByCategory.untagged.length} bilder</Badge>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {photosByCategory.untagged.map((photo) => (
+                        {photosByCategory.untagged.map((photo, index) => (
                           <div key={photo.id} className="relative group">
                             <img
                               src={photo.image_url}
                               alt="Project photo"
                               className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                              onClick={() => {/* TODO: Open full-size view */}}
+                              onClick={() => openImageGallery(photosByCategory.untagged, index)}
+                              title={`Uten tilknytning - ${photo.uploaded_by_email || 'Ukjent bruker'}`}
                             />
                             <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <Button 
@@ -784,41 +884,52 @@ export default function ProjectDetailPage() {
                           {Object.values(photosByCategory.oppgaver).reduce((sum, photos) => sum + photos.length, 0)} bilder
                         </Badge>
                       </div>
-                      {Object.entries(photosByCategory.oppgaver).map(([oppgaveId, photos]) => (
-                        <div key={oppgaveId} className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <h4 className="text-xs font-medium text-muted-foreground">
-                              Oppgave {oppgaveId.substring(0, 8)}...
-                            </h4>
-                            <Badge variant="outline" className="text-xs">{photos.length} bilder</Badge>
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {photos.map((photo) => (
-                              <div key={photo.id} className="relative group">
-                                <img
-                                  src={photo.image_url}
-                                  alt="Oppgave photo"
-                                  className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                                  onClick={() => {/* TODO: Open full-size view */}}
-                                />
-                                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Button 
-                                    size="sm" 
-                                    variant="destructive" 
-                                    className="h-6 w-6 p-0"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeletePhoto(photo.id);
-                                    }}
-                                  >
-                                    🗑️
-                                  </Button>
+                      {Object.entries(photosByCategory.oppgaver).map(([oppgaveId, photos]) => {
+                        const firstPhoto = photos[0];
+                        const oppgaveInfo = firstPhoto?.oppgave_info;
+                        
+                        return (
+                          <div key={oppgaveId} className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <h4 className="text-xs font-medium text-muted-foreground">
+                                {oppgaveInfo?.title || `Oppgave ${oppgaveId.substring(0, 8)}...`}
+                              </h4>
+                              {oppgaveInfo?.fag && (
+                                <Badge variant="outline" className="text-xs">
+                                  {oppgaveInfo.fag}
+                                </Badge>
+                              )}
+                              <Badge variant="outline" className="text-xs">{photos.length} bilder</Badge>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              {photos.map((photo, index) => (
+                                <div key={photo.id} className="relative group">
+                                  <img
+                                    src={photo.image_url}
+                                    alt="Oppgave photo"
+                                    className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={() => openImageGallery(photos, index, oppgaveInfo)}
+                                    title={`${oppgaveInfo?.title || 'Oppgave'} - ${oppgaveInfo?.fag || 'Ukjent fag'} - ${photo.uploaded_by_email || 'Ukjent bruker'}`}
+                                  />
+                                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button 
+                                      size="sm" 
+                                      variant="destructive" 
+                                      className="h-6 w-6 p-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeletePhoto(photo.id);
+                                      }}
+                                    >
+                                      🗑️
+                                    </Button>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </>
@@ -962,6 +1073,15 @@ export default function ProjectDetailPage() {
           </Card>
         </div>
       </div>
+      
+      {/* Image Gallery Modal */}
+      <ImageGallery
+        photos={galleryPhotos}
+        isOpen={galleryOpen}
+        onClose={closeImageGallery}
+        initialIndex={galleryInitialIndex}
+        oppgaveInfo={galleryOppgaveInfo}
+      />
     </div>
   );
 }

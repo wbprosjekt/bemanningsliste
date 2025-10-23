@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_events: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          entity_id: string
+          entity_type: string
+          event_type: string
+          id: string
+          org_id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          entity_id: string
+          entity_type: string
+          event_type: string
+          id?: string
+          org_id: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string
+          entity_type?: string
+          event_type?: string
+          id?: string
+          org_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -22,7 +63,7 @@ export type Database = {
           entity_id: string
           entity_type: string
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           new_data: Json | null
           old_data: Json | null
           org_id: string | null
@@ -37,7 +78,7 @@ export type Database = {
           entity_id: string
           entity_type: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           new_data?: Json | null
           old_data?: Json | null
           org_id?: string | null
@@ -52,7 +93,7 @@ export type Database = {
           entity_id?: string
           entity_type?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           new_data?: Json | null
           old_data?: Json | null
           org_id?: string | null
@@ -66,6 +107,297 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      befaring_oppgave_svar: {
+        Row: {
+          befaring_oppgave_id: string
+          created_at: string | null
+          id: string
+          svar_fra_epost: string
+          svar_fra_navn: string | null
+          svar_text: string
+          token_id: string | null
+          vedlegg_urls: string[] | null
+        }
+        Insert: {
+          befaring_oppgave_id: string
+          created_at?: string | null
+          id?: string
+          svar_fra_epost: string
+          svar_fra_navn?: string | null
+          svar_text: string
+          token_id?: string | null
+          vedlegg_urls?: string[] | null
+        }
+        Update: {
+          befaring_oppgave_id?: string
+          created_at?: string | null
+          id?: string
+          svar_fra_epost?: string
+          svar_fra_navn?: string | null
+          svar_text?: string
+          token_id?: string | null
+          vedlegg_urls?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "befaring_oppgave_svar_befaring_oppgave_id_fkey"
+            columns: ["befaring_oppgave_id"]
+            isOneToOne: false
+            referencedRelation: "befaring_oppgaver"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "befaring_oppgave_svar_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "befaring_oppgave_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      befaring_oppgave_tokens: {
+        Row: {
+          befaring_oppgave_id: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          scope: string | null
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          befaring_oppgave_id: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          scope?: string | null
+          token?: string
+          used_at?: string | null
+        }
+        Update: {
+          befaring_oppgave_id?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          scope?: string | null
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "befaring_oppgave_tokens_befaring_oppgave_id_fkey"
+            columns: ["befaring_oppgave_id"]
+            isOneToOne: false
+            referencedRelation: "befaring_oppgaver"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      befaring_oppgaver: {
+        Row: {
+          ansvarlig_person_id: string | null
+          befaring_punkt_id: string
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          epost_sendt: boolean | null
+          epost_sendt_at: string | null
+          frist: string | null
+          id: string
+          prioritet: string | null
+          status: string | null
+          title: string
+          underleverandor_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ansvarlig_person_id?: string | null
+          befaring_punkt_id: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          epost_sendt?: boolean | null
+          epost_sendt_at?: string | null
+          frist?: string | null
+          id?: string
+          prioritet?: string | null
+          status?: string | null
+          title: string
+          underleverandor_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ansvarlig_person_id?: string | null
+          befaring_punkt_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          epost_sendt?: boolean | null
+          epost_sendt_at?: string | null
+          frist?: string | null
+          id?: string
+          prioritet?: string | null
+          status?: string | null
+          title?: string
+          underleverandor_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "befaring_oppgaver_ansvarlig_person_id_fkey"
+            columns: ["ansvarlig_person_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "befaring_oppgaver_befaring_punkt_id_fkey"
+            columns: ["befaring_punkt_id"]
+            isOneToOne: false
+            referencedRelation: "befaring_punkter"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "befaring_oppgaver_underleverandor_id_fkey"
+            columns: ["underleverandor_id"]
+            isOneToOne: false
+            referencedRelation: "underleverandorer"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      befaring_punkter: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          fag: string | null
+          fri_befaring_id: string
+          frist: string | null
+          id: string
+          prioritet: string | null
+          punkt_nummer: number
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          fag?: string | null
+          fri_befaring_id: string
+          frist?: string | null
+          id?: string
+          prioritet?: string | null
+          punkt_nummer: number
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          fag?: string | null
+          fri_befaring_id?: string
+          frist?: string | null
+          id?: string
+          prioritet?: string | null
+          punkt_nummer?: number
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "befaring_punkter_fri_befaring_id_fkey"
+            columns: ["fri_befaring_id"]
+            isOneToOne: false
+            referencedRelation: "fri_befaringer"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      befaring_signaturer: {
+        Row: {
+          content_hash: string | null
+          created_at: string | null
+          created_by: string | null
+          fri_befaring_id: string
+          id: string
+          signatur_data: string
+          signatur_dato: string | null
+          signatur_navn: string
+          signatur_png_url: string | null
+        }
+        Insert: {
+          content_hash?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          fri_befaring_id: string
+          id?: string
+          signatur_data: string
+          signatur_dato?: string | null
+          signatur_navn: string
+          signatur_png_url?: string | null
+        }
+        Update: {
+          content_hash?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          fri_befaring_id?: string
+          id?: string
+          signatur_data?: string
+          signatur_dato?: string | null
+          signatur_navn?: string
+          signatur_png_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "befaring_signaturer_fri_befaring_id_fkey"
+            columns: ["fri_befaring_id"]
+            isOneToOne: false
+            referencedRelation: "fri_befaringer"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      befaring_versions: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          fri_befaring_id: string
+          id: string
+          payload: Json
+          version: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          fri_befaring_id: string
+          id?: string
+          payload: Json
+          version: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          fri_befaring_id?: string
+          id?: string
+          payload?: Json
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "befaring_versions_fri_befaring_id_fkey"
+            columns: ["fri_befaring_id"]
+            isOneToOne: false
+            referencedRelation: "fri_befaringer"
             referencedColumns: ["id"]
           },
         ]
@@ -329,6 +661,83 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "org"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      fri_befaringer: {
+        Row: {
+          befaring_date: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          org_id: string
+          parent_befaring_id: string | null
+          reopen_reason: string | null
+          status: string | null
+          title: string
+          tripletex_project_id: number | null
+          updated_at: string | null
+          version: string | null
+        }
+        Insert: {
+          befaring_date?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          org_id: string
+          parent_befaring_id?: string | null
+          reopen_reason?: string | null
+          status?: string | null
+          title: string
+          tripletex_project_id?: number | null
+          updated_at?: string | null
+          version?: string | null
+        }
+        Update: {
+          befaring_date?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          org_id?: string
+          parent_befaring_id?: string | null
+          reopen_reason?: string | null
+          status?: string | null
+          title?: string
+          tripletex_project_id?: number | null
+          updated_at?: string | null
+          version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fri_befaringer_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fri_befaringer_parent_befaring_id_fkey"
+            columns: ["parent_befaring_id"]
+            isOneToOne: false
+            referencedRelation: "fri_befaringer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fri_befaringer_tripletex_project_id_fkey"
+            columns: ["tripletex_project_id"]
+            isOneToOne: false
+            referencedRelation: "project_activity_summary"
+            referencedColumns: ["tripletex_project_id"]
+          },
+          {
+            foreignKeyName: "fri_befaringer_tripletex_project_id_fkey"
+            columns: ["tripletex_project_id"]
+            isOneToOne: false
+            referencedRelation: "ttx_project_cache"
+            referencedColumns: ["tripletex_project_id"]
           },
         ]
       }
@@ -619,16 +1028,19 @@ export type Database = {
       }
       oppgave_bilder: {
         Row: {
+          befaring_punkt_id: string | null
+          comment: string | null
           created_at: string | null
           file_format: string | null
           file_size_bytes: number | null
           id: string
+          image_source: string | null
           image_type: string | null
           image_url: string
           inbox_date: string | null
           is_optimized: boolean | null
           is_tagged: boolean | null
-          oppgave_id: string
+          oppgave_id: string | null
           original_height: number | null
           original_width: number | null
           prosjekt_id: string | null
@@ -641,16 +1053,19 @@ export type Database = {
           uploaded_by_email: string | null
         }
         Insert: {
+          befaring_punkt_id?: string | null
+          comment?: string | null
           created_at?: string | null
           file_format?: string | null
           file_size_bytes?: number | null
           id?: string
+          image_source?: string | null
           image_type?: string | null
           image_url: string
           inbox_date?: string | null
           is_optimized?: boolean | null
           is_tagged?: boolean | null
-          oppgave_id: string
+          oppgave_id?: string | null
           original_height?: number | null
           original_width?: number | null
           prosjekt_id?: string | null
@@ -663,16 +1078,19 @@ export type Database = {
           uploaded_by_email?: string | null
         }
         Update: {
+          befaring_punkt_id?: string | null
+          comment?: string | null
           created_at?: string | null
           file_format?: string | null
           file_size_bytes?: number | null
           id?: string
+          image_source?: string | null
           image_type?: string | null
           image_url?: string
           inbox_date?: string | null
           is_optimized?: boolean | null
           is_tagged?: boolean | null
-          oppgave_id?: string
+          oppgave_id?: string | null
           original_height?: number | null
           original_width?: number | null
           prosjekt_id?: string | null
@@ -685,6 +1103,13 @@ export type Database = {
           uploaded_by_email?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "oppgave_bilder_befaring_punkt_id_fkey"
+            columns: ["befaring_punkt_id"]
+            isOneToOne: false
+            referencedRelation: "befaring_punkter"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "oppgave_bilder_oppgave_id_fkey"
             columns: ["oppgave_id"]
@@ -1660,6 +2085,56 @@ export type Database = {
           },
         ]
       }
+      tripletex_sync_state: {
+        Row: {
+          checksum: string | null
+          created_at: string | null
+          id: string
+          last_modified: string | null
+          last_synced: string | null
+          org_id: string
+          resource_id: string
+          resource_type: string
+          tripletex_checksum: string | null
+          tripletex_last_modified: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          checksum?: string | null
+          created_at?: string | null
+          id?: string
+          last_modified?: string | null
+          last_synced?: string | null
+          org_id: string
+          resource_id: string
+          resource_type: string
+          tripletex_checksum?: string | null
+          tripletex_last_modified?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          checksum?: string | null
+          created_at?: string | null
+          id?: string
+          last_modified?: string | null
+          last_synced?: string | null
+          org_id?: string
+          resource_id?: string
+          resource_type?: string
+          tripletex_checksum?: string | null
+          tripletex_last_modified?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tripletex_sync_state_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ttx_activity_cache: {
         Row: {
           aktiv: boolean | null
@@ -1710,6 +2185,7 @@ export type Database = {
           fornavn: string
           id: string
           last_synced: string | null
+          needs_sync: boolean | null
           org_id: string
           tripletex_employee_id: number
           updated_at: string
@@ -1722,6 +2198,7 @@ export type Database = {
           fornavn: string
           id?: string
           last_synced?: string | null
+          needs_sync?: boolean | null
           org_id: string
           tripletex_employee_id: number
           updated_at?: string
@@ -1734,6 +2211,7 @@ export type Database = {
           fornavn?: string
           id?: string
           last_synced?: string | null
+          needs_sync?: boolean | null
           org_id?: string
           tripletex_employee_id?: number
           updated_at?: string
@@ -1755,6 +2233,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           last_synced: string | null
+          needs_sync: boolean | null
           org_id: string
           project_name: string | null
           project_number: number | null
@@ -1767,6 +2246,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           last_synced?: string | null
+          needs_sync?: boolean | null
           org_id: string
           project_name?: string | null
           project_number?: number | null
@@ -1779,6 +2259,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           last_synced?: string | null
+          needs_sync?: boolean | null
           org_id?: string
           project_name?: string | null
           project_number?: number | null
@@ -2351,7 +2832,7 @@ export type Database = {
           created_at: string | null
           entity_id: string | null
           entity_type: string | null
-          ip_address: unknown | null
+          ip_address: unknown
           user_name: string | null
           user_role: string | null
         }
@@ -2452,28 +2933,26 @@ export type Database = {
         }
         Returns: boolean
       }
-      cleanup_old_rate_limits: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      decrypt_token: {
-        Args: { encrypted: string }
+      cleanup_old_rate_limits: { Args: never; Returns: number }
+      cleanup_old_tripletex_sync_state: { Args: never; Returns: undefined }
+      create_befaring_snapshot: {
+        Args: { fri_befaring_id: string }
         Returns: string
       }
-      encrypt_token: {
-        Args: { token: string }
-        Returns: string
-      }
+      decrypt_token: { Args: { encrypted: string }; Returns: string }
+      encrypt_token: { Args: { token: string }; Returns: string }
       generate_client_reference: {
         Args: { org_uuid: string; timer_uuid: string }
         Returns: string
       }
-      generate_invite_code: {
-        Args: Record<PropertyKey, never>
-        Returns: string
+      generate_invite_code: { Args: never; Returns: string }
+      get_befaring_punkt_image_count: {
+        Args: { punkt_id: string }
+        Returns: number
       }
+      get_oppgave_image_count: { Args: { oppgave_id: string }; Returns: number }
       get_org_favorite_projects: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           befaring_count: number
           created_by_name: string
@@ -2486,8 +2965,16 @@ export type Database = {
           project_number: number
         }[]
       }
+      get_tripletex_checksum: {
+        Args: {
+          p_org_id: string
+          p_resource_id: string
+          p_resource_type: string
+        }
+        Returns: string
+      }
       get_user_favorite_projects: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           befaring_count: number
           favorited_at: string
@@ -2499,10 +2986,7 @@ export type Database = {
           project_number: number
         }[]
       }
-      get_user_org_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      get_user_org_id: { Args: never; Returns: string }
       get_user_recent_projects: {
         Args: { limit_count?: number }
         Returns: {
@@ -2516,10 +3000,7 @@ export type Database = {
           project_number: number
         }[]
       }
-      is_token_encrypted: {
-        Args: { token: string }
-        Returns: boolean
-      }
+      is_token_encrypted: { Args: { token: string }; Returns: boolean }
       log_audit: {
         Args: {
           p_action: string
@@ -2538,6 +3019,16 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      update_tripletex_sync_state: {
+        Args: {
+          p_checksum?: string
+          p_last_modified?: string
+          p_org_id: string
+          p_resource_id: string
+          p_resource_type: string
+        }
+        Returns: undefined
+      }
       validate_and_use_invite_code: {
         Args: { p_code: string; p_user_id: string }
         Returns: {
@@ -2548,6 +3039,7 @@ export type Database = {
           valid: boolean
         }[]
       }
+      validate_and_use_token: { Args: { token_text: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

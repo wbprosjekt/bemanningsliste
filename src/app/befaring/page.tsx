@@ -104,9 +104,9 @@ export default function BefaringPage() {
   }
 
   // Sjekk tilgang til befaring-modul
-  // For nå: alle admins, managers og ledere har tilgang
+  // MIDLERTIDIG: Alle brukere har tilgang for testing
   // TODO: Legg til modul-basert tilgang når subscription_plan og modules er implementert
-  const canAccessBefaring = profile.role === 'admin' || profile.role === 'manager' || profile.role === 'leder';
+  const canAccessBefaring = true; // profile.role === 'admin' || profile.role === 'manager' || profile.role === 'leder';
 
   // Ingen tilgang til befaring-modul
   if (!canAccessBefaring) {

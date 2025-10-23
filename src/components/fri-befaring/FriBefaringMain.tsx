@@ -54,8 +54,13 @@ interface BefaringStats {
   total_bilder: number;
 }
 
-export default function FriBefaringMain() {
-  const { id } = useParams();
+interface FriBefaringMainProps {
+  befaringId: string;
+  orgId: string;
+  userId: string;
+}
+
+export default function FriBefaringMain({ befaringId, orgId, userId }: FriBefaringMainProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -72,10 +77,10 @@ export default function FriBefaringMain() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (id && user) {
+    if (befaringId && user) {
       loadBefaringData();
     }
-  }, [id, user]);
+  }, [befaringId, user]);
 
   const loadBefaringData = async () => {
     try {
@@ -85,7 +90,8 @@ export default function FriBefaringMain() {
       const { data: befaringData, error: befaringError } = await supabase
         .from('fri_befaringer' as any)
         .select('*')
-        .eq('id', id)
+        .eq('id', befaringId)
+        .eq('org_id', orgId)
         .single();
 
       if (befaringError) throw befaringError;
@@ -100,15 +106,24 @@ export default function FriBefaringMain() {
 
       // Load project data if connected
       if (typedBefaringData.tripletex_project_id) {
+        console.log('=== LOADING PROJECT DATA ===');
+        console.log('Tripletex Project ID:', typedBefaringData.tripletex_project_id);
+        
         const { data: projectData, error: projectError } = await supabase
           .from('ttx_project_cache')
           .select('project_name, project_number, customer_name')
           .eq('tripletex_project_id', typedBefaringData.tripletex_project_id)
+          .eq('org_id', orgId)
           .single();
 
         if (!projectError) {
+          console.log('Project data loaded:', projectData);
           setProject(projectData);
+        } else {
+          console.error('Error loading project data:', projectError);
         }
+      } else {
+        console.log('No tripletex_project_id - untagged befaring');
       }
 
       // Load stats
@@ -173,6 +188,11 @@ export default function FriBefaringMain() {
     if (!befaring) return;
 
     try {
+      console.log('=== SAVE BEFARING DEBUG ===');
+      console.log('Befaring ID:', befaring.id);
+      console.log('Org ID:', orgId);
+      console.log('Edit data:', editData);
+      
       const { error } = await supabase
         .from('fri_befaringer' as any)
         .update({
@@ -181,7 +201,8 @@ export default function FriBefaringMain() {
           befaring_date: editData.befaring_date || null,
           updated_at: new Date().toISOString()
         })
-        .eq('id', befaring.id);
+        .eq('id', befaring.id)
+        .eq('org_id', orgId);
 
       if (error) throw error;
 
@@ -219,8 +240,14 @@ export default function FriBefaringMain() {
   };
 
   const handleMoveToProjectSuccess = () => {
+    console.log('=== MOVE TO PROJECT SUCCESS CALLBACK ===');
+    console.log('Reloading befaring data...');
     // Reload befaring data to get updated project info
     loadBefaringData();
+    
+    // Also refresh project stats if we have a project detail dialog open
+    // This will be handled by the parent component that manages the dialog
+    console.log('Move to project completed successfully');
   };
 
   const handleDeleteBefaring = async () => {
@@ -361,91 +388,131 @@ export default function FriBefaringMain() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button variant="outline" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Tilbake
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">
-              {isEditing ? (
-                <Input
-                  value={editData.title}
-                  onChange={(e) => setEditData(prev => ({ ...prev, title: e.target.value }))}
-                  className="text-2xl font-bold border-none p-0 h-auto"
-                />
-              ) : (
-                befaring.title
-              )}
-            </h1>
-            <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-              <div className="flex items-center space-x-1">
-                <Calendar className="h-4 w-4" />
-                <span>{befaring.befaring_date || 'Ikke satt'}</span>
-              </div>
-              {project ? (
-                <div className="flex items-center space-x-1">
-                  <Building2 className="h-4 w-4" />
-                  <span>{project.project_name} (#{project.project_number})</span>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-1 text-orange-600">
-                  <Building2 className="h-4 w-4" />
-                  <span>Uten prosjekt (untagged)</span>
-                </div>
-              )}
-              <div className="flex items-center space-x-1">
-                <User className="h-4 w-4" />
-                <span>Opprettet: {new Date(befaring.created_at).toLocaleDateString('no-NO')}</span>
-              </div>
+      <div className="space-y-4">
+        {/* Top row: Back button and title */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center space-x-2 md:space-x-4 min-w-0 flex-1">
+            <Button variant="outline" onClick={() => router.back()} size="sm" className="shrink-0">
+              <ArrowLeft className="h-4 w-4 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">Tilbake</span>
+            </Button>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg md:text-2xl font-bold truncate">
+                {isEditing ? (
+                  <Input
+                    value={editData.title}
+                    onChange={(e) => setEditData(prev => ({ ...prev, title: e.target.value }))}
+                    className="text-lg md:text-2xl font-bold border-none p-0 h-auto"
+                  />
+                ) : (
+                  befaring.title
+                )}
+              </h1>
             </div>
           </div>
+          
+          {/* Status badges - only show on larger screens */}
+          <div className="hidden md:flex items-center space-x-2 shrink-0">
+            <Badge className={getStatusColor(befaring.status)}>
+              <div className="flex items-center space-x-1">
+                {getStatusIcon(befaring.status)}
+                <span className="capitalize">{befaring.status}</span>
+              </div>
+            </Badge>
+            <Badge variant="outline">v{befaring.version}</Badge>
+          </div>
         </div>
-        
-        <div className="flex items-center space-x-2">
-          <Badge className={getStatusColor(befaring.status)}>
+
+        {/* Info row - responsive layout */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs md:text-sm text-gray-600">
+          <div className="flex items-center space-x-1">
+            <Calendar className="h-3 w-3 md:h-4 md:w-4" />
+            <span>{befaring.befaring_date || 'Ikke satt'}</span>
+          </div>
+          {project ? (
             <div className="flex items-center space-x-1">
-              {getStatusIcon(befaring.status)}
-              <span className="capitalize">{befaring.status}</span>
+              <Building2 className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="truncate">{project.project_name} (#{project.project_number})</span>
             </div>
-          </Badge>
-          <Badge variant="outline">v{befaring.version}</Badge>
-          {befaring.status === 'aktiv' && (
-            <>
+          ) : (
+            <div className="flex items-center space-x-1 text-orange-600">
+              <Building2 className="h-3 w-3 md:h-4 md:w-4" />
+              <span>Uten prosjekt (untagged)</span>
+            </div>
+          )}
+          <div className="flex items-center space-x-1">
+            <User className="h-3 w-3 md:h-4 md:w-4" />
+            <span>Opprettet: {new Date(befaring.created_at).toLocaleDateString('no-NO')}</span>
+          </div>
+        </div>
+
+        {/* Action buttons - responsive layout */}
+        {befaring.status === 'aktiv' && (
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            {/* Status badges for mobile */}
+            <div className="flex md:hidden items-center space-x-2">
+              <Badge className={getStatusColor(befaring.status)}>
+                <div className="flex items-center space-x-1">
+                  {getStatusIcon(befaring.status)}
+                  <span className="capitalize">{befaring.status}</span>
+                </div>
+              </Badge>
+              <Badge variant="outline">v{befaring.version}</Badge>
+            </div>
+            
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                onClick={() => setIsEditing(!isEditing)}
+                onClick={() => {
+                  console.log('Toggle editing mode:', !isEditing);
+                  setIsEditing(!isEditing);
+                }}
+                size="sm"
+                className="flex-1 sm:flex-none"
               >
-                <Edit className="h-4 w-4 mr-2" />
-                {isEditing ? 'Avbryt' : 'Rediger'}
+                <Edit className="h-4 w-4 mr-1 md:mr-2" />
+                <span className="hidden sm:inline">{isEditing ? 'Avbryt' : 'Rediger'}</span>
+                <span className="sm:hidden">{isEditing ? 'Avbryt' : 'Rediger'}</span>
               </Button>
-              {!befaring.tripletex_project_id && (
-                <MoveToProjectDialog
-                  befaringId={befaring.id}
-                  befaringTitle={befaring.title}
-                  currentProjectId={befaring.tripletex_project_id}
-                  onSuccess={handleMoveToProjectSuccess}
-                >
-                  <Button variant="default" className="bg-orange-600 hover:bg-orange-700">
-                    <Building2 className="h-4 w-4 mr-2" />
-                    Flytt til prosjekt
-                  </Button>
-                </MoveToProjectDialog>
-              )}
+              
+                    <MoveToProjectDialog
+                      befaringId={befaring.id}
+                      befaringTitle={befaring.title}
+                      currentProjectId={befaring.tripletex_project_id}
+                      onSuccess={handleMoveToProjectSuccess}
+                    >
+                      <Button 
+                        variant={befaring.tripletex_project_id ? "outline" : "default"} 
+                        className={befaring.tripletex_project_id ? "flex-1 sm:flex-none" : "bg-orange-600 hover:bg-orange-700 flex-1 sm:flex-none"} 
+                        size="sm"
+                      >
+                        <Building2 className="h-4 w-4 mr-1 md:mr-2" />
+                        <span className="hidden sm:inline">
+                          {befaring.tripletex_project_id ? 'Endre prosjekt' : 'Flytt til prosjekt'}
+                        </span>
+                        <span className="sm:hidden">
+                          {befaring.tripletex_project_id ? 'Endre' : 'Flytt'}
+                        </span>
+                      </Button>
+                    </MoveToProjectDialog>
+              
               <Button
                 variant="destructive"
                 onClick={handleDeleteBefaring}
                 disabled={loading}
+                size="sm"
+                className="flex-1 sm:flex-none"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Slett befaring
+                <Trash2 className="h-4 w-4 mr-1 md:mr-2" />
+                <span className="hidden sm:inline">Slett befaring</span>
+                <span className="sm:hidden">Slett</span>
               </Button>
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Description */}
@@ -474,44 +541,47 @@ export default function FriBefaringMain() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 md:grid-cols-3 md:gap-4">
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <CheckSquare className="h-6 w-6 text-blue-600" />
+          <CardContent className="p-3 md:p-6">
+            <div className="flex items-center space-x-2 md:space-x-4">
+              <div className="p-2 md:p-3 bg-blue-100 rounded-lg">
+                <CheckSquare className="h-4 w-4 md:h-6 md:w-6 text-blue-600" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">Befaringspunkter</p>
-                <p className="text-2xl font-bold">{stats.total_punkter}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs md:text-sm font-medium text-gray-600 leading-tight">
+                  <span className="md:hidden">Punkter</span>
+                  <span className="hidden md:inline">Befaringspunkter</span>
+                </p>
+                <p className="text-lg md:text-2xl font-bold">{stats.total_punkter}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <FileText className="h-6 w-6 text-green-600" />
+          <CardContent className="p-3 md:p-6">
+            <div className="flex items-center space-x-2 md:space-x-4">
+              <div className="p-2 md:p-3 bg-green-100 rounded-lg">
+                <FileText className="h-4 w-4 md:h-6 md:w-6 text-green-600" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">Oppgaver</p>
-                <p className="text-2xl font-bold">{stats.total_oppgaver}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs md:text-sm font-medium text-gray-600 leading-tight">Oppgaver</p>
+                <p className="text-lg md:text-2xl font-bold">{stats.total_oppgaver}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <ImageIcon className="h-6 w-6 text-purple-600" />
+          <CardContent className="p-3 md:p-6">
+            <div className="flex items-center space-x-2 md:space-x-4">
+              <div className="p-2 md:p-3 bg-purple-100 rounded-lg">
+                <ImageIcon className="h-4 w-4 md:h-6 md:w-6 text-purple-600" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">Bilder</p>
-                <p className="text-2xl font-bold">{stats.total_bilder}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs md:text-sm font-medium text-gray-600 leading-tight">Bilder</p>
+                <p className="text-lg md:text-2xl font-bold">{stats.total_bilder}</p>
               </div>
             </div>
           </CardContent>
@@ -520,11 +590,14 @@ export default function FriBefaringMain() {
 
       {/* Save/Cancel buttons for editing */}
       {isEditing && (
-        <div className="flex justify-end space-x-2">
+        <div className="flex justify-end space-x-2 mb-6">
           <Button variant="outline" onClick={handleCancel}>
             Avbryt
           </Button>
-          <Button onClick={handleSave}>
+          <Button onClick={() => {
+            console.log('Save button clicked, isEditing:', isEditing);
+            handleSave();
+          }}>
             Lagre endringer
           </Button>
         </div>
@@ -535,7 +608,8 @@ export default function FriBefaringMain() {
         befaringId={befaring.id}
         onStatsUpdate={() => loadStats(befaring.id)}
         canEdit={befaring.status === 'aktiv'}
-        orgId={befaring.org_id}
+        orgId={orgId}
+        userId={userId}
       />
     </div>
   );

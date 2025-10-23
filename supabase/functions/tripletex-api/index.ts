@@ -1182,6 +1182,106 @@ Deno.serve(async (req) => {
               return { success: false, error: `Database error: ${upsertError.message}` };
             }
 
+            // 🎯 AUTOMATISK ARKIVERING: Arkiver befaringsrapporter når prosjekt blir inaktivt
+            const inactiveProjects = projects.filter(p => !p.is_active);
+            if (inactiveProjects.length > 0) {
+              console.log(`🔄 Auto-archiving befaringsrapporter for ${inactiveProjects.length} inactive projects`);
+              
+              for (const project of inactiveProjects) {
+                try {
+                  // Arkiver alle aktive befaringsrapporter for dette prosjektet
+                  const { data: archivedBefaringer, error: archiveError } = await supabase
+                    .from('befaringer')
+                    .update({ 
+                      status: 'arkivert',
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('org_id', orgId)
+                    .eq('tripletex_project_id', project.tripletex_project_id)
+                    .eq('status', 'aktiv')
+                    .select('id, title');
+
+                  if (archiveError) {
+                    console.error(`Error archiving befaringsrapporter for project ${project.tripletex_project_id}:`, archiveError);
+                  } else if (archivedBefaringer && archivedBefaringer.length > 0) {
+                    console.log(`✅ Auto-archived ${archivedBefaringer.length} befaringsrapporter for project ${project.tripletex_project_id}:`, 
+                      archivedBefaringer.map(b => b.title));
+                  }
+
+                  // Arkiver også fri befaringsrapporter for dette prosjektet
+                  const { data: archivedFriBefaringer, error: archiveFriError } = await supabase
+                    .from('fri_befaringer')
+                    .update({ 
+                      status: 'arkivert',
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('org_id', orgId)
+                    .eq('tripletex_project_id', project.tripletex_project_id)
+                    .eq('status', 'aktiv')
+                    .select('id, title');
+
+                  if (archiveFriError) {
+                    console.error(`Error archiving fri befaringsrapporter for project ${project.tripletex_project_id}:`, archiveFriError);
+                  } else if (archivedFriBefaringer && archivedFriBefaringer.length > 0) {
+                    console.log(`✅ Auto-archived ${archivedFriBefaringer.length} fri befaringsrapporter for project ${project.tripletex_project_id}:`, 
+                      archivedFriBefaringer.map(b => b.title));
+                  }
+                } catch (archiveException) {
+                  console.error(`Exception archiving befaringsrapporter for project ${project.tripletex_project_id}:`, archiveException);
+                }
+              }
+            }
+
+            // 🎯 AUTOMATISK AKTIVERING: Aktiver befaringsrapporter når prosjekt blir aktivt igjen
+            const activeProjects = projects.filter(p => p.is_active);
+            if (activeProjects.length > 0) {
+              console.log(`🔄 Auto-activating befaringsrapporter for ${activeProjects.length} active projects`);
+              
+              for (const project of activeProjects) {
+                try {
+                  // Aktiver alle arkiverte befaringsrapporter for dette prosjektet
+                  const { data: activatedBefaringer, error: activateError } = await supabase
+                    .from('befaringer')
+                    .update({ 
+                      status: 'aktiv',
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('org_id', orgId)
+                    .eq('tripletex_project_id', project.tripletex_project_id)
+                    .eq('status', 'arkivert')
+                    .select('id, title');
+
+                  if (activateError) {
+                    console.error(`Error activating befaringsrapporter for project ${project.tripletex_project_id}:`, activateError);
+                  } else if (activatedBefaringer && activatedBefaringer.length > 0) {
+                    console.log(`✅ Auto-activated ${activatedBefaringer.length} befaringsrapporter for project ${project.tripletex_project_id}:`, 
+                      activatedBefaringer.map(b => b.title));
+                  }
+
+                  // Aktiver også fri befaringsrapporter for dette prosjektet
+                  const { data: activatedFriBefaringer, error: activateFriError } = await supabase
+                    .from('fri_befaringer')
+                    .update({ 
+                      status: 'aktiv',
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('org_id', orgId)
+                    .eq('tripletex_project_id', project.tripletex_project_id)
+                    .eq('status', 'arkivert')
+                    .select('id, title');
+
+                  if (activateFriError) {
+                    console.error(`Error activating fri befaringsrapporter for project ${project.tripletex_project_id}:`, activateFriError);
+                  } else if (activatedFriBefaringer && activatedFriBefaringer.length > 0) {
+                    console.log(`✅ Auto-activated ${activatedFriBefaringer.length} fri befaringsrapporter for project ${project.tripletex_project_id}:`, 
+                      activatedFriBefaringer.map(b => b.title));
+                  }
+                } catch (activateException) {
+                  console.error(`Exception activating befaringsrapporter for project ${project.tripletex_project_id}:`, activateException);
+                }
+              }
+            }
+
             console.log(`Successfully synced ${projects.length} projects`);
             return { 
               success: true, 

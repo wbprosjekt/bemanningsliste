@@ -21,7 +21,10 @@ import {
   CheckCircle,
   Circle,
   Trash2,
-  MoreVertical
+  MoreVertical,
+  ArrowRight,
+  Loader2,
+  Check
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nb } from 'date-fns/locale';
@@ -99,6 +102,11 @@ export default function BefaringDetail({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [plantegningToDelete, setPlantegningToDelete] = useState<Plantegning | null>(null);
   const [activeTab, setActiveTab] = useState('plantegninger');
+  const [showProjectDialog, setShowProjectDialog] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingMove, setLoadingMove] = useState(false);
   const { toast } = useToast();
 
   const normalizeStatus = (status: string | null | undefined): Oppgave['status'] => {

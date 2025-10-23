@@ -8,7 +8,8 @@ import WeekCalendar from '@/components/uke-v2/WeekCalendar';
 import DayView from '@/components/uke-v2/DayView';
 import TimeEntrySheet from '@/components/uke-v2/TimeEntrySheet';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileText } from 'lucide-react';
+import FriBefaringDialog from '@/components/fri-befaring/FriBefaringDialog';
 
 export default function UkeV2Page() {
   const params = useParams();
@@ -18,6 +19,7 @@ export default function UkeV2Page() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
+  const [showBefaringDialog, setShowBefaringDialog] = useState(false);
 
   const year = parseInt(params.year as string);
   const week = parseInt(params.week as string);
@@ -86,6 +88,11 @@ export default function UkeV2Page() {
   const handleCloseSheet = () => {
     setIsSheetOpen(false);
     setSelectedDate(null);
+  };
+
+  const handleBefaringSuccess = () => {
+    setShowBefaringDialog(false);
+    // Optionally refresh data or show success message
   };
 
   return (
@@ -159,9 +166,19 @@ export default function UkeV2Page() {
 
       {/* Bottom Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 safe-area-pb">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto space-y-3">
+          {/* Ny befaring knapp */}
           <Button 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 rounded-full text-lg font-medium"
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-full text-lg font-medium"
+            onClick={() => setShowBefaringDialog(true)}
+          >
+            <FileText className="mr-2 h-5 w-5" />
+            Ny befaring
+          </Button>
+          
+          {/* Ferdig knapp */}
+          <Button 
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-full text-lg font-medium"
             onClick={() => router.push('/min/uke')}
           >
             <span className="mr-2">☑</span> Ferdig
@@ -179,7 +196,15 @@ export default function UkeV2Page() {
           orgId={profile.org_id}
         />
       )}
+
+      {/* Fri Befaring Dialog */}
+      {showBefaringDialog && (
+        <FriBefaringDialog
+          orgId={profile.org_id}
+          userId={profile.user_id}
+          onSuccess={handleBefaringSuccess}
+          onClose={() => setShowBefaringDialog(false)}
+        />
+      )}
     </div>
-  );
-}
 

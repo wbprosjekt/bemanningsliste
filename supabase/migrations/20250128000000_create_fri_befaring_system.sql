@@ -198,6 +198,15 @@ CREATE POLICY "Admins manage own org fri befaringsrapporter"
     AND (SELECT role FROM public.profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
   );
 
+-- Users can update fri befaringsrapporter if they are not signed/locked
+DROP POLICY IF EXISTS "Users can update active fri befaringsrapporter" ON public.fri_befaringer;
+CREATE POLICY "Users can update active fri befaringsrapporter"
+  ON public.fri_befaringer FOR UPDATE
+  USING (
+    org_id = public.get_user_org_id()
+    AND status = 'aktiv'  -- Only allow updates to active (non-signed) befaringsrapporter
+  );
+
 -- BEFARING PUNKTER: Users see punkter in own org befaringsrapporter
 DROP POLICY IF EXISTS "Users see punkter in own org" ON public.befaring_punkter;
 CREATE POLICY "Users see punkter in own org"
@@ -220,6 +229,19 @@ CREATE POLICY "Admins manage punkter in own org"
       AND fb.org_id = public.get_user_org_id()
     )
     AND (SELECT role FROM public.profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
+  );
+
+-- Users can manage punkter in active fri befaringsrapporter
+DROP POLICY IF EXISTS "Users can manage punkter in active befaringsrapporter" ON public.befaring_punkter;
+CREATE POLICY "Users can manage punkter in active befaringsrapporter"
+  ON public.befaring_punkter FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.fri_befaringer fb
+      WHERE fb.id = befaring_punkter.fri_befaring_id
+      AND fb.org_id = public.get_user_org_id()
+      AND fb.status = 'aktiv'  -- Only allow updates to active befaringsrapporter
+    )
   );
 
 -- BEFARING OPPGAVER: Users see oppgaver in own org befaringsrapporter
@@ -246,6 +268,20 @@ CREATE POLICY "Admins manage oppgaver in own org"
       AND fb.org_id = public.get_user_org_id()
     )
     AND (SELECT role FROM public.profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
+  );
+
+-- Users can manage oppgaver in active fri befaringsrapporter
+DROP POLICY IF EXISTS "Users can manage oppgaver in active befaringsrapporter" ON public.befaring_oppgaver;
+CREATE POLICY "Users can manage oppgaver in active befaringsrapporter"
+  ON public.befaring_oppgaver FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.befaring_punkter bp
+      JOIN public.fri_befaringer fb ON fb.id = bp.fri_befaring_id
+      WHERE bp.id = befaring_oppgaver.befaring_punkt_id
+      AND fb.org_id = public.get_user_org_id()
+      AND fb.status = 'aktiv'  -- Only allow updates to active befaringsrapporter
+    )
   );
 
 -- BEFARING SIGNATURER: Same as fri befaringsrapporter

@@ -166,25 +166,49 @@ export function useGlobalSearch() {
       total: 0
     };
 
-    // Search projects
-    results.projects = cachedData.projects
-      .filter(project => {
+    // Search projects with smart prioritization
+    const projectMatches = cachedData.projects
+      .map(project => {
         const name = project.project_name?.toLowerCase() || '';
         const number = project.project_number?.toString() || '';
-        return name.includes(searchTerm) || number.includes(searchTerm);
+        
+        let score = 0;
+        
+        // Exact number match (highest priority)
+        if (number === searchTerm) {
+          score = 100;
+        }
+        // Number starts with search term
+        else if (number.startsWith(searchTerm)) {
+          score = 80;
+        }
+        // Name contains search term
+        else if (name.includes(searchTerm)) {
+          score = 60;
+        }
+        // Number contains search term
+        else if (number.includes(searchTerm)) {
+          score = 40;
+        }
+        
+        return { project, score };
       })
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
       .slice(0, 5)
-      .map(project => ({
-        id: project.id,
-        title: project.project_name || 'Uten navn',
-        description: `Prosjekt #${project.project_number}`,
+      .map(item => ({
+        id: item.project.id,
+        title: item.project.project_name || 'Uten navn',
+        description: `Prosjekt #${item.project.project_number}`,
         type: 'project' as const,
-        url: `/prosjekt/${project.id}`,
+        url: `/prosjekt/${item.project.id}`,
         metadata: {
-          project_number: project.project_number,
-          project_name: project.project_name
+          project_number: item.project.project_number,
+          project_name: item.project.project_name
         }
       }));
+    
+    results.projects = projectMatches;
 
     // Search befaringer
     results.befaringer = cachedData.befaringer

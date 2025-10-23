@@ -430,36 +430,6 @@ export default function ProjectDashboard() {
         </CardContent>
       </Card>
 
-      {/* 🚨 KREVER HANDLING - Øverst som prioritert */}
-      <Card className="border-red-200 bg-red-50">
-        <CardHeader>
-          <CardTitle className="text-red-700 flex items-center">
-            🚨 KREVER HANDLING ({stats.untagged_photos + stats.untagged_befaringer} ting) 
-            <Button variant="link" className="ml-auto text-red-600">
-              Vis alle →
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <span className="text-red-600">🔴</span>
-            <span className="text-xs">Kritiske oppgaver som krever oppmerksomhet</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-yellow-600">🟡</span>
-            <span className="text-xs">Befaringer som trenger planlegging</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-orange-600">📷</span>
-            <span className="text-xs">{stats.untagged_photos} bilder venter på tagging</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-blue-600">📋</span>
-            <span className="text-xs">{stats.untagged_befaringer} befaringer venter på prosjekt</span>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* 📷 FOTO-INNBOKS - Hybrid strategi */}
       <Card className="border-orange-200 bg-orange-50">
         <CardHeader>

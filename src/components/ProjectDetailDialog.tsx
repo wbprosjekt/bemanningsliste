@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building, User, Phone, Mail, FileText, Calendar } from 'lucide-react';
+import { Building, User, Phone, Mail, FileText, Calendar, CheckSquare, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -42,33 +42,119 @@ interface ProjectDetails {
   displayName: string;
 }
 
+interface ProjectStats {
+  total_befaringer: number;
+  active_befaringer: number;
+  signed_befaringer: number;
+  archived_befaringer: number;
+  total_oppgaver: number;
+  open_oppgaver: number;
+  completed_oppgaver: number;
+}
+
 const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDialogProps) => {
   const [projectDetails, setProjectDetails] = useState<ProjectDetails | null>(null);
+  const [projectStats, setProjectStats] = useState<ProjectStats | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+
+  const loadProjectStats = useCallback(async () => {
+    if (!project.tripletex_project_id) return;
+    
+    try {
+      console.log('Loading project stats for project:', project.tripletex_project_id);
+      console.log('Org ID:', orgId);
+      
+      // Load befaringer stats (both plantegning and fri befaring)
+      const [befaringerResult, friBefaringerResult, oppgaverResult] = await Promise.all([
+        // Regular befaringer (plantegning)
+        supabase
+          .from('befaringer')
+          .select('status')
+          .eq('tripletex_project_id', project.tripletex_project_id)
+          .eq('org_id', orgId),
+        
+        // Fri befaringer
+        supabase
+          .from('fri_befaringer')
+          .select('status')
+          .eq('tripletex_project_id', project.tripletex_project_id)
+          .eq('org_id', orgId),
+        
+        // Oppgaver stats
+        supabase
+          .from('oppgaver')
+          .select('status')
+          .eq('tripletex_project_id', project.tripletex_project_id)
+          .eq('org_id', orgId)
+      ]);
+
+      console.log('Befaringer result:', befaringerResult);
+      console.log('Fri befaringer result:', friBefaringerResult);
+      console.log('Oppgaver result:', oppgaverResult);
+
+      if (befaringerResult.error) throw befaringerResult.error;
+      if (friBefaringerResult.error) throw friBefaringerResult.error;
+      if (oppgaverResult.error) throw oppgaverResult.error;
+
+      // Combine all befaringer
+      const allBefaringer = [
+        ...(befaringerResult.data || []),
+        ...(friBefaringerResult.data || [])
+      ];
+
+      console.log('All befaringer combined:', allBefaringer);
+      console.log('Regular befaringer count:', befaringerResult.data?.length || 0);
+      console.log('Fri befaringer count:', friBefaringerResult.data?.length || 0);
+      console.log('Total befaringer count:', allBefaringer.length);
+
+      // Count befaringer by status
+      const stats: ProjectStats = {
+        total_befaringer: allBefaringer.length,
+        active_befaringer: allBefaringer.filter(b => b.status === 'aktiv').length,
+        signed_befaringer: allBefaringer.filter(b => b.status === 'signert').length,
+        archived_befaringer: allBefaringer.filter(b => b.status === 'arkivert').length,
+        total_oppgaver: oppgaverResult.data?.length || 0,
+        open_oppgaver: oppgaverResult.data?.filter(o => o.status === 'åpen').length || 0,
+        completed_oppgaver: oppgaverResult.data?.filter(o => o.status === 'lukket').length || 0
+      };
+
+      console.log('Final project stats:', stats);
+      setProjectStats(stats);
+    } catch (error) {
+      console.error('Error loading project stats:', error);
+      // Don't show error toast - stats are not critical
+    }
+  }, [project.tripletex_project_id, orgId]);
 
   const loadProjectDetails = useCallback(async () => {
     setLoading(true);
     try {
-      // Call Tripletex API through our edge function using Supabase client
-      const { data, error } = await supabase.functions.invoke('tripletex-api', {
-        body: {
-          action: 'get_project_details',
-          project_id: project.tripletex_project_id,
-          orgId: orgId
-        }
-      });
+      // Load both project details and stats in parallel
+      await Promise.all([
+        (async () => {
+          // Call Tripletex API through our edge function using Supabase client
+          const { data, error } = await supabase.functions.invoke('tripletex-api', {
+            body: {
+              action: 'get_project_details',
+              project_id: project.tripletex_project_id,
+              orgId: orgId
+            }
+          });
 
-      if (error) {
-        console.error('Supabase function error:', error);
-        throw new Error(error.message || 'Failed to load project details');
-      }
+          if (error) {
+            console.error('Supabase function error:', error);
+            throw new Error(error.message || 'Failed to load project details');
+          }
 
-      if (!data?.success) {
-        throw new Error(data?.error || 'Failed to load project details');
-      }
+          if (!data?.success) {
+            throw new Error(data?.error || 'Failed to load project details');
+          }
 
-      setProjectDetails(data.data);
+          setProjectDetails(data.data);
+        })(),
+        loadProjectStats()
+      ]);
     } catch (error) {
       console.error('Error loading project details:', error);
       toast({
@@ -79,7 +165,7 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
     } finally {
       setLoading(false);
     }
-  }, [project, orgId, toast]);
+  }, [project, orgId, toast, loadProjectStats]);
 
   useEffect(() => {
     if (open && project) {
@@ -106,6 +192,59 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
           </div>
         ) : projectDetails ? (
           <div className="space-y-6">
+            {/* KPI Cards */}
+            {projectStats && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-2">
+                      <CheckSquare className="h-5 w-5 text-blue-500" />
+                      <div>
+                        <p className="text-2xl font-bold">{projectStats.total_befaringer}</p>
+                        <p className="text-sm text-muted-foreground">Befaringer</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-2">
+                      <AlertCircle className="h-5 w-5 text-amber-500" />
+                      <div>
+                        <p className="text-2xl font-bold">{projectStats.active_befaringer}</p>
+                        <p className="text-sm text-muted-foreground">Åpne</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-5 w-5 text-green-500" />
+                      <div>
+                        <p className="text-2xl font-bold">{projectStats.total_oppgaver}</p>
+                        <p className="text-sm text-muted-foreground">Oppgaver</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-2">
+                      <AlertCircle className="h-5 w-5 text-red-500" />
+                      <div>
+                        <p className="text-2xl font-bold">{projectStats.open_oppgaver}</p>
+                        <p className="text-sm text-muted-foreground">Åpne oppg.</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             {/* Project Overview */}
             <Card>
               <CardHeader>
