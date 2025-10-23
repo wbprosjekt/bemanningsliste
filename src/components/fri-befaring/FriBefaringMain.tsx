@@ -223,6 +223,91 @@ export default function FriBefaringMain() {
     loadBefaringData();
   };
 
+  const handleDeleteBefaring = async () => {
+    if (!befaring) return;
+
+    const confirmed = confirm(
+      `Er du sikker på at du vil slette befaringen "${befaring.title}"?\n\n` +
+      `Dette vil slette:\n` +
+      `- ${stats.total_punkter} befaringspunkter\n` +
+      `- ${stats.total_oppgaver} oppgaver\n` +
+      `- ${stats.total_bilder} bilder\n\n` +
+      `Denne handlingen kan ikke angres.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+
+      // 1. Slett alle bilder fra storage bucket
+      const { data: punkter } = await supabase
+        .from('befaring_punkter' as any)
+        .select('id')
+        .eq('fri_befaring_id', befaring.id);
+
+      if (punkter && punkter.length > 0) {
+        const punktIds = punkter.map(p => p.id);
+        
+        // Hent alle bilder for disse punktene
+        const { data: bilder } = await supabase
+          .from('oppgave_bilder')
+          .select('image_url')
+          .in('befaring_punkt_id', punktIds)
+          .eq('image_source', 'punkt');
+
+        if (bilder && bilder.length > 0) {
+          const filePaths = bilder
+            .map(b => b.image_url)
+            .filter(url => url)
+            .map(url => {
+              // Extract file path from URL
+              const parts = url.split('/storage/v1/object/');
+              return parts[1] ? parts[1].split('?')[0] : null;
+            })
+            .filter(Boolean);
+
+          if (filePaths.length > 0) {
+            const { error: storageError } = await supabase.storage
+              .from('befaring-assets')
+              .remove(filePaths);
+
+            if (storageError) {
+              console.warn('Error deleting storage files:', storageError);
+              // Continue with database deletion even if storage fails
+            }
+          }
+        }
+      }
+
+      // 2. Slett fra database (cascade should handle most of this)
+      const { error } = await supabase
+        .from('fri_befaringer' as any)
+        .delete()
+        .eq('id', befaring.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Slettet',
+        description: 'Befaringen er slettet',
+      });
+
+      // Navigate back to befaring list
+      router.push('/befaring');
+
+    } catch (error) {
+      console.error('Error deleting befaring:', error);
+      toast({
+        title: 'Feil',
+        description: 'Kunne ikke slette befaringen',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'aktiv': return 'bg-green-100 text-green-800';
@@ -350,6 +435,14 @@ export default function FriBefaringMain() {
                   </Button>
                 </MoveToProjectDialog>
               )}
+              <Button
+                variant="destructive"
+                onClick={handleDeleteBefaring}
+                disabled={loading}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Slett befaring
+              </Button>
             </>
           )}
         </div>

@@ -339,71 +339,124 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
 
     setIsDeleting(true);
     try {
-      // 1. Hent alle plantegninger for denne befaringen
-      const { data: plantegninger } = await supabase
-        .from('plantegninger')
-        .select('id, image_url')
-        .eq('befaring_id', befaringToDelete.id);
+      if (befaringToDelete.type === 'fri') {
+        // Handle fri befaring deletion
+        // 1. Slett alle bilder fra storage bucket
+        const { data: punkter } = await supabase
+          .from('befaring_punkter' as any)
+          .select('id')
+          .eq('fri_befaring_id', befaringToDelete.id);
 
-      // 2. Slett alle filer fra storage bucket
-      if (plantegninger && plantegninger.length > 0) {
-        const filePaths = plantegninger
-          .map(p => p.image_url)
-          .filter((url): url is string => Boolean(url))
-          .map(url => {
-            // Extract file path from URL
-            const parts = url.split('/storage/v1/object/');
-            return parts[1] ? parts[1].split('?')[0] : null;
-          })
-          .filter((path): path is string => Boolean(path));
+        if (punkter && punkter.length > 0) {
+          const punktIds = punkter.map(p => p.id);
+          
+          // Hent alle bilder for disse punktene
+          const { data: bilder } = await supabase
+            .from('oppgave_bilder')
+            .select('image_url')
+            .in('befaring_punkt_id', punktIds)
+            .eq('image_source', 'punkt');
 
-        if (filePaths.length > 0) {
-          const { error: storageError } = await supabase.storage
-            .from('befaring-assets')
-            .remove(filePaths);
+          if (bilder && bilder.length > 0) {
+            const filePaths = bilder
+              .map(b => b.image_url)
+              .filter((url): url is string => Boolean(url))
+              .map(url => {
+                // Extract file path from URL
+                const parts = url.split('/storage/v1/object/');
+                return parts[1] ? parts[1].split('?')[0] : null;
+              })
+              .filter((path): path is string => Boolean(path));
 
-          if (storageError) {
-            console.warn('Error deleting storage files:', storageError);
-            // Continue with database deletion even if storage fails
+            if (filePaths.length > 0) {
+              const { error: storageError } = await supabase.storage
+                .from('befaring-assets')
+                .remove(filePaths);
+
+              if (storageError) {
+                console.warn('Error deleting storage files:', storageError);
+                // Continue with database deletion even if storage fails
+              }
+            }
           }
         }
-      }
 
-      // 3. Slett alle oppgaver (cascade should handle this, but being explicit)
-      // First get all plantegning IDs for this befaring
-      const { data: plantegningIds } = await supabase
-        .from('plantegninger')
-        .select('id')
-        .eq('befaring_id', befaringToDelete.id);
-
-      if (plantegningIds && plantegningIds.length > 0) {
-        const { error: oppgaverError } = await supabase
-          .from('oppgaver')
+        // 2. Slett fra database (cascade should handle most of this)
+        const { error } = await supabase
+          .from('fri_befaringer' as any)
           .delete()
-          .in('plantegning_id', plantegningIds.map(p => p.id));
+          .eq('id', befaringToDelete.id);
 
-        if (oppgaverError) {
-          console.warn('Error deleting oppgaver:', oppgaverError);
+        if (error) throw error;
+
+      } else {
+        // Handle plantegning befaring deletion (existing logic)
+        // 1. Hent alle plantegninger for denne befaringen
+        const { data: plantegninger } = await supabase
+          .from('plantegninger')
+          .select('id, image_url')
+          .eq('befaring_id', befaringToDelete.id);
+
+        // 2. Slett alle filer fra storage bucket
+        if (plantegninger && plantegninger.length > 0) {
+          const filePaths = plantegninger
+            .map(p => p.image_url)
+            .filter((url): url is string => Boolean(url))
+            .map(url => {
+              // Extract file path from URL
+              const parts = url.split('/storage/v1/object/');
+              return parts[1] ? parts[1].split('?')[0] : null;
+            })
+            .filter((path): path is string => Boolean(path));
+
+          if (filePaths.length > 0) {
+            const { error: storageError } = await supabase.storage
+              .from('befaring-assets')
+              .remove(filePaths);
+
+            if (storageError) {
+              console.warn('Error deleting storage files:', storageError);
+              // Continue with database deletion even if storage fails
+            }
+          }
         }
+
+        // 3. Slett alle oppgaver (cascade should handle this, but being explicit)
+        // First get all plantegning IDs for this befaring
+        const { data: plantegningIds } = await supabase
+          .from('plantegninger')
+          .select('id')
+          .eq('befaring_id', befaringToDelete.id);
+
+        if (plantegningIds && plantegningIds.length > 0) {
+          const { error: oppgaverError } = await supabase
+            .from('oppgaver')
+            .delete()
+            .in('plantegning_id', plantegningIds.map(p => p.id));
+
+          if (oppgaverError) {
+            console.warn('Error deleting oppgaver:', oppgaverError);
+          }
+        }
+
+        // 4. Slett alle plantegninger
+        const { error: plantegningerError } = await supabase
+          .from('plantegninger')
+          .delete()
+          .eq('befaring_id', befaringToDelete.id);
+
+        if (plantegningerError) {
+          console.warn('Error deleting plantegninger:', plantegningerError);
+        }
+
+        // 5. Slett befaringen
+        const { error: befaringError } = await supabase
+          .from('befaringer')
+          .delete()
+          .eq('id', befaringToDelete.id);
+
+        if (befaringError) throw befaringError;
       }
-
-      // 4. Slett alle plantegninger
-      const { error: plantegningerError } = await supabase
-        .from('plantegninger')
-        .delete()
-        .eq('befaring_id', befaringToDelete.id);
-
-      if (plantegningerError) {
-        console.warn('Error deleting plantegninger:', plantegningerError);
-      }
-
-      // 5. Slett befaringen
-      const { error: befaringError } = await supabase
-        .from('befaringer')
-        .delete()
-        .eq('id', befaringToDelete.id);
-
-      if (befaringError) throw befaringError;
 
       toast({
         title: 'Befaring slettet',

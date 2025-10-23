@@ -38,7 +38,7 @@ import {
   X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import BefaringPunktImages from './BefaringPunktImages';
+import BefaringPunktImageThumbnails from './BefaringPunktImageThumbnails';
 
 interface BefaringPunkt {
   id: string;
@@ -410,7 +410,7 @@ export default function BefaringPunktList({ befaringId, onStatsUpdate, canEdit, 
 
                   {/* Foto-seksjon */}
                   <div className="border-t pt-4">
-                    <BefaringPunktImages
+                    <BefaringPunktImageThumbnails
                       befaringPunktId={null}
                       orgId={orgId}
                       canUpload={true}
@@ -572,13 +572,21 @@ export default function BefaringPunktList({ befaringId, onStatsUpdate, canEdit, 
                     </div>
                   )}
                   
-                  {/* Images Section */}
+                  {/* Images Section - Compact Thumbnails */}
                   <div className="mt-4">
-                    <BefaringPunktImages
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <ImageIcon className="h-4 w-4 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-700">Bilder</span>
+                      </div>
+                    </div>
+                    <BefaringPunktImageThumbnails
                       befaringPunktId={punkt.id}
                       orgId={orgId}
                       canUpload={canEdit}
                       onImageCountChange={() => onStatsUpdate()}
+                      maxThumbnails={4}
+                      showUploadButton={canEdit}
                     />
                   </div>
                 </CardContent>
