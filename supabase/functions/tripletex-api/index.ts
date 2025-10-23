@@ -1091,7 +1091,7 @@ Deno.serve(async (req) => {
           console.log('🔍 Stored checksum:', storedChecksum);
           
           // Test with all possible fields to see what's actually available
-          const response = await callTripletexAPI(`/project?count=1&fields=id,number,name,displayName,customer,projectManager,description,startDate,endDate,isActive,isClosed,mainProjectId,projectCategoryId${changesSinceParam}`, 'GET', undefined, orgId, headers);
+          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,projectManager,description,startDate,endDate,isActive,isClosed${changesSinceParam}`, 'GET', undefined, orgId, headers);
           
           // Check if we got a 304 Not Modified response
           if (response.status === 304) {
