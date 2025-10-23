@@ -58,6 +58,7 @@ interface ProjectPhoto {
   uploaded_by_email: string | null;
   created_at: string | null;
   oppgave_id: string | null;
+  // befaring_id will be added when befaringer are fully implemented
 }
 
 interface ProjectComment {
@@ -82,6 +83,15 @@ export default function ProjectDetailPage() {
   });
   const [activities, setActivities] = useState<Activity[]>([]);
   const [projectPhotos, setProjectPhotos] = useState<ProjectPhoto[]>([]);
+  const [photosByCategory, setPhotosByCategory] = useState<{
+    untagged: ProjectPhoto[];
+    befaringer: { [key: string]: ProjectPhoto[] };
+    oppgaver: { [key: string]: ProjectPhoto[] };
+  }>({
+    untagged: [],
+    befaringer: {},
+    oppgaver: {}
+  });
   const [comments, setComments] = useState<ProjectComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
@@ -234,8 +244,12 @@ export default function ProjectDetailPage() {
       // Load project stats with real data
       await loadProjectStats(projectId);
 
-      // Load project photos (tagged to project but not to specific oppgave)
-      const { data: photosData, error: photosError } = await supabase
+      // Load ALL project photos from multiple sources:
+      // 1. Direct project photos (prosjekt_id)
+      // 2. Befaring photos (via oppgave -> plantegning -> befaring -> tripletex_project_id)
+      
+      // First: Direct project photos
+      const { data: directPhotosData, error: directPhotosError } = await supabase
         .from('oppgave_bilder')
         .select(`
           id,
@@ -247,13 +261,73 @@ export default function ProjectDetailPage() {
           prosjekt_id
         `)
         .eq('prosjekt_id', projectId)
-        .is('oppgave_id', null) // Photos tagged to project but not to specific task
         .order('created_at', { ascending: false });
+
+      // Second: Get befaring photos via RPC function or simpler approach
+      // For now, let's get all photos that have oppgave_id and check if they belong to this project
+      const { data: befaringPhotosData, error: befaringPhotosError } = await supabase
+        .from('oppgave_bilder')
+        .select(`
+          id,
+          image_url,
+          uploaded_by,
+          uploaded_by_email,
+          created_at,
+          oppgave_id,
+          prosjekt_id,
+          oppgaver!inner(
+            id,
+            plantegning_id,
+            plantegninger!inner(
+              id,
+              befaring_id,
+              befaringer!inner(
+                id,
+                tripletex_project_id
+              )
+            )
+          )
+        `)
+        .not('oppgave_id', 'is', null)
+        .eq('oppgaver.plantegninger.befaringer.tripletex_project_id', project?.tripletex_project_id || 0)
+        .order('created_at', { ascending: false });
+
+      // Combine both results
+      const allPhotosData = [
+        ...(directPhotosData || []),
+        ...(befaringPhotosData || [])
+      ];
+      
+      const photosError = directPhotosError || befaringPhotosError;
 
       if (photosError) {
         console.warn('Could not load project photos:', photosError);
       } else {
-        setProjectPhotos(photosData || []);
+        setProjectPhotos(allPhotosData);
+        
+        // Organize photos by category
+        const organizedPhotos = {
+          untagged: [] as ProjectPhoto[],
+          befaringer: {} as { [key: string]: ProjectPhoto[] },
+          oppgaver: {} as { [key: string]: ProjectPhoto[] }
+        };
+
+        allPhotosData.forEach(photo => {
+          if (photo.oppgave_id) {
+            // Photo belongs to an oppgave
+            if (!organizedPhotos.oppgaver[photo.oppgave_id]) {
+              organizedPhotos.oppgaver[photo.oppgave_id] = [];
+            }
+            organizedPhotos.oppgaver[photo.oppgave_id].push(photo);
+          } else {
+            // Photo is untagged (belongs to project but not to specific task)
+            // NOTE: For now, we don't have befaring_id in oppgave_bilder table
+            // When befaringer are implemented, we'll need to add that column
+            organizedPhotos.untagged.push(photo);
+          }
+        });
+
+        setPhotosByCategory(organizedPhotos);
       }
 
       // Load project comments
@@ -613,37 +687,141 @@ export default function ProjectDetailPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center">
                 <ImageIcon className="h-5 w-5 mr-2 text-orange-600" />
-                Foto-bibliotek ({projectPhotos.length})
+                Foto-bibliotek ({projectPhotos.length} bilder)
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               {projectPhotos.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {projectPhotos.map((photo) => (
-                    <div key={photo.id} className="relative group">
-                      <img
-                        src={photo.image_url}
-                        alt="Project photo"
-                        className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => {/* TODO: Open full-size view */}}
-                      />
-                      {/* Comment removed - not available in current schema */}
-                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          size="sm" 
-                          variant="destructive" 
-                          className="h-6 w-6 p-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeletePhoto(photo.id);
-                          }}
-                        >
-                          🗑️
-                        </Button>
+                <>
+                  {/* Uten tilknytning */}
+                  {photosByCategory.untagged.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">📁 Uten tilknytning</h3>
+                        <Badge variant="secondary">{photosByCategory.untagged.length} bilder</Badge>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {photosByCategory.untagged.map((photo) => (
+                          <div key={photo.id} className="relative group">
+                            <img
+                              src={photo.image_url}
+                              alt="Project photo"
+                              className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => {/* TODO: Open full-size view */}}
+                            />
+                            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button 
+                                size="sm" 
+                                variant="destructive" 
+                                className="h-6 w-6 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeletePhoto(photo.id);
+                                }}
+                              >
+                                🗑️
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )}
+
+                  {/* Befaringer */}
+                  {Object.keys(photosByCategory.befaringer).length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">🏗️ Befaringer</h3>
+                        <Badge variant="secondary">
+                          {Object.values(photosByCategory.befaringer).reduce((sum, photos) => sum + photos.length, 0)} bilder
+                        </Badge>
+                      </div>
+                      {Object.entries(photosByCategory.befaringer).map(([befaringId, photos]) => (
+                        <div key={befaringId} className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-xs font-medium text-muted-foreground">
+                              Befaring {befaringId.substring(0, 8)}...
+                            </h4>
+                            <Badge variant="outline" className="text-xs">{photos.length} bilder</Badge>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {photos.map((photo) => (
+                              <div key={photo.id} className="relative group">
+                                <img
+                                  src={photo.image_url}
+                                  alt="Befaring photo"
+                                  className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => {/* TODO: Open full-size view */}}
+                                />
+                                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button 
+                                    size="sm" 
+                                    variant="destructive" 
+                                    className="h-6 w-6 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeletePhoto(photo.id);
+                                    }}
+                                  >
+                                    🗑️
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Oppgaver */}
+                  {Object.keys(photosByCategory.oppgaver).length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">✅ Oppgaver</h3>
+                        <Badge variant="secondary">
+                          {Object.values(photosByCategory.oppgaver).reduce((sum, photos) => sum + photos.length, 0)} bilder
+                        </Badge>
+                      </div>
+                      {Object.entries(photosByCategory.oppgaver).map(([oppgaveId, photos]) => (
+                        <div key={oppgaveId} className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-xs font-medium text-muted-foreground">
+                              Oppgave {oppgaveId.substring(0, 8)}...
+                            </h4>
+                            <Badge variant="outline" className="text-xs">{photos.length} bilder</Badge>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {photos.map((photo) => (
+                              <div key={photo.id} className="relative group">
+                                <img
+                                  src={photo.image_url}
+                                  alt="Oppgave photo"
+                                  className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => {/* TODO: Open full-size view */}}
+                                />
+                                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button 
+                                    size="sm" 
+                                    variant="destructive" 
+                                    className="h-6 w-6 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeletePhoto(photo.id);
+                                    }}
+                                  >
+                                    🗑️
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <ImageIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
