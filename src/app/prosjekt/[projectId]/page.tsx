@@ -40,7 +40,7 @@ interface TripletexProjectDetails {
     email?: string;
     phoneNumber?: string;
   };
-  projectManager: {
+  projectManager?: {
     id: number;
     firstName: string;
     lastName: string;
@@ -324,7 +324,7 @@ export default function ProjectDetailPage() {
         .single();
 
       if (projectError) throw projectError;
-      setProject(projectData);
+      setProject(projectData as Project);
 
       // Load Tripletex project details from cache instead of API
       if (projectData.tripletex_project_id) {
@@ -337,31 +337,32 @@ export default function ProjectDetailPage() {
             .single();
 
           if (!cacheError && cachedData) {
+            const cacheRow = cachedData as Project;
             // Transform cached data to match TripletexProjectDetails interface
             const tripletexDetails: TripletexProjectDetails = {
-              id: cachedData.tripletex_project_id!,
-              name: cachedData.project_name || '',
-              number: cachedData.project_number?.toString() || '',
+              id: cacheRow.tripletex_project_id!,
+              name: cacheRow.project_name || '',
+              number: cacheRow.project_number?.toString() || '',
               customer: {
                 id: 0, // Not available in cache
-                name: cachedData.customer_name || 'Ukjent kunde',
-                email: cachedData.customer_email,
-                phoneNumber: cachedData.customer_phone
+                name: cacheRow.customer_name || 'Ukjent kunde',
+                email: cacheRow.customer_email ?? undefined,
+                phoneNumber: cacheRow.customer_phone ?? undefined
               },
-              projectManager: cachedData.project_manager_name ? {
+              projectManager: cacheRow.project_manager_name ? {
                 id: 0, // Not available in cache
-                firstName: cachedData.project_manager_name.split(' ')[0] || '',
-                lastName: cachedData.project_manager_name.split(' ').slice(1).join(' ') || '',
-                email: cachedData.project_manager_email || '',
-                phoneNumber: cachedData.project_manager_phone
+                firstName: cacheRow.project_manager_name.split(' ')[0] || '',
+                lastName: cacheRow.project_manager_name.split(' ').slice(1).join(' ') || '',
+                email: cacheRow.project_manager_email || '',
+                phoneNumber: cacheRow.project_manager_phone ?? undefined
               } : undefined,
-              startDate: cachedData.start_date || '',
-              endDate: cachedData.end_date,
-              status: cachedData.is_active ? 'active' : 'inactive',
-              isActive: cachedData.is_active || false,
-              isClosed: cachedData.is_closed || false,
-              displayName: cachedData.project_name || '',
-              description: cachedData.project_description
+              startDate: cacheRow.start_date || '',
+              endDate: cacheRow.end_date ?? undefined,
+              status: cacheRow.is_active ? 'active' : 'inactive',
+              isActive: cacheRow.is_active ?? false,
+              isClosed: cacheRow.is_closed ?? false,
+              displayName: cacheRow.project_name || '',
+              description: cacheRow.project_description ?? undefined
             };
 
             setTripletexDetails(tripletexDetails);
@@ -373,7 +374,7 @@ export default function ProjectDetailPage() {
       }
 
       // Load project stats with real data (pass projectData directly)
-      await loadProjectStatsWithData(projectData);
+      await loadProjectStatsWithData(projectData as Project);
 
       // Load ALL project photos from multiple sources:
       // 1. Direct project photos (prosjekt_id)

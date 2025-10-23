@@ -194,13 +194,15 @@ export default function MoveToProjectDialog({
     }
 
     // Show confirmation dialog
-    const cleanProjectName = selectedProject.project_name?.startsWith(selectedProject.project_number + ' ') 
-      ? selectedProject.project_name.substring(selectedProject.project_number.toString().length + 1)
-      : selectedProject.project_name;
+    const projectName = selectedProject.project_name ?? '';
+    const projectNumber = selectedProject.project_number?.toString() ?? '';
+    const cleanProjectName = projectNumber && projectName.startsWith(`${projectNumber} `)
+      ? projectName.substring(projectNumber.length + 1)
+      : projectName;
     
     const confirmMessage = currentProjectId 
-      ? `Er du sikker på at du vil flytte "${befaringTitle}" til prosjekt ${selectedProject.project_number} - ${cleanProjectName}?`
-      : `Er du sikker på at du vil flytte "${befaringTitle}" til prosjekt ${selectedProject.project_number} - ${cleanProjectName}?`;
+      ? `Er du sikker på at du vil flytte "${befaringTitle}" til prosjekt ${projectNumber || 'ukjent nummer'} - ${cleanProjectName}?`
+      : `Er du sikker på at du vil flytte "${befaringTitle}" til prosjekt ${projectNumber || 'ukjent nummer'} - ${cleanProjectName}?`;
     
     if (!confirm(confirmMessage)) {
       return;
@@ -215,10 +217,17 @@ export default function MoveToProjectDialog({
       console.log('Selected Project:', selectedProject);
       
       // 1. Check user role first
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+
+      if (!userId) {
+        throw new Error('Fant ikke innlogget bruker. Prøv å logge inn på nytt.');
+      }
+
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('role')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .select('role, org_id')
+        .eq('user_id', userId)
         .single();
       
       if (profileError) {
@@ -229,15 +238,22 @@ export default function MoveToProjectDialog({
       console.log('User role:', profile?.role);
       
       // Check if user has permission (admin/manager can move any befaring, users can only move their own)
-      if (!['admin', 'manager'].includes(profile?.role)) {
+      const orgId = profile?.org_id;
+
+      if (!orgId) {
+        throw new Error('Fant ikke organisasjonen for brukeren. Kontakt administrator.');
+      }
+
+      if (!['admin', 'manager'].includes(profile?.role ?? '')) {
         // For regular users, check if they created the befaring
         const { data: befaringData } = await supabase
           .from('fri_befaringer' as any)
           .select('created_by')
           .eq('id', befaringId)
           .single();
-        
-        if (befaringData?.created_by !== (await supabase.auth.getUser()).data.user?.id) {
+
+        const befaringRecord = befaringData as { created_by: string | null } | null;
+        if (befaringRecord?.created_by !== userId) {
           toast({
             title: 'Ingen tilgang',
             description: 'Du kan kun flytte befaringsrapporter du har opprettet.',
@@ -284,13 +300,15 @@ export default function MoveToProjectDialog({
       }
 
       // 5. Success feedback
-      const cleanProjectName = selectedProject.project_name?.startsWith(selectedProject.project_number + ' ') 
-        ? selectedProject.project_name.substring(selectedProject.project_number.toString().length + 1)
-        : selectedProject.project_name;
-      
+      const successProjectName = selectedProject.project_name ?? '';
+      const successProjectNumber = selectedProject.project_number?.toString() ?? '';
+      const cleanProjectName = successProjectNumber && successProjectName.startsWith(`${successProjectNumber} `) 
+        ? successProjectName.substring(successProjectNumber.length + 1)
+        : successProjectName;
+
       toast({
         title: currentProjectId ? 'Prosjekt endret' : 'Befaring flyttet til prosjekt',
-        description: `"${befaringTitle}" er nå koblet til prosjekt ${selectedProject.project_number} - ${cleanProjectName}`,
+        description: `"${befaringTitle}" er nå koblet til prosjekt ${successProjectNumber || 'ukjent nummer'} - ${cleanProjectName || 'uten navn'}`,
       });
 
       setIsOpen(false);
@@ -299,12 +317,13 @@ export default function MoveToProjectDialog({
     } catch (error) {
       console.error('=== FLYTT TIL PROSJEKT ERROR ===');
       console.error('Full error:', error);
-      console.error('Error message:', error.message);
-      console.error('Error details:', error);
-      
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error('Error message:', err.message);
+      console.error('Error details:', err);
+
       toast({
         title: 'Feil ved flytting',
-        description: error.message || 'Kunne ikke flytte befaring til prosjekt. Prøv igjen.',
+        description: err.message || 'Kunne ikke flytte befaring til prosjekt. Prøv igjen.',
         variant: 'destructive',
       });
     } finally {

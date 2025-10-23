@@ -200,6 +200,7 @@ export default function UkeV2Page() {
       {/* Fri Befaring Dialog */}
       {showBefaringDialog && (
         <FriBefaringDialog
+          isOpen={showBefaringDialog}
           orgId={profile.org_id}
           userId={profile.user_id}
           onSuccess={handleBefaringSuccess}
@@ -207,4 +208,5 @@ export default function UkeV2Page() {
         />
       )}
     </div>
-
+  );
+}

@@ -273,8 +273,9 @@ export default function FriBefaringMain({ befaringId, orgId, userId }: FriBefari
         .select('id')
         .eq('fri_befaring_id', befaring.id);
 
-      if (punkter && punkter.length > 0) {
-        const punktIds = punkter.map(p => p.id);
+      if (Array.isArray(punkter) && punkter.length > 0) {
+        const punktArray = punkter as unknown as Array<{ id: string }>;
+        const punktIds = punktArray.map(p => p.id);
         
         // Hent alle bilder for disse punktene
         const { data: bilder } = await supabase
@@ -283,16 +284,17 @@ export default function FriBefaringMain({ befaringId, orgId, userId }: FriBefari
           .in('befaring_punkt_id', punktIds)
           .eq('image_source', 'punkt');
 
-        if (bilder && bilder.length > 0) {
-          const filePaths = bilder
+        if (Array.isArray(bilder) && bilder.length > 0) {
+          const bildeArray = bilder as unknown as Array<{ image_url: string | null }>;
+          const filePaths = bildeArray
             .map(b => b.image_url)
-            .filter(url => url)
+            .filter((url): url is string => Boolean(url))
             .map(url => {
               // Extract file path from URL
               const parts = url.split('/storage/v1/object/');
               return parts[1] ? parts[1].split('?')[0] : null;
             })
-            .filter(Boolean);
+            .filter((path): path is string => Boolean(path));
 
           if (filePaths.length > 0) {
             const { error: storageError } = await supabase.storage

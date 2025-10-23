@@ -347,8 +347,9 @@ export default function BefaringList({ orgId, userId }: BefaringListProps) {
           .select('id')
           .eq('fri_befaring_id', befaringToDelete.id);
 
-        if (punkter && punkter.length > 0) {
-          const punktIds = punkter.map(p => p.id);
+        if (Array.isArray(punkter) && punkter.length > 0) {
+          const punktArray = punkter as unknown as Array<{ id: string }>;
+          const punktIds = punktArray.map(p => p.id);
           
           // Hent alle bilder for disse punktene
           const { data: bilder } = await supabase

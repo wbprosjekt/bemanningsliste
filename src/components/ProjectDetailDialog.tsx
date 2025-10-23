@@ -32,7 +32,8 @@ interface ProjectDetails {
   };
   projectManager?: {
     id: number;
-    name: string;
+    firstName: string;
+    lastName: string;
     email: string;
     phoneNumber?: string;
   };
@@ -43,6 +44,10 @@ interface ProjectDetails {
   isClosed: boolean;
   displayName: string;
   description?: string;
+  department?: {
+    name: string;
+    id?: number;
+  };
 }
 
 const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDialogProps) => {
@@ -53,11 +58,16 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
   const loadProjectDetails = useCallback(async () => {
     setLoading(true);
     try {
+      const tripletexId = project.tripletex_project_id;
+      if (!tripletexId) {
+        throw new Error('Prosjektet mangler tilhørende Tripletex-ID.');
+      }
+
       // Load project details from cache instead of API
       const { data: projectData, error: projectError } = await supabase
         .from('ttx_project_cache')
         .select('*')
-        .eq('tripletex_project_id', project.tripletex_project_id)
+        .eq('tripletex_project_id', tripletexId)
         .eq('org_id', orgId)
         .single();
 
@@ -71,29 +81,32 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
       }
 
       // Transform cached data to match ProjectDetails interface
+      const cacheRow = projectData as TtxProjectCache;
       const projectDetails: ProjectDetails = {
-        id: projectData.tripletex_project_id!,
-        name: projectData.project_name || '',
-        number: projectData.project_number?.toString() || '',
+        id: cacheRow.tripletex_project_id!,
+        name: cacheRow.project_name || '',
+        number: cacheRow.project_number?.toString() || '',
         customer: {
           id: 0, // Not available in cache
-          name: projectData.customer_name || 'Ukjent kunde',
-          email: projectData.customer_email,
-          phoneNumber: projectData.customer_phone
+          name: cacheRow.customer_name || 'Ukjent kunde',
+          email: cacheRow.customer_email ?? undefined,
+          phoneNumber: cacheRow.customer_phone ?? undefined
         },
-        projectManager: projectData.project_manager_name ? {
+        projectManager: cacheRow.project_manager_name ? {
           id: 0, // Not available in cache
-          name: projectData.project_manager_name,
-          email: projectData.project_manager_email || '',
-          phoneNumber: projectData.project_manager_phone
+          firstName: cacheRow.project_manager_name.split(' ')[0] || '',
+          lastName: cacheRow.project_manager_name.split(' ').slice(1).join(' ') || '',
+          email: cacheRow.project_manager_email || '',
+          phoneNumber: cacheRow.project_manager_phone ?? undefined
         } : undefined,
-        startDate: projectData.start_date || '',
-        endDate: projectData.end_date,
-        status: projectData.is_active ? 'active' : 'inactive',
-        isActive: projectData.is_active || false,
-        isClosed: projectData.is_closed || false,
-        displayName: projectData.project_name || '',
-        description: projectData.project_description
+        startDate: cacheRow.start_date || '',
+        endDate: cacheRow.end_date ?? undefined,
+        status: cacheRow.is_active ? 'active' : 'inactive',
+        isActive: cacheRow.is_active ?? false,
+        isClosed: cacheRow.is_closed ?? false,
+        displayName: cacheRow.project_name || '',
+        description: cacheRow.project_description ?? undefined,
+        department: undefined
       };
 
       setProjectDetails(projectDetails);
