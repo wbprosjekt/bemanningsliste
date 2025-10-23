@@ -1090,7 +1090,7 @@ Deno.serve(async (req) => {
           console.log('🔍 Sending headers:', headers);
           console.log('🔍 Stored checksum:', storedChecksum);
           
-          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,projectManager,description,startDate,endDate,isActive,isClosed${changesSinceParam}`, 'GET', undefined, orgId, headers);
+          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,projectManager${changesSinceParam}`, 'GET', undefined, orgId, headers);
           
           // Check if we got a 304 Not Modified response
           if (response.status === 304) {
@@ -1100,6 +1100,11 @@ Deno.serve(async (req) => {
           
           if (response.success && response.data?.values) {
             console.log(`Syncing ${response.data.values.length} projects for org ${orgId}`);
+            
+            // Debug: Log the first project to see what fields are actually available
+            if (response.data.values.length > 0) {
+              console.log('🔍 DEBUG: First project from Tripletex:', JSON.stringify(response.data.values[0], null, 2));
+            }
             
             // Store the new ETag checksum from response
             console.log('🔍 Response headers:', Object.keys(response.headers || {}));
@@ -1174,9 +1179,8 @@ Deno.serve(async (req) => {
                 isClosed?: boolean; 
               };
               
-              // Check multiple conditions to determine if project is truly active
+              // Since isActive is undefined, we'll assume projects are active unless explicitly closed
               const isActive = 
-                project.isActive !== false &&           // Not inactive
                 project.isClosed !== true &&            // Not closed
                 (!project.endDate || new Date(project.endDate) >= new Date());  // Not past end date
               
@@ -1186,15 +1190,15 @@ Deno.serve(async (req) => {
                 project_number: project.number,
                 project_name: project.displayName || project.name,
                 customer_name: project.customer?.name,
-                customer_email: project.customer?.email,
-                customer_phone: project.customer?.phoneNumber,
+                customer_email: project.customer?.email || null,
+                customer_phone: project.customer?.phoneNumber || null,
                 project_manager_name: project.projectManager ? 
                   `${project.projectManager.firstName || ''} ${project.projectManager.lastName || ''}`.trim() : null,
-                project_manager_email: project.projectManager?.email,
-                project_manager_phone: project.projectManager?.phoneNumber,
-                project_description: project.description,
-                start_date: project.startDate,
-                end_date: project.endDate,
+                project_manager_email: project.projectManager?.email || null,
+                project_manager_phone: project.projectManager?.phoneNumber || null,
+                project_description: project.description || null,
+                start_date: project.startDate || null,
+                end_date: project.endDate || null,
                 is_active: isActive,
                 is_closed: project.isClosed || false,
                 last_synced: new Date().toISOString()
