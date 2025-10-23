@@ -1090,8 +1090,8 @@ Deno.serve(async (req) => {
           console.log('🔍 Sending headers:', headers);
           console.log('🔍 Stored checksum:', storedChecksum);
           
-          // Test with all possible fields to see what's actually available
-          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,projectManager,description,startDate,endDate,isActive,isClosed${changesSinceParam}`, 'GET', undefined, orgId, headers);
+          // Test with only known valid fields
+          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,projectManager${changesSinceParam}`, 'GET', undefined, orgId, headers);
           
           // Check if we got a 304 Not Modified response
           if (response.status === 304) {
@@ -1112,8 +1112,6 @@ Deno.serve(async (req) => {
               console.log('🔍 DEBUG: Description field:', firstProject.description);
               console.log('🔍 DEBUG: StartDate field:', firstProject.startDate);
               console.log('🔍 DEBUG: EndDate field:', firstProject.endDate);
-              console.log('🔍 DEBUG: IsActive field:', firstProject.isActive);
-              console.log('🔍 DEBUG: IsClosed field:', firstProject.isClosed);
             }
             
             // Store the new ETag checksum from response
