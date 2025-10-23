@@ -26,18 +26,9 @@ import {
 } from 'lucide-react';
 import ImageGallery from '@/components/ImageGallery';
 
-interface Project {
-  id: string;
-  project_name: string | null;
-  project_number: number | null;
-  is_active: boolean | null;
-  created_at: string;
-  updated_at: string;
-  org_id: string;
-  customer_name: string | null;
-  tripletex_project_id: number | null;
-  last_synced: string | null;
-}
+import { Database } from '@/types/supabase';
+
+type Project = Database['public']['Tables']['ttx_project_cache']['Row'];
 
 interface TripletexProjectDetails {
   id: number;
@@ -335,22 +326,48 @@ export default function ProjectDetailPage() {
       if (projectError) throw projectError;
       setProject(projectData);
 
-      // Load Tripletex project details if we have a tripletex_project_id
+      // Load Tripletex project details from cache instead of API
       if (projectData.tripletex_project_id) {
         try {
-          const { data: tripletexData, error: tripletexError } = await supabase.functions.invoke('tripletex-api', {
-            body: {
-              action: 'get_project_details',
-              project_id: projectData.tripletex_project_id,
-              orgId: projectData.org_id
-            }
-          });
+          const { data: cachedData, error: cacheError } = await supabase
+            .from('ttx_project_cache')
+            .select('*')
+            .eq('tripletex_project_id', projectData.tripletex_project_id)
+            .eq('org_id', projectData.org_id)
+            .single();
 
-          if (!tripletexError && tripletexData?.success) {
-            setTripletexDetails(tripletexData.data);
+          if (!cacheError && cachedData) {
+            // Transform cached data to match TripletexProjectDetails interface
+            const tripletexDetails: TripletexProjectDetails = {
+              id: cachedData.tripletex_project_id!,
+              name: cachedData.project_name || '',
+              number: cachedData.project_number?.toString() || '',
+              customer: {
+                id: 0, // Not available in cache
+                name: cachedData.customer_name || 'Ukjent kunde',
+                email: cachedData.customer_email,
+                phoneNumber: cachedData.customer_phone
+              },
+              projectManager: cachedData.project_manager_name ? {
+                id: 0, // Not available in cache
+                firstName: cachedData.project_manager_name.split(' ')[0] || '',
+                lastName: cachedData.project_manager_name.split(' ').slice(1).join(' ') || '',
+                email: cachedData.project_manager_email || '',
+                phoneNumber: cachedData.project_manager_phone
+              } : undefined,
+              startDate: cachedData.start_date || '',
+              endDate: cachedData.end_date,
+              status: cachedData.is_active ? 'active' : 'inactive',
+              isActive: cachedData.is_active || false,
+              isClosed: cachedData.is_closed || false,
+              displayName: cachedData.project_name || '',
+              description: cachedData.project_description
+            };
+
+            setTripletexDetails(tripletexDetails);
           }
         } catch (error) {
-          console.error('Error loading Tripletex details:', error);
+          console.error('Error loading cached Tripletex details:', error);
           // Don't throw - this is not critical
         }
       }

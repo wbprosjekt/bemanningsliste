@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building, User, Phone, Mail, FileText, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { Database } from '@/types/supabase';
+
+type TtxProjectCache = Database['public']['Tables']['ttx_project_cache']['Row'];
 
 interface ProjectDetailDialogProps {
   open: boolean;
@@ -20,42 +23,18 @@ interface ProjectDetailDialogProps {
 interface ProjectDetails {
   id: number;
   name: string;
-  number: number;
-  description?: string;
-  startDate?: string;
-  endDate?: string;
-  customer: {
-    name: string;
-    email?: string;
-    phoneNumber?: string;
-  };
-  projectManager?: {
-    firstName: string;
-    lastName: string;
-    email?: string;
-    phoneNumber?: string;
-  };
-  department?: {
-    name: string;
-  };
-  isClosed: boolean;
-  displayName: string;
-}
-
-interface ProjectDetails {
-  id: number;
-  name: string;
   number: string;
   customer: {
     id: number;
     name: string;
     email?: string;
-    phone?: string;
+    phoneNumber?: string;
   };
-  projectManager: {
+  projectManager?: {
     id: number;
     name: string;
     email: string;
+    phoneNumber?: string;
   };
   startDate: string;
   endDate?: string;
@@ -63,6 +42,7 @@ interface ProjectDetails {
   isActive: boolean;
   isClosed: boolean;
   displayName: string;
+  description?: string;
 }
 
 const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDialogProps) => {
@@ -73,25 +53,50 @@ const ProjectDetailDialog = ({ open, onClose, project, orgId }: ProjectDetailDia
   const loadProjectDetails = useCallback(async () => {
     setLoading(true);
     try {
-      // Call Tripletex API through our edge function using Supabase client
-      const { data, error } = await supabase.functions.invoke('tripletex-api', {
-        body: {
-          action: 'get_project_details',
-          project_id: project.tripletex_project_id,
-          orgId: orgId
-        }
-      });
+      // Load project details from cache instead of API
+      const { data: projectData, error: projectError } = await supabase
+        .from('ttx_project_cache')
+        .select('*')
+        .eq('tripletex_project_id', project.tripletex_project_id)
+        .eq('org_id', orgId)
+        .single();
 
-      if (error) {
-        console.error('Supabase function error:', error);
-        throw new Error(error.message || 'Failed to load project details');
+      if (projectError) {
+        console.error('Error loading cached project data:', projectError);
+        throw new Error(projectError.message || 'Failed to load project details');
       }
 
-      if (!data?.success) {
-        throw new Error(data?.error || 'Failed to load project details');
+      if (!projectData) {
+        throw new Error('Project not found in cache');
       }
 
-      setProjectDetails(data.data);
+      // Transform cached data to match ProjectDetails interface
+      const projectDetails: ProjectDetails = {
+        id: projectData.tripletex_project_id!,
+        name: projectData.project_name || '',
+        number: projectData.project_number?.toString() || '',
+        customer: {
+          id: 0, // Not available in cache
+          name: projectData.customer_name || 'Ukjent kunde',
+          email: projectData.customer_email,
+          phoneNumber: projectData.customer_phone
+        },
+        projectManager: projectData.project_manager_name ? {
+          id: 0, // Not available in cache
+          name: projectData.project_manager_name,
+          email: projectData.project_manager_email || '',
+          phoneNumber: projectData.project_manager_phone
+        } : undefined,
+        startDate: projectData.start_date || '',
+        endDate: projectData.end_date,
+        status: projectData.is_active ? 'active' : 'inactive',
+        isActive: projectData.is_active || false,
+        isClosed: projectData.is_closed || false,
+        displayName: projectData.project_name || '',
+        description: projectData.project_description
+      };
+
+      setProjectDetails(projectDetails);
     } catch (error) {
       console.error('Error loading project details:', error);
       toast({

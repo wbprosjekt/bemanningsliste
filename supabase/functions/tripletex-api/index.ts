@@ -1090,7 +1090,7 @@ Deno.serve(async (req) => {
           console.log('🔍 Sending headers:', headers);
           console.log('🔍 Stored checksum:', storedChecksum);
           
-          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,department,projectManager${changesSinceParam}`, 'GET', undefined, orgId, headers);
+          const response = await callTripletexAPI(`/project?count=100&fields=id,number,name,displayName,customer,department,projectManager,description,startDate,endDate,isActive,isClosed${changesSinceParam}`, 'GET', undefined, orgId, headers);
           
           // Check if we got a 304 Not Modified response
           if (response.status === 304) {
@@ -1151,7 +1151,28 @@ Deno.serve(async (req) => {
             
             // Cache only changed projects in database
             const projects = projectsToProcess.map((proj: unknown) => {
-              const project = proj as { id: number; number?: string; displayName?: string; name?: string; customer?: { name?: string }; isActive?: boolean; isClosed?: boolean; endDate?: string };
+              const project = proj as { 
+                id: number; 
+                number?: string; 
+                displayName?: string; 
+                name?: string; 
+                customer?: { 
+                  name?: string; 
+                  email?: string; 
+                  phoneNumber?: string; 
+                }; 
+                projectManager?: {
+                  firstName?: string;
+                  lastName?: string;
+                  email?: string;
+                  phoneNumber?: string;
+                };
+                description?: string;
+                startDate?: string;
+                endDate?: string;
+                isActive?: boolean; 
+                isClosed?: boolean; 
+              };
               
               // Check multiple conditions to determine if project is truly active
               const isActive = 
@@ -1165,7 +1186,17 @@ Deno.serve(async (req) => {
                 project_number: project.number,
                 project_name: project.displayName || project.name,
                 customer_name: project.customer?.name,
+                customer_email: project.customer?.email,
+                customer_phone: project.customer?.phoneNumber,
+                project_manager_name: project.projectManager ? 
+                  `${project.projectManager.firstName || ''} ${project.projectManager.lastName || ''}`.trim() : null,
+                project_manager_email: project.projectManager?.email,
+                project_manager_phone: project.projectManager?.phoneNumber,
+                project_description: project.description,
+                start_date: project.startDate,
+                end_date: project.endDate,
                 is_active: isActive,
+                is_closed: project.isClosed || false,
                 last_synced: new Date().toISOString()
               };
             });
