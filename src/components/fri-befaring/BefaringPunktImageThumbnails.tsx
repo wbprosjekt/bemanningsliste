@@ -60,6 +60,26 @@ export default function BefaringPunktImageThumbnails({
   const [selectedImage, setSelectedImage] = useState<BefaringPunktImage | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
+  
+  // Debug logging when component mounts/updates
+  useEffect(() => {
+    console.log('📸 BefaringPunktImageThumbnails mounted/updated:', {
+      befaringPunktId,
+      imagesCount: images.length,
+      showUploadButton,
+      canUpload,
+      showUploadDialog
+    });
+  }, [befaringPunktId, images.length, showUploadButton, canUpload, showUploadDialog]);
+  
+  // Prevent dialog from closing unexpectedly
+  const handleDialogOpenChange = useCallback((open: boolean) => {
+    console.log('🔄 handleDialogOpenChange called:', open, 'current state:', showUploadDialog);
+    if (open !== showUploadDialog) {
+      console.log('🔄 State mismatch! Setting to:', open);
+      setShowUploadDialog(open);
+    }
+  }, [showUploadDialog]);
   const [showFullGallery, setShowFullGallery] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedImageType, setSelectedImageType] = useState<string>('standard');
@@ -335,27 +355,199 @@ export default function BefaringPunktImageThumbnails({
     );
   }
 
+  const uploadDialog = showUploadDialog ? (
+    <Dialog open={showUploadDialog} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="sm:max-w-md"
+        style={{ zIndex: 10000 }}
+        onPointerDownOutside={(e) => {
+          console.log('🚫 Clicked outside dialog');
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>Last opp bilde</DialogTitle>
+          <DialogDescription>
+            Velg et bilde å laste opp til dette befaringspunktet
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div
+            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+              dragActive 
+                ? 'border-blue-500 bg-blue-50' 
+                : 'border-gray-300 hover:border-gray-400'
+            }`}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+              const file = e.dataTransfer.files[0];
+              if (file) {
+                handleFileSelect(file);
+              }
+            }}
+          >
+            {selectedFile ? (
+              <div className="space-y-2">
+                <div className="aspect-video rounded-lg overflow-hidden bg-gray-100">
+                  <img
+                    src={URL.createObjectURL(selectedFile)}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <p className="text-sm text-gray-600">{selectedFile.name}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelectedFile(null)}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Fjern
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                <p className="text-sm">Dra og slipp bilde her</p>
+                <p className="text-xs text-gray-500">eller</p>
+                <div className="flex space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={openFilePicker}
+                    className="flex-1"
+                  >
+                    <ImageIcon className="h-4 w-4 mr-1" />
+                    Velg fil
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={openCamera}
+                    className="flex-1"
+                  >
+                    <Camera className="h-4 w-4 mr-1" />
+                    Ta bilde
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                handleFileSelect(file);
+              }
+              (e.target as HTMLInputElement).value = '';
+            }}
+            className="hidden"
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                handleFileSelect(file);
+              }
+              (e.target as HTMLInputElement).value = '';
+            }}
+            className="hidden"
+          />
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Bildetype</label>
+            <Select value={selectedImageType} onValueChange={setSelectedImageType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {IMAGE_TYPES.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {uploading && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Laster opp...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowUploadDialog(false)}>
+            Avbryt
+          </Button>
+          <Button 
+            onClick={handleUpload} 
+            disabled={!selectedFile || uploading}
+          >
+            {uploading ? 'Laster opp...' : 'Last opp'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  ) : null;
+
   if (images.length === 0) {
     if (!showUploadButton || !canUpload) {
       console.log('⚠️ Upload button hidden:', { showUploadButton, canUpload, befaringPunktId });
-      return null;
+      return uploadDialog;
     }
     
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-10 px-3 text-sm bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-        onClick={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          console.log('🖼️ Opening upload dialog, befaringPunktId:', befaringPunktId, 'showUploadDialog state:', showUploadDialog);
-          setShowUploadDialog(true);
-        }}
-      >
-        <Plus className="h-4 w-4 mr-2" />
-        Legg til bilde
-      </Button>
+      <>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-10 px-3 text-sm bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            console.log('🖼️ Button clicked, befaringPunktId:', befaringPunktId, 'Current state:', showUploadDialog);
+            console.log('🖼️ Setting state to true...');
+            setShowUploadDialog(true);
+          }}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Legg til bilde
+        </Button>
+        {uploadDialog}
+      </>
     );
   }
 
@@ -520,175 +712,7 @@ export default function BefaringPunktImageThumbnails({
         </DialogContent>
       </Dialog>
 
-      {/* Upload Dialog */}
-      <Dialog open={showUploadDialog} onOpenChange={(open) => {
-        console.log('🔄 Upload dialog state changed:', open);
-        setShowUploadDialog(open);
-      }}>
-        <DialogContent className="sm:max-w-md z-50">
-          <DialogHeader>
-            <DialogTitle>Last opp bilde</DialogTitle>
-            <DialogDescription>
-              Velg et bilde å laste opp til dette befaringspunktet
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            {/* Drag and Drop Area */}
-            <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                dragActive 
-                  ? 'border-blue-500 bg-blue-50' 
-                  : 'border-gray-300 hover:border-gray-400'
-              }`}
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                const file = e.dataTransfer.files[0];
-                if (file) {
-                  handleFileSelect(file);
-                }
-              }}
-            >
-              {selectedFile ? (
-                <div className="space-y-2">
-                  <div className="aspect-video rounded-lg overflow-hidden bg-gray-100">
-                    <img
-                      src={URL.createObjectURL(selectedFile)}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <p className="text-sm text-gray-600">{selectedFile.name}</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setSelectedFile(null)}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Fjern
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Upload className="h-8 w-8 mx-auto text-gray-400" />
-                  <p className="text-sm">Dra og slipp bilde her</p>
-                  <p className="text-xs text-gray-500">eller</p>
-                  <div className="flex space-x-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={openFilePicker}
-                      className="flex-1"
-                    >
-                      <ImageIcon className="h-4 w-4 mr-1" />
-                      Velg fil
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={openCamera}
-                      className="flex-1"
-                    >
-                      <Camera className="h-4 w-4 mr-1" />
-                      Ta bilde
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Hidden file inputs */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  handleFileSelect(file);
-                }
-                // Reset input value to allow selecting the same file again
-                (e.target as HTMLInputElement).value = '';
-              }}
-              className="hidden"
-            />
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  handleFileSelect(file);
-                }
-                // Reset input value to allow selecting the same file again
-                (e.target as HTMLInputElement).value = '';
-              }}
-              className="hidden"
-            />
-
-            {/* Image type selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Bildetype</label>
-              <Select value={selectedImageType} onValueChange={setSelectedImageType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {IMAGE_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Upload Progress */}
-            {uploading && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Laster opp...</span>
-                  <span>{uploadProgress}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUploadDialog(false)}>
-              Avbryt
-            </Button>
-            <Button 
-              onClick={handleUpload} 
-              disabled={!selectedFile || uploading}
-            >
-              {uploading ? 'Laster opp...' : 'Last opp'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {uploadDialog}
     </>
   );
 }
