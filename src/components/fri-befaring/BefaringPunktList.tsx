@@ -334,17 +334,18 @@ export default function BefaringPunktList({ befaringId, onStatsUpdate, canEdit, 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center space-x-2">
-            <CheckSquare className="h-5 w-5" />
-            <span>Befaringspunkter ({punkter.length})</span>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center space-x-2 min-w-0">
+            <CheckSquare className="h-5 w-5 flex-shrink-0" />
+            <span className="truncate">Befaringspunkter ({punkter.length})</span>
           </CardTitle>
           {canEdit && (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Legg til punkt
+                <Button size="sm" className="flex-shrink-0">
+                  <Plus className="h-4 w-4 mr-2 flex-shrink-0" />
+                  <span className="hidden sm:inline">Legg til punkt</span>
+                  <span className="sm:hidden">Legg til</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
