@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Rapport Wireframe - FieldNote Befaring</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; padding: 20px; }
+    .wireframe-page { 
+      width: 210mm; 
+      height: 297mm; 
+      background: white; 
+      margin: 0 auto 20px; 
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      padding: 20mm;
+      position: relative;
+      page-break-after: always;
+    }
+    .cover { text-align: center; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+    .logo { font-size: 48px; font-weight: bold; color: #0066CC; margin-bottom: 60px; }
+    .title { font-size: 64px; font-weight: bold; color: #333; margin-bottom: 80px; }
+    .metadata { text-align: left; font-size: 18px; color: #666; line-height: 2; max-width: 400px; margin: 0 auto; }
+    .metadata div { margin-bottom: 20px; }
+    .metadata strong { color: #333; }
+    .separator { height: 1px; background: #ddd; margin: 40px 0; }
+    
+    h1 { font-size: 32px; color: #333; margin-bottom: 30px; border-bottom: 3px solid #0066CC; padding-bottom: 10px; }
+    h2 { font-size: 24px; color: #666; margin: 30px 0 20px 0; }
+    
+    .plantegning-container { border: 2px solid #ddd; padding: 20px; margin: 20px 0; background: #fafafa; }
+    .plantegning-placeholder { 
+      background: #f0f0f0; 
+      height: 200px; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      color: #999;
+      font-style: italic;
+      border: 2px dashed #ccc;
+    }
+    
+    .oppgave-card {
+      background: white;
+      border-left: 4px solid #0066CC;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .oppgave-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+    .oppgave-title { font-size: 18px; font-weight: bold; color: #333; }
+    .status-badge { padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .status-aapen { background: #FFE5B4; color: #8B6914; }
+    .status-lukket { background: #D4EDDA; color: #155724; }
+    .oppgave-meta { color: #666; font-size: 14px; margin: 10px 0; }
+    .oppgave-description { color: #333; margin: 15px 0; line-height: 1.6; }
+    
+    .image-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0; }
+    .image-placeholder {
+      background: #f0f0f0;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #ddd;
+      color: #999;
+      font-size: 12px;
+    }
+    
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 30px 0; }
+    .summary-card {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .summary-number { font-size: 36px; font-weight: bold; color: #0066CC; }
+    .summary-label { font-size: 14px; color: #666; margin-top: 10px; }
+    
+    .signatur-section {
+      border: 2px solid #ddd;
+      padding: 30px;
+      margin: 40px 0;
+    }
+    .signatur-line {
+      border-top: 2px solid #333;
+      margin: 80px 0 20px 0;
+      padding-top: 10px;
+    }
+    
+    .footer {
+      position: absolute;
+      bottom: 20mm;
+      width: calc(100% - 40mm);
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+      border-top: 1px solid #ddd;
+      padding-top: 10px;
+    }
+    
+    .page-number { position: absolute; bottom: 10mm; right: 20mm; font-size: 12px; color: #999; }
+    @media print {
+      .wireframe-page { box-shadow: none; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="wireframe-page cover">
+  <div class="logo">FieldNote</div>
+  <div class="title">BEFARINGSRAPPORT</div>
+  <div class="metadata">
+    <div><strong>Type:</strong> Forbefaring</div>
+    <div><strong>Dato:</strong> 26. oktober 2025</div>
+    <div><strong>Prosjekt:</strong> Råholt skole (#11)</div>
+  </div>
+  
+  <div class="separator"></div>
+  
+  <div class="metadata">
+    <div><strong>Utført av:</strong></div>
+    <div style="border-top: 2px solid #333; margin-top: 40px; padding-top: 10px;">
+      Kristian Walberg<br>
+      prosjektleder@wbprosjekt.no
+    </div>
+  </div>
+  
+  <div class="separator"></div>
+  
+  <div class="metadata">
+    <div><strong>Lokasjon:</strong></div>
+    Råholt 1, 2010 Ski
+  </div>
+  
+  <div class="footer">Generert av FieldNote - www.fieldnote.no</div>
+</div>
+
+<!-- SUMMARY PAGE -->
+<div class="wireframe-page">
+  <h1>EXECUTIVE SUMMARY</h1>
+  
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-number">6</div>
+      <div class="summary-label">Total oppgaver</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-number">2</div>
+      <div class="summary-label">Åpne</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-number">3</div>
+      <div class="summary-label">Lukket</div>
+    </div>
+  </div>
+  
+  <div class="oppgave-card" style="background: #FFF3CD; border-left-color: #FFC107;">
+    <div class="oppgave-title">⚠️ Kritisk funn</div>
+    <div class="oppgave-description">
+      Leakage i rørlegger i 2. etasje. Krever umiddelbar oppfølging.
+    </div>
+  </div>
+  
+  <h2 style="margin-top: 40px;">Kostnadsoversikt</h2>
+  <div class="metadata" style="margin-top: 20px;">
+    <div><strong>Estimert kostnad:</strong> 45.000 kr</div>
+    <div><strong>Faktisk kostnad:</strong> 38.500 kr</div>
+    <div><strong>Avvik:</strong> -6.500 kr (14.4% under estimat)</div>
+  </div>
+  
+  <div class="page-number">Side 1</div>
+</div>
+
+<!-- PLANTEGNING PAGE -->
+<div class="wireframe-page">
+  <h1>PLANTEGNING - 1. ETASJE</h1>
+  
+  <div class="plantegning-container">
+    <div class="plantegning-placeholder">
+      [Plantegning PDF bilde] (245 x 180 px)
+      <br>
+      ● Oppgave #1 (x: 245, y: 180)
+      <br>
+      ● Oppgave #2 (x: 380, y: 220)
+    </div>
+  </div>
+  
+  <div style="page-break-after: always;"></div>
+  
+  <h2>OPPGAVER PÅ DENNE PLANLEGGINGEN</h2>
+  
+  <div class="oppgave-card">
+    <div class="oppgave-header">
+      <div class="oppgave-title">#1 - MALERARBEID</div>
+      <span class="status-badge status-aapen">Åpen</span>
+    </div>
+    <div class="oppgave-meta">
+      Koordinater: (245, 180) | Fag: Maler | Prioritet: Høy
+    </div>
+    <div class="oppgave-description">
+      Stue og gang må males. Fargekode: RAL 9010. Skulle være ferdig innen 1. november.
+    </div>
+    <div class="image-grid">
+      <div class="image-placeholder">Før.jpg</div>
+      <div class="image-placeholder">Etter.jpg</div>
+    </div>
+    <div class="oppgave-meta">
+      Estimert: 15.000 kr | Opprettet: 20.10.2025
+    </div>
+  </div>
+  
+  <div class="oppgave-card">
+    <div class="oppgave-header">
+      <div class="oppgave-title">#2 - RØRLEGGER</div>
+      <span class="status-badge status-lukket">Lukket</span>
+    </div>
+    <div class="oppgave-meta">
+      Koordinater: (380, 220) | Fag: Rørlegger | Prioritet: Middels
+    </div>
+    <div class="oppgave-description">
+      Reparert lekkasje i bad. Testet vann og trykk. Alt fungerer normalt.
+    </div>
+    <div class="image-grid">
+      <div class="image-placeholder">Leakage.jpg</div>
+      <div class="image-placeholder">Reparert.jpg</div>
+    </div>
+    <div class="oppgave-meta">
+      Estimert: 8.500 kr | Faktisk: 7.200 kr | Fullført: 22.10.2025
+    </div>
+  </div>
+  
+  <div class="page-number">Side 2-3</div>
+</div>
+
+<!-- SIGNATUR PAGE -->
+<div class="wireframe-page">
+  <h1>SIGNATUR OG DOKUMENTASJON</h1>
+  
+  <div class="signatur-section">
+    <h2>Befaring godkjent av:</h2>
+    <div style="margin-top: 40px;">
+      <div style="margin-bottom: 60px;">
+        <div style="margin-bottom: 10px; font-weight: bold;">Klient</div>
+        <div class="signatur-line">
+          <div style="text-align: right; color: #666;">26. oktober 2025</div>
+        </div>
+      </div>
+      
+      <div style="margin-bottom: 60px;">
+        <div style="margin-bottom: 10px; font-weight: bold;">Byggherre</div>
+        <div class="signatur-line">
+          <div style="text-align: right; color: #666;">26. oktober 2025</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="signatur-section" style="margin-top: 60px;">
+    <h2>Teknisk godkjenning:</h2>
+    <div style="margin-top: 40px;">
+      <div style="margin-bottom: 10px; font-weight: bold;">Prosjektleder</div>
+      <div class="signatur-line">
+        <div style="text-align: right; color: #666;">26. oktober 2025</div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="footer" style="margin-top: 100px;">
+    Generert av FieldNote<br>
+    www.fieldnote.no<br>
+    Rapport-ID: BEF-2025-10-26-001
+  </div>
+  
+  <div class="page-number">Side 4</div>
+</div>
+
+</body>
+</html>
+
