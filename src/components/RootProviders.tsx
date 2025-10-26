@@ -10,6 +10,8 @@ import { AuthProvider } from "@/hooks/useAuth";
 import NavigationWrapper from "@/components/NavigationWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { CookieConsentProvider } from "@/components/providers/CookieConsentProvider";
+import { CookieSettingsButton } from "@/components/CookieSettingsButton";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 
 interface RootProvidersProps {
@@ -52,13 +54,16 @@ export default function RootProviders({ children }: RootProvidersProps) {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
-            <NavigationWrapper />
-            <OfflineBanner />
-            <CookieConsentBanner />
-            <ShadcnToaster />
-            <Sonner />
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {children as any}
+            <CookieConsentProvider>
+              <NavigationWrapper />
+              <OfflineBanner />
+              <CookieConsentBanner />
+              <CookieSettingsButton />
+              <ShadcnToaster />
+              <Sonner />
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {children as any}
+            </CookieConsentProvider>
           </TooltipProvider>
         </AuthProvider>
         {/* React Query DevTools - only in development */}

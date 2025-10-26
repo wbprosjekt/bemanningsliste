@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { useCookieConsent } from '@/components/providers/CookieConsentProvider';
 
 export interface SearchResult {
   id: string;
@@ -39,6 +40,8 @@ const MAX_RECENT_SEARCHES = 10;
 
 export function useGlobalSearch() {
   const { user } = useAuth();
+  const { hasFunctionalConsent } = useCookieConsent();
+  const functionalEnabled = hasFunctionalConsent();
   const [cachedData, setCachedData] = useState<CachedData>({
     projects: [],
     befaringer: [],
@@ -53,8 +56,10 @@ export function useGlobalSearch() {
     if (user) {
       loadCachedData();
       loadRecentSearches();
+    } else {
+      setRecentSearches([]);
     }
-  }, [user]);
+  }, [user, functionalEnabled]);
 
   const loadCachedData = async () => {
     if (!user) return;
@@ -117,6 +122,11 @@ export function useGlobalSearch() {
 
   const loadRecentSearches = () => {
     try {
+      if (!functionalEnabled) {
+        setRecentSearches([]);
+        return;
+      }
+
       const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
       if (stored) {
         setRecentSearches(JSON.parse(stored));
@@ -127,7 +137,7 @@ export function useGlobalSearch() {
   };
 
   const saveRecentSearch = useCallback((query: string) => {
-    if (!query.trim()) return;
+    if (!query.trim() || !functionalEnabled) return;
 
     const trimmedQuery = query.trim().toLowerCase();
     const newRecentSearches = [
@@ -142,7 +152,7 @@ export function useGlobalSearch() {
     } catch (error) {
       console.error('Error saving recent search:', error);
     }
-  }, [recentSearches]);
+  }, [recentSearches, functionalEnabled]);
 
   const search = useCallback((query: string): SearchResults => {
     if (!query.trim() || loading) {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { codeToWeather } from "@/lib/weather";
 import { useWeatherForecast, useCurrentTemperature, useHistoricalWeather } from "@/hooks/useWeather";
+import { useCookieConsent } from "@/components/providers/CookieConsentProvider";
 
 interface WeatherDay {
   date: string;
@@ -33,6 +34,8 @@ export default function WeatherDayPills({
   weekDates,
 }: WeatherDayPillsProps) {
   const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null);
+  const { hasFunctionalConsent } = useCookieConsent();
+  const functionalEnabled = hasFunctionalConsent();
 
   // Set Slattum coordinates directly (no geolocation popup)
   useEffect(() => {
@@ -58,21 +61,24 @@ export default function WeatherDayPills({
 
   // Save today's weather to history when forecast data is available
   useEffect(() => {
-    if (forecastData?.days && forecastData.days.length > 0) {
+    if (forecastData?.days && forecastData.days.length > 0 && functionalEnabled) {
       saveDailyWeatherToHistory(forecastData.days[0]);
     }
-  }, [forecastData]);
+  }, [forecastData, functionalEnabled]);
 
   // Clean up old historical data on mount
   useEffect(() => {
-    cleanupOldWeatherHistory();
-  }, []);
+    if (functionalEnabled) {
+      cleanupOldWeatherHistory();
+    }
+  }, [functionalEnabled]);
 
   // Determine overall loading state
   const isLoading = forecastLoading || currentLoading || historicalLoading || !coordinates;
 
   // Save today's weather to history
   function saveDailyWeatherToHistory(weatherDay: WeatherDay) {
+    if (!functionalEnabled) return;
     try {
       const historyKey = 'weather-history';
       const history: WeatherHistory = JSON.parse(localStorage.getItem(historyKey) || '{}');
@@ -95,6 +101,7 @@ export default function WeatherDayPills({
 
   // Get historical weather for a date
   function getHistoricalWeather(date: Date): HistoricalWeather | null {
+    if (!functionalEnabled) return null;
     try {
       const historyKey = 'weather-history';
       const history: WeatherHistory = JSON.parse(localStorage.getItem(historyKey) || '{}');
@@ -108,6 +115,7 @@ export default function WeatherDayPills({
 
   // Clean up old historical data (older than 7 days)
   function cleanupOldWeatherHistory() {
+    if (!functionalEnabled) return;
     try {
       const historyKey = 'weather-history';
       const history: WeatherHistory = JSON.parse(localStorage.getItem(historyKey) || '{}');
@@ -336,4 +344,3 @@ export default function WeatherDayPills({
     </div>
   );
 }
-

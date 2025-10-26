@@ -234,6 +234,9 @@ export function checkClientRateLimit(
   endpoint: string,
   config: RateLimitConfig = defaultConfigs.api
 ): boolean {
+  if (!canUseFunctionalStorage()) {
+    return true;
+  }
   const key = `client:${endpoint}`;
   const now = Date.now();
   
@@ -255,6 +258,9 @@ export function updateClientRateLimit(
   endpoint: string,
   config: RateLimitConfig = defaultConfigs.api
 ): void {
+  if (!canUseFunctionalStorage()) {
+    return;
+  }
   const key = `client:${endpoint}`;
   const now = Date.now();
   
@@ -281,6 +287,9 @@ export function getRateLimitStatus(endpoint: string): {
   remaining: number;
   resetTime: number;
 } | null {
+  if (!canUseFunctionalStorage()) {
+    return null;
+  }
   const key = `client:${endpoint}`;
   const stored = localStorage.getItem(key);
   
@@ -301,4 +310,6 @@ export function getRateLimitStatus(endpoint: string): {
 
 // Export default configurations
 export { defaultConfigs };
-
+function canUseFunctionalStorage() {
+  return typeof window !== 'undefined' && window.__cookieConsent?.functional;
+}

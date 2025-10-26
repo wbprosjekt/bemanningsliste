@@ -4,9 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Cookie, Shield, Settings, CheckCircle, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useCookieConsent } from "@/components/providers/CookieConsentProvider";
+
+const COOKIE_POLICY_LAST_UPDATED = "14. oktober 2025";
 
 export default function CookiePolicyPage() {
   const router = useRouter();
+  const { openSettings } = useCookieConsent();
 
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
@@ -25,7 +29,7 @@ export default function CookiePolicyPage() {
             Cookie Policy
           </h1>
           <p className="text-muted-foreground">
-            Sist oppdatert: {new Date().toLocaleDateString('nb-NO', { year: 'numeric', month: 'long', day: 'numeric' })}
+            Sist oppdatert: {COOKIE_POLICY_LAST_UPDATED}
           </p>
         </div>
       </div>
@@ -250,12 +254,10 @@ export default function CookiePolicyPage() {
               Du kan administrere dine cookie-preferanser via cookie-banneret som vises ved første besøk, 
               eller ved å klikke på "Cookie Innstillinger" i bunnen av siden.
             </p>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
-                // This will be implemented in CookieConsentBanner
-                localStorage.removeItem('cookie-consent');
-                window.location.reload();
+                openSettings();
               }}
             >
               Åpne Cookie Innstillinger
@@ -347,4 +349,3 @@ export default function CookiePolicyPage() {
     </div>
   );
 }
-

@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import pdfjsLib from '@/lib/pdfjs-config';
 import { supabase } from '@/integrations/supabase/client';
+import { useCookieConsent } from '@/components/providers/CookieConsentProvider';
 
 interface Oppgave {
   id: string;
@@ -91,6 +92,8 @@ export default function PlantegningViewer({
   const [rotation, setRotation] = useState(0); // Rotation in degrees (0, 90, 180, 270)
   const [showRotationTip, setShowRotationTip] = useState(false); // Show tip for rotation
   const { toast } = useToast();
+  const { hasFunctionalConsent } = useCookieConsent();
+  const functionalEnabled = hasFunctionalConsent();
   
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -465,6 +468,11 @@ export default function PlantegningViewer({
   
   // Show rotation tip on first open (only if 0 oppgaver)
   useEffect(() => {
+    if (!functionalEnabled) {
+      setShowRotationTip(false);
+      return;
+    }
+
     if (currentOppgaver.length === 0 && !showRotationTip) {
       // Check if user has dismissed this tip before
       const tipDismissed = localStorage.getItem('rotation-tip-dismissed');
@@ -472,7 +480,7 @@ export default function PlantegningViewer({
         setShowRotationTip(true);
       }
     }
-  }, [currentOppgaver.length]); // Removed showRotationTip from dependencies
+  }, [currentOppgaver.length, showRotationTip, functionalEnabled]);
 
   const loadAndRenderPDF = async () => {
     // Prevent multiple simultaneous renders
@@ -1198,16 +1206,18 @@ export default function PlantegningViewer({
                       ⚠️ Viktig: Rotasjon kan kun endres når plantegningen har 0 oppgaver.
                     </p>
                     <div className="flex space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          localStorage.setItem('rotation-tip-dismissed', 'true');
-                          setShowRotationTip(false);
-                        }}
-                      >
-                        Ikke vis igjen
-                      </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (functionalEnabled) {
+                                localStorage.setItem('rotation-tip-dismissed', 'true');
+                              }
+                              setShowRotationTip(false);
+                            }}
+                          >
+                            Ikke vis igjen
+                          </Button>
                       <Button
                         size="sm"
                         onClick={() => setShowRotationTip(false)}
