@@ -336,7 +336,10 @@ export default function BefaringPunktImageThumbnails({
   }
 
   if (images.length === 0) {
-    if (!showUploadButton) return null;
+    if (!showUploadButton || !canUpload) {
+      console.log('⚠️ Upload button hidden:', { showUploadButton, canUpload, befaringPunktId });
+      return null;
+    }
     
     return (
       <Button
@@ -345,7 +348,8 @@ export default function BefaringPunktImageThumbnails({
         className="h-10 px-3 text-sm bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
         onClick={(e) => {
           e.stopPropagation();
-          console.log('🖼️ Opening upload dialog, befaringPunktId:', befaringPunktId);
+          e.preventDefault();
+          console.log('🖼️ Opening upload dialog, befaringPunktId:', befaringPunktId, 'showUploadDialog state:', showUploadDialog);
           setShowUploadDialog(true);
         }}
       >
@@ -517,7 +521,10 @@ export default function BefaringPunktImageThumbnails({
       </Dialog>
 
       {/* Upload Dialog */}
-      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+      <Dialog open={showUploadDialog} onOpenChange={(open) => {
+        console.log('🔄 Upload dialog state changed:', open);
+        setShowUploadDialog(open);
+      }}>
         <DialogContent className="sm:max-w-md z-50">
           <DialogHeader>
             <DialogTitle>Last opp bilde</DialogTitle>
