@@ -65,7 +65,9 @@ function isDoNotTrackEnabled() {
   if (typeof window === "undefined") {
     return false;
   }
-  const dnt = (window.doNotTrack || navigator.doNotTrack || (navigator as unknown as { msDoNotTrack?: string })?.msDoNotTrack) ?? "0";
+  const dnt = ((window as unknown as { doNotTrack?: string }).doNotTrack || 
+               (navigator as unknown as { doNotTrack?: string })?.doNotTrack || 
+               (navigator as unknown as { msDoNotTrack?: string })?.msDoNotTrack) ?? "0";
   return dnt === "1" || dnt === "yes";
 }
 
