@@ -248,3 +248,4 @@ ADD COLUMN befaring_punkt_id uuid REFERENCES befaring_punkter(id);
 **Neste steg:** Start med STEG 1 - Grunnleggende struktur
 
 
+

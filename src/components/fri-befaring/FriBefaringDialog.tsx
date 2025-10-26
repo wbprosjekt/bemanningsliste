@@ -115,7 +115,7 @@ export default function FriBefaringDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Ny befaring</DialogTitle>
           <DialogDescription>
@@ -123,7 +123,7 @@ export default function FriBefaringDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-6 pb-4">
           {/* Befaring Type Selection */}
           <div>
             <h3 className="text-lg font-semibold mb-4">Velg type befaring:</h3>
