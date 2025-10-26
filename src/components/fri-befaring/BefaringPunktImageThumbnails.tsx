@@ -345,6 +345,7 @@ export default function BefaringPunktImageThumbnails({
         className="h-10 px-3 text-sm bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
         onClick={(e) => {
           e.stopPropagation();
+          console.log('🖼️ Opening upload dialog, befaringPunktId:', befaringPunktId);
           setShowUploadDialog(true);
         }}
       >
@@ -408,6 +409,7 @@ export default function BefaringPunktImageThumbnails({
             className="h-10 px-3 text-sm text-gray-600 hover:text-gray-700 hover:bg-gray-50"
             onClick={(e) => {
               e.stopPropagation();
+              console.log('🖼️ Opening upload dialog (existing images), befaringPunktId:', befaringPunktId);
               setShowUploadDialog(true);
             }}
           >
@@ -516,7 +518,7 @@ export default function BefaringPunktImageThumbnails({
 
       {/* Upload Dialog */}
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md z-50">
           <DialogHeader>
             <DialogTitle>Last opp bilde</DialogTitle>
             <DialogDescription>
