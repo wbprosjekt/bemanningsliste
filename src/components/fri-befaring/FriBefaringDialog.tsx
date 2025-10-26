@@ -115,15 +115,15 @@ export default function FriBefaringDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-2xl font-bold">Ny befaring</DialogTitle>
           <DialogDescription>
             Velg type befaring og prosjekt-tilknytning
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 pb-4">
+        <div className="flex-1 overflow-y-auto space-y-6 px-1">
           {/* Befaring Type Selection */}
           <div>
             <h3 className="text-lg font-semibold mb-4">Velg type befaring:</h3>
@@ -265,7 +265,7 @@ export default function FriBefaringDialog({
           )}
         </div>
 
-        <DialogFooter className="flex justify-between">
+        <DialogFooter className="flex justify-between flex-shrink-0 pt-4 border-t mt-auto">
           <Button variant="outline" onClick={handleClose}>
             Avbryt
           </Button>
