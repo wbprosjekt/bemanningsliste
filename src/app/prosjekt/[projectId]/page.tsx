@@ -746,18 +746,18 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         
-        <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm">
-            <Star className="h-4 w-4 mr-2" />
-            Favoritt
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" className="flex-1 min-w-0">
+            <Star className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span className="truncate">Favoritt</span>
           </Button>
-          <Button variant="outline" size="sm">
-            <Settings className="h-4 w-4 mr-2" />
-            Innstillinger
+          <Button variant="outline" size="sm" className="flex-1 min-w-0">
+            <Settings className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span className="truncate">Innstillinger</span>
           </Button>
-          <Button size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Ny befaring
+          <Button size="sm" className="flex-1 min-w-0">
+            <Plus className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span className="truncate">Ny befaring</span>
           </Button>
         </div>
       </div>
