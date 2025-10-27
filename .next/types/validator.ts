@@ -290,6 +290,24 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/refusjon/admin/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/refusjon/admin">> = Specific
+  const handler = {} as typeof import("../../src/app/refusjon/admin/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/refusjon/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/refusjon">> = Specific
+  const handler = {} as typeof import("../../src/app/refusjon/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/terms/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/terms">> = Specific
@@ -321,6 +339,51 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends AppPageConfig<"/uke/[year]/[week]">> = Specific
   const handler = {} as typeof import("../../src/app/uke/[year]/[week]/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/admin/refusjon/csv/analyser/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/refusjon/csv/analyser">> = Specific
+  const handler = {} as typeof import("../../src/app/api/admin/refusjon/csv/analyser/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/admin/refusjon/csv/generer/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/refusjon/csv/generer">> = Specific
+  const handler = {} as typeof import("../../src/app/api/admin/refusjon/csv/generer/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/admin/refusjon/csv/parse/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/refusjon/csv/parse">> = Specific
+  const handler = {} as typeof import("../../src/app/api/admin/refusjon/csv/parse/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/admin/refusjon/priser/backfill/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/refusjon/priser/backfill">> = Specific
+  const handler = {} as typeof import("../../src/app/api/admin/refusjon/priser/backfill/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/admin/refusjon/priser/seed/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/refusjon/priser/seed">> = Specific
+  const handler = {} as typeof import("../../src/app/api/admin/refusjon/priser/seed/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

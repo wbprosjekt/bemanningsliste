@@ -43,6 +43,7 @@ import {
   Bell,
   ClipboardCheck,
   Camera,
+  Zap,
 } from "lucide-react";
 
 interface AdminNavigationProps {
@@ -170,6 +171,19 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               >
                 <ClipboardCheck className="h-5 w-5" />
                 <span className="hidden xl:inline">Befaring</span>
+              </button>
+
+              <button
+                onClick={() => router.push("/refusjon/admin")}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive("/refusjon")
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+                title="Refusjon hjemmelading"
+              >
+                <Zap className="h-5 w-5" />
+                <span className="hidden xl:inline">Refusjon</span>
               </button>
 
               <button
