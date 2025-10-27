@@ -35,6 +35,7 @@ import OppgaveImages from './OppgaveImages';
 import OppgaveImageThumbnails from './OppgaveImageThumbnails';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import BefaringReportPDF from '@/components/befaring/reports/BefaringReportPDF';
 
 interface Oppgave {
   id: string;
@@ -99,6 +100,7 @@ export default function BefaringDetail({
   const [showOppgaveForm, setShowOppgaveForm] = useState(false);
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [showPlantegningUpload, setShowPlantegningUpload] = useState(false);
+  const [showPdfDialog, setShowPdfDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [plantegningToDelete, setPlantegningToDelete] = useState<Plantegning | null>(null);
   const [activeTab, setActiveTab] = useState('plantegninger');
@@ -442,7 +444,7 @@ export default function BefaringDetail({
           <Badge variant="outline" className="text-xs sm:text-sm">
             {allOppgaver.length} oppgaver
           </Badge>
-          <Button size="sm" className="text-xs sm:text-sm">
+          <Button size="sm" className="text-xs sm:text-sm" onClick={() => setShowPdfDialog(true)}>
             <FileText className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">PDF-rapport</span>
           </Button>
@@ -794,6 +796,18 @@ export default function BefaringDetail({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {befaring && (
+        <Dialog open={showPdfDialog} onOpenChange={setShowPdfDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>PDF-rapport</DialogTitle>
+              <DialogDescription>Last ned en profesjonell rapport for denne befaringen.</DialogDescription>
+            </DialogHeader>
+            <BefaringReportPDF befaringId={befaring.id} />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
