@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, Users, Building, Settings, ArrowRight, Clock, Mail, Info, GitBranch, Calendar, Code } from "lucide-react";
+import { Bell, Users, Building, Settings, ArrowRight, Clock, Mail, Info, GitBranch, Calendar, Code, Zap } from "lucide-react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { getVersionInfo, getShortCommitHash, getFormattedBuildTime } from "@/lib/version";
 
@@ -65,6 +65,34 @@ export default function SettingsPage() {
                     <ArrowRight className="h-3 w-3" />
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Refusjon hjemmelading */}
+          <Card className="hover:shadow-md transition-shadow">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-orange-600" />
+                Refusjon hjemmelading
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Konfigurer RFID-nøkler, ladeboks, nettprofiler og prispolicy
+              </p>
+              <div className="flex items-center justify-between">
+                <Badge variant="default" className="bg-orange-100 text-orange-800">
+                  Ny funksjon
+                </Badge>
+                <Button 
+                  onClick={() => router.push('/refusjon/settings')}
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  Innstillinger
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
               </div>
             </CardContent>
           </Card>

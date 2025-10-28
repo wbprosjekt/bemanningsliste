@@ -146,12 +146,19 @@ const ProjectSelector = ({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[500px] p-0 max-h-[400px]" align="start">
+      <PopoverContent 
+        className="w-[calc(100vw-2rem)] sm:w-[500px] p-0 max-h-[70vh] z-[110]" 
+        align="start"
+        sideOffset={5}
+        avoidCollisions={true}
+        collisionPadding={20}
+        modal={false}
+      >
         <Command>
           <div className="flex items-center border-b px-3">
             <CommandInput placeholder="Søk prosjekter..." className="flex-1" />
           </div>
-          <CommandList className="max-h-[300px] overflow-y-auto">
+          <CommandList className="max-h-[400px] overflow-y-auto">
             <CommandEmpty>
               {loading ? (
                 <div className="py-6 text-center text-sm">Laster prosjekter...</div>

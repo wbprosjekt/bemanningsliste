@@ -78,28 +78,47 @@ async function fetchDailySpotPrices(
   area: string,
   date: Date
 ): Promise<SpotPrice[]> {
-  const dateStr = formatDate(date);
-  const url = `https://www.hvakosterstrommen.no/api/v1/prices/${dateStr}_${area}.json`;
+  // Correct format: 2025/10-25_NO1.json (not 2025-10-25_NO1.json)
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const url = `https://www.hvakosterstrommen.no/api/v1/prices/${year}/${month}-${day}_${area}.json`;
 
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.error(`Failed to fetch spot prices for ${dateStr}: ${response.statusText}`);
+      console.error(`Failed to fetch spot prices for ${url}: ${response.statusText}`);
       return [];
     }
 
     const data = await response.json();
     
-    return Object.entries(data).map(([hour, price]) => {
-      const timestamp = new Date(date);
-      timestamp.setHours(parseInt(hour), 0, 0, 0);
-      
-      return {
-        timestamp,
-        area,
-        nok_per_kwh: (price as number) / 100, // Convert øre to NOK
-      };
-    });
+    // Debug: Log first few entries to see structure
+    const entries = Object.entries(data).slice(0, 5);
+    console.log('Sample API response:', entries);
+    
+    return Object.entries(data)
+      .map(([hour, priceData]) => {
+        // priceData is an object like: { NOK_per_kWh: 0.62, EUR_per_kWh: 0.05, ... }
+        const price = (priceData as any)?.NOK_per_kWh;
+        
+        // Skip if price is null/undefined or NaN
+        if (price == null || isNaN(price)) {
+          return null;
+        }
+        
+        const timestamp = new Date(date);
+        timestamp.setHours(parseInt(hour), 0, 0, 0);
+        
+        // Price is already in NOK/kWh, no conversion needed!
+        
+        return {
+          timestamp,
+          area,
+          nok_per_kwh: price,
+        };
+      })
+      .filter((p): p is SpotPrice => p !== null); // Remove null values
   } catch (error) {
     console.error('Error fetching daily spot prices:', error);
     return [];
@@ -114,6 +133,34 @@ function formatDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}/${month}-${day}`;
+}
+
+/**
+ * Get spot price for a specific hour from Supabase
+ */
+export async function getSpotPriceForHour(
+  supabase: any,
+  area: string,
+  tsHour: string
+): Promise<{ price_per_kwh: number } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('ref_energy_prices')
+      .select('nok_per_kwh') // Correct column name
+      .eq('area', area)
+      .eq('ts_hour', tsHour)
+      .eq('provider', 'spot')
+      .single();
+    
+    if (error || !data) {
+      return null;
+    }
+    
+    return { price_per_kwh: data.nok_per_kwh };
+  } catch (error) {
+    console.error('Error getting spot price:', error);
+    return null;
+  }
 }
 
 /**

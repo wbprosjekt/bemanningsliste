@@ -40,6 +40,7 @@ import {
   ClipboardCheck,
   Home,
   Camera,
+  Zap,
 } from "lucide-react";
 
 interface EmployeeNavigationProps {
@@ -57,6 +58,7 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [orgId, setOrgId] = useState<string>('');
+  const [hasRefusjonAccess, setHasRefusjonAccess] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -81,24 +83,66 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
 
   const getCurrentYear = () => new Date().getFullYear();
 
-  // Load org_id
+  // Load org_id and refusjon access
   useEffect(() => {
-    const loadOrgId = async () => {
-      if (!user) return;
+    const loadData = async () => {
+      if (!user) {
+        console.log('❌ No user, skipping refusjon access check (EmployeeNav)');
+        return;
+      }
       
-      const { data } = await supabase
+      console.log('🔐 Checking refusjon access for user (EmployeeNav):', user.email);
+      
+      const { data, error } = await supabase
         .from('profiles')
-        .select('org_id')
+        .select('org_id, id')
         .eq('user_id', user.id)
         .single();
       
-      if (data) {
-        setOrgId(data.org_id);
+      if (error) {
+        console.error('❌ Error loading profile (EmployeeNav):', error);
+        return;
       }
+      
+      if (!data) {
+        console.log('❌ No profile found (EmployeeNav):', user.email);
+        return;
+      }
+      
+      console.log('✅ Profile found (EmployeeNav):', data.id);
+      setOrgId(data.org_id);
+      
+      // Check if user has access to refusjon module
+      const { data: moduleAccess, error: moduleError } = await supabase
+        .from('profile_modules')
+        .select('enabled')
+        .eq('profile_id', data.id)
+        .eq('module_name', 'refusjon_hjemmelading')
+        .maybeSingle();
+      
+      if (moduleError) {
+        console.error('❌ Error loading module access (EmployeeNav):', moduleError);
+      }
+      
+      const hasAccess = moduleAccess?.enabled ?? false;
+      
+      console.log('🔍 Refusjon access check (EmployeeNav):', {
+        profileId: data.id,
+        moduleAccess: moduleAccess,
+        hasAccess
+      });
+      
+      setHasRefusjonAccess(hasAccess);
+      console.log('✅ hasRefusjonAccess set to (EmployeeNav):', hasAccess);
     };
     
-    loadOrgId();
+    loadData();
   }, [user]);
+
+  // Debug: Show hasRefusjonAccess in console when it changes
+  useEffect(() => {
+    console.log('🔄 hasRefusjonAccess state changed (EmployeeNav):', hasRefusjonAccess);
+  }, [hasRefusjonAccess]);
 
   return (
     <>
@@ -164,6 +208,20 @@ export default function EmployeeNavigation({ profile }: EmployeeNavigationProps)
               >
                 <Camera className="h-4 w-4" />
                 <span className="hidden xl:inline">Foto</span>
+              </button>
+
+              <button
+                onClick={() => router.push('/refusjon/min')}
+                className={`flex items-center space-x-1 px-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive("/refusjon")
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+                title="Refusjon hjemmelading"
+                style={{ display: hasRefusjonAccess ? 'flex' : 'none' }}
+              >
+                <Zap className="h-4 w-4" />
+                <span className="hidden xl:inline">Refusjon</span>
               </button>
 
               {/* User Menu */}

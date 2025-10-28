@@ -290,6 +290,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/refusjon/admin/historikk/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/refusjon/admin/historikk">> = Specific
+  const handler = {} as typeof import("../../src/app/refusjon/admin/historikk/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/refusjon/admin/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/refusjon/admin">> = Specific
@@ -299,10 +308,37 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/refusjon/admin/tilgang/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/refusjon/admin/tilgang">> = Specific
+  const handler = {} as typeof import("../../src/app/refusjon/admin/tilgang/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/refusjon/min/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/refusjon/min">> = Specific
+  const handler = {} as typeof import("../../src/app/refusjon/min/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/refusjon/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/refusjon">> = Specific
   const handler = {} as typeof import("../../src/app/refusjon/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/refusjon/settings/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/refusjon/settings">> = Specific
+  const handler = {} as typeof import("../../src/app/refusjon/settings/page.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check
@@ -375,6 +411,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/refusjon/priser/backfill">> = Specific
   const handler = {} as typeof import("../../src/app/api/admin/refusjon/priser/backfill/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/admin/refusjon/priser/fetch-historical/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/refusjon/priser/fetch-historical">> = Specific
+  const handler = {} as typeof import("../../src/app/api/admin/refusjon/priser/fetch-historical/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

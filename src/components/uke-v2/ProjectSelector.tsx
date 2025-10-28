@@ -75,7 +75,7 @@ export default function ProjectSelector({ open, onClose, onSelect, orgId }: Proj
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl flex flex-col">
+      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl flex flex-col z-[100]">
         <SheetHeader>
           <SheetTitle>Velg prosjekt</SheetTitle>
         </SheetHeader>

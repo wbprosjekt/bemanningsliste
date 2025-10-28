@@ -42,6 +42,72 @@ export interface PricingContext {
 /**
  * Calculate reimbursement for a session (time-split into bits)
  */
+/**
+ * Simplified reimbursement calculation for a single time bit
+ * Returns NOK amounts (excluding kWh breakdown)
+ */
+export function calculateReimbursementForBit(params: {
+  policy: 'norgespris' | 'spot_med_stromstotte';
+  policyParams: Record<string, any>;
+  kwh: number;
+  tsHour: string;
+  spotPricePerKwhExVat: number;
+  touWindow?: any;
+  nettProfile?: any;
+}): {
+  energy_nok: number;
+  nett_nok: number;
+  support_nok: number;
+} {
+  const { policy, policyParams, kwh, spotPricePerKwhExVat, touWindow, nettProfile } = params;
+  
+  let energyNok = 0;
+  let nettNok = 0;
+  let supportNok = 0;
+  
+  // Convert spot price to including VAT
+  const spotInclMva = spotPricePerKwhExVat * 1.25;
+  
+  // TOU nettariff
+  if (touWindow && nettProfile) {
+    const nettEnergyPerKwh = touWindow.nett_energy_nok_per_kwh || 0;
+    const nettTimePerKwh = touWindow.nett_time_nok_per_kwh || 0;
+    nettNok = kwh * (nettEnergyPerKwh + nettTimePerKwh);
+  }
+  
+  // Energy pricing based on policy
+  if (policy === 'norgespris') {
+    // Fixed price per kWh
+    const fastpris = parseFloat(policyParams.fastpris_nok_per_kwh || 0);
+    energyNok = kwh * fastpris;
+  } else {
+    // Spot + strømstøtte (spot_med_stromstotte)
+    // Calculate strømstøtte (90% of amount over 0.75 NOK/kWh ex. MVA)
+    const terskel = parseFloat(policyParams.terskel_nok_per_kwh || 0.75);
+    const stotteAndel = parseFloat(policyParams.stotte_andel || 0.9);
+    
+    const overTerskel = Math.max(0, spotPricePerKwhExVat - terskel);
+    const stottePerKwh = overTerskel * stotteAndel;
+    
+    // Energy cost = spot - støtte (converted to incl. MVA)
+    const energyCostExVat = spotPricePerKwhExVat - stottePerKwh;
+    const energyCostInclVat = energyCostExVat * 1.25;
+    
+    energyNok = kwh * energyCostInclVat;
+    supportNok = kwh * stottePerKwh * 1.25; // Støtte incl. MVA
+  }
+  
+  return {
+    energy_nok: energyNok,
+    nett_nok: nettNok,
+    support_nok: supportNok,
+  };
+}
+
+/**
+ * Legacy async function for backward compatibility
+ * @deprecated Use calculateReimbursementForBit instead
+ */
 export async function calculateSessionReimbursement(
   session: {
     kwh: number;
@@ -120,7 +186,7 @@ function timeSplitIntoHourlyBits(
   let current = new Date(startDate);
   
   while (current < endDate) {
-    const next = new Date(current);
+    let next = new Date(current);
     next.setHours(next.getHours() + 1, 0, 0, 0);
     if (next > endDate) next = endDate;
     

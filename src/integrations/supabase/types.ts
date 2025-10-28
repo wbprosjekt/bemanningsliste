@@ -1689,6 +1689,41 @@ export type Database = {
           },
         ]
       }
+      profile_modules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          module_name: string
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          module_name: string
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          module_name?: string
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_modules_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -1934,6 +1969,558 @@ export type Database = {
           window_start?: string
         }
         Relationships: []
+      }
+      ref_chargers: {
+        Row: {
+          address: string | null
+          area: string
+          created_at: string
+          easee_charger_id: string | null
+          id: string
+          name: string
+          org_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          area: string
+          created_at?: string
+          easee_charger_id?: string | null
+          id?: string
+          name: string
+          org_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          area?: string
+          created_at?: string
+          easee_charger_id?: string | null
+          id?: string
+          name?: string
+          org_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_chargers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_effect_tiers: {
+        Row: {
+          created_at: string
+          id: string
+          monthly_fee_nok: number
+          name: string
+          org_id: string
+          threshold_kw: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          monthly_fee_nok: number
+          name: string
+          org_id: string
+          threshold_kw: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          monthly_fee_nok?: number
+          name?: string
+          org_id?: string
+          threshold_kw?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_effect_tiers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_employee_keys: {
+        Row: {
+          charger_id: string | null
+          created_at: string
+          id: string
+          org_id: string
+          profile_id: string
+          rfid_key_id: string
+        }
+        Insert: {
+          charger_id?: string | null
+          created_at?: string
+          id?: string
+          org_id: string
+          profile_id: string
+          rfid_key_id: string
+        }
+        Update: {
+          charger_id?: string | null
+          created_at?: string
+          id?: string
+          org_id?: string
+          profile_id?: string
+          rfid_key_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_employee_keys_charger_id_fkey"
+            columns: ["charger_id"]
+            isOneToOne: false
+            referencedRelation: "ref_chargers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_employee_keys_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_employee_keys_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_employee_keys_rfid_key_id_fkey"
+            columns: ["rfid_key_id"]
+            isOneToOne: false
+            referencedRelation: "ref_rfid_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_employee_settings: {
+        Row: {
+          created_at: string
+          default_area: string | null
+          effective_from: string
+          effective_to: string | null
+          employee_effect_base_tier_id: string | null
+          fastpris_nok_per_kwh: number | null
+          id: string
+          manedlig_tak_kwh: number | null
+          nett_profile_id: string | null
+          org_id: string
+          policy: string
+          profile_id: string
+          stotte_andel: number | null
+          terskel_nok_per_kwh: number | null
+        }
+        Insert: {
+          created_at?: string
+          default_area?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          employee_effect_base_tier_id?: string | null
+          fastpris_nok_per_kwh?: number | null
+          id?: string
+          manedlig_tak_kwh?: number | null
+          nett_profile_id?: string | null
+          org_id: string
+          policy: string
+          profile_id: string
+          stotte_andel?: number | null
+          terskel_nok_per_kwh?: number | null
+        }
+        Update: {
+          created_at?: string
+          default_area?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          employee_effect_base_tier_id?: string | null
+          fastpris_nok_per_kwh?: number | null
+          id?: string
+          manedlig_tak_kwh?: number | null
+          nett_profile_id?: string | null
+          org_id?: string
+          policy?: string
+          profile_id?: string
+          stotte_andel?: number | null
+          terskel_nok_per_kwh?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_employee_settings_employee_effect_base_tier_id_fkey"
+            columns: ["employee_effect_base_tier_id"]
+            isOneToOne: false
+            referencedRelation: "ref_effect_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_employee_settings_nett_profile_id_fkey"
+            columns: ["nett_profile_id"]
+            isOneToOne: false
+            referencedRelation: "ref_nett_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_employee_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_employee_settings_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_energy_prices: {
+        Row: {
+          area: string
+          created_at: string
+          id: string
+          meta: Json | null
+          nok_per_kwh: number
+          org_id: string
+          provider: string
+          ts_hour: string
+        }
+        Insert: {
+          area: string
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          nok_per_kwh: number
+          org_id: string
+          provider?: string
+          ts_hour: string
+        }
+        Update: {
+          area?: string
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          nok_per_kwh?: number
+          org_id?: string
+          provider?: string
+          ts_hour?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_energy_prices_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_nett_profiles: {
+        Row: {
+          created_at: string
+          id: string
+          meta: Json | null
+          name: string
+          org_id: string
+          timezone: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          name: string
+          org_id: string
+          timezone?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          name?: string
+          org_id?: string
+          timezone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_nett_profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_nett_windows: {
+        Row: {
+          dow: number
+          end_time: string
+          energy_ore_per_kwh: number
+          id: string
+          meta: Json | null
+          profile_id: string
+          start_time: string
+          time_ore_per_kwh: number | null
+        }
+        Insert: {
+          dow: number
+          end_time: string
+          energy_ore_per_kwh: number
+          id?: string
+          meta?: Json | null
+          profile_id: string
+          start_time: string
+          time_ore_per_kwh?: number | null
+        }
+        Update: {
+          dow?: number
+          end_time?: string
+          energy_ore_per_kwh?: number
+          id?: string
+          meta?: Json | null
+          profile_id?: string
+          start_time?: string
+          time_ore_per_kwh?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_nett_windows_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "ref_nett_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_reimbursements: {
+        Row: {
+          created_at: string
+          csv_url: string | null
+          employee_id: string
+          id: string
+          meta: Json | null
+          org_id: string
+          pdf_url: string | null
+          period_month: string
+          policy_snapshot: Json | null
+          total_amount_nok: number
+          total_effect_nok: number | null
+          total_energy_nok: number
+          total_kwh: number
+          total_nett_nok: number
+          total_support_nok: number
+        }
+        Insert: {
+          created_at?: string
+          csv_url?: string | null
+          employee_id: string
+          id?: string
+          meta?: Json | null
+          org_id: string
+          pdf_url?: string | null
+          period_month: string
+          policy_snapshot?: Json | null
+          total_amount_nok: number
+          total_effect_nok?: number | null
+          total_energy_nok: number
+          total_kwh: number
+          total_nett_nok: number
+          total_support_nok: number
+        }
+        Update: {
+          created_at?: string
+          csv_url?: string | null
+          employee_id?: string
+          id?: string
+          meta?: Json | null
+          org_id?: string
+          pdf_url?: string | null
+          period_month?: string
+          policy_snapshot?: Json | null
+          total_amount_nok?: number
+          total_effect_nok?: number | null
+          total_energy_nok?: number
+          total_kwh?: number
+          total_nett_nok?: number
+          total_support_nok?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_reimbursements_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_reimbursements_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_rfid_keys: {
+        Row: {
+          created_at: string
+          easee_key_id: string
+          id: string
+          label: string | null
+          org_id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          easee_key_id: string
+          id?: string
+          label?: string | null
+          org_id: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          easee_key_id?: string
+          id?: string
+          label?: string | null
+          org_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_rfid_keys_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_sessions_hourly: {
+        Row: {
+          address: string | null
+          charger_id: string | null
+          created_at: string
+          employee_id: string
+          id: string
+          kwh_bit: number
+          local_ts_hour: string
+          meta: Json | null
+          org_id: string
+          period_month: string
+          rfid_key_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          charger_id?: string | null
+          created_at?: string
+          employee_id: string
+          id?: string
+          kwh_bit: number
+          local_ts_hour: string
+          meta?: Json | null
+          org_id: string
+          period_month: string
+          rfid_key_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          charger_id?: string | null
+          created_at?: string
+          employee_id?: string
+          id?: string
+          kwh_bit?: number
+          local_ts_hour?: string
+          meta?: Json | null
+          org_id?: string
+          period_month?: string
+          rfid_key_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_sessions_hourly_charger_id_fkey"
+            columns: ["charger_id"]
+            isOneToOne: false
+            referencedRelation: "ref_chargers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_sessions_hourly_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_sessions_hourly_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_sessions_hourly_rfid_key_id_fkey"
+            columns: ["rfid_key_id"]
+            isOneToOne: false
+            referencedRelation: "ref_rfid_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ref_sessions_raw: {
+        Row: {
+          created_at: string
+          csv_hash: string
+          employee_id: string
+          id: string
+          org_id: string
+          period_month: string
+          row: Json
+        }
+        Insert: {
+          created_at?: string
+          csv_hash: string
+          employee_id: string
+          id?: string
+          org_id: string
+          period_month: string
+          row: Json
+        }
+        Update: {
+          created_at?: string
+          csv_hash?: string
+          employee_id?: string
+          id?: string
+          org_id?: string
+          period_month?: string
+          row?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_sessions_raw_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ref_sessions_raw_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reminder_logs: {
         Row: {
@@ -2229,40 +2816,67 @@ export type Database = {
       ttx_project_cache: {
         Row: {
           created_at: string
+          customer_email: string | null
           customer_name: string | null
+          customer_phone: string | null
+          end_date: string | null
           id: string
           is_active: boolean | null
+          is_closed: boolean | null
           last_synced: string | null
           needs_sync: boolean | null
           org_id: string
+          project_description: string | null
+          project_manager_email: string | null
+          project_manager_name: string | null
+          project_manager_phone: string | null
           project_name: string | null
           project_number: number | null
+          start_date: string | null
           tripletex_project_id: number | null
           updated_at: string
         }
         Insert: {
           created_at?: string
+          customer_email?: string | null
           customer_name?: string | null
+          customer_phone?: string | null
+          end_date?: string | null
           id?: string
           is_active?: boolean | null
+          is_closed?: boolean | null
           last_synced?: string | null
           needs_sync?: boolean | null
           org_id: string
+          project_description?: string | null
+          project_manager_email?: string | null
+          project_manager_name?: string | null
+          project_manager_phone?: string | null
           project_name?: string | null
           project_number?: number | null
+          start_date?: string | null
           tripletex_project_id?: number | null
           updated_at?: string
         }
         Update: {
           created_at?: string
+          customer_email?: string | null
           customer_name?: string | null
+          customer_phone?: string | null
+          end_date?: string | null
           id?: string
           is_active?: boolean | null
+          is_closed?: boolean | null
           last_synced?: string | null
           needs_sync?: boolean | null
           org_id?: string
+          project_description?: string | null
+          project_manager_email?: string | null
+          project_manager_name?: string | null
+          project_manager_phone?: string | null
           project_name?: string | null
           project_number?: number | null
+          start_date?: string | null
           tripletex_project_id?: number | null
           updated_at?: string
         }

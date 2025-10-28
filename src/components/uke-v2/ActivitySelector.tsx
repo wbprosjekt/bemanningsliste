@@ -56,7 +56,7 @@ export default function ActivitySelector({ open, onClose, onSelect, projectId }:
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl">
+      <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl z-[100]">
         <SheetHeader>
           <SheetTitle>Velg aktivitet</SheetTitle>
         </SheetHeader>

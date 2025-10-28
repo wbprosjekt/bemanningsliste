@@ -4,12 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { supabase } from '@/integrations/supabase/client';
 import { fetchSpotPricesRange } from '@/lib/refusjon/spotProvider';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     
     // Check authentication
     const { data: { user } } = await supabase.auth.getUser();
@@ -78,7 +77,7 @@ export async function POST(request: NextRequest) {
     
     // Upsert to database
     const { error } = await supabase
-      .from('ref_energy_prices')
+      .from('ref_energy_prices' as any)
       .upsert(energyPrices, {
         onConflict: 'org_id,provider,area,ts_hour',
       });

@@ -143,7 +143,7 @@ const ProjectSearchDialog = ({ open, onClose, date, personId, orgId, onProjectAs
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-full max-w-lg mx-4 sm:mx-0 sm:w-auto sm:max-w-2xl">
+      <DialogContent className="w-full max-w-lg mx-4 sm:mx-0 sm:w-auto sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />

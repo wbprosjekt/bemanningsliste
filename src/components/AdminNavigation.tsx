@@ -61,6 +61,8 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [orgId, setOrgId] = useState<string>('');
+  const [hasRefusjonAccess, setHasRefusjonAccess] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   const handleLogout = async () => {
     try {
@@ -85,24 +87,86 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
 
   const getCurrentYear = () => new Date().getFullYear();
 
-  // Load org_id
+  // Load org_id and refusjon access
   useEffect(() => {
-    const loadOrgId = async () => {
-      if (!user) return;
+    const loadData = async () => {
+      if (!user) {
+        console.log('❌ No user, skipping refusjon access check');
+        return;
+      }
       
-      const { data } = await supabase
+      console.log('🔐 Checking refusjon access for user:', user.email);
+      
+      const { data, error } = await supabase
         .from('profiles')
-        .select('org_id')
+        .select('org_id, id, role')
         .eq('user_id', user.id)
         .single();
       
-      if (data) {
-        setOrgId(data.org_id);
+      if (error) {
+        console.error('❌ Error loading profile:', error);
+        return;
       }
+      
+      if (!data) {
+        console.log('❌ No profile found for user:', user.email);
+        return;
+      }
+      
+      console.log('✅ Profile found:', data.id);
+      setOrgId(data.org_id);
+      setUserRole(data.role);
+      console.log('✅ User role:', data.role);
+      
+      // Check if user has access to refusjon module
+      const { data: moduleAccess, error: moduleError } = await supabase
+        .from('profile_modules')
+        .select('enabled')
+        .eq('profile_id', data.id)
+        .eq('module_name', 'refusjon_hjemmelading')
+        .maybeSingle();
+      
+      if (moduleError) {
+        console.error('❌ Error loading module access:', moduleError);
+      }
+      
+      const hasAccess = moduleAccess?.enabled ?? false;
+      
+      console.log('🔍 Refusjon access check:', {
+        profileId: data.id,
+        moduleAccess: moduleAccess,
+        hasAccess
+      });
+      
+      setHasRefusjonAccess(hasAccess);
+      
+      // Force re-render if needed
+      console.log('✅ hasRefusjonAccess set to:', hasAccess);
     };
     
-    loadOrgId();
+    loadData();
   }, [user]);
+
+  // Debug: Show hasRefusjonAccess in console when it changes
+  useEffect(() => {
+    console.log('🔄 hasRefusjonAccess state changed to:', hasRefusjonAccess);
+  }, [hasRefusjonAccess]);
+  
+  useEffect(() => {
+    console.log('🔄 userRole state changed to:', userRole);
+  }, [userRole]);
+  
+  // For admin users, always show refusjon button regardless of module access
+  // (they need admin panel access)
+  const shouldShowRefusjon = hasRefusjonAccess || userRole === 'admin' || userRole === 'økonomi';
+  
+  useEffect(() => {
+    console.log('🎯 shouldShowRefusjon check:', {
+      hasRefusjonAccess,
+      userRole,
+      shouldShowRefusjon
+    });
+  }, [hasRefusjonAccess, userRole]);
 
   return (
     <>
@@ -174,13 +238,18 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               </button>
 
               <button
-                onClick={() => router.push("/refusjon/admin")}
+                onClick={() => {
+                  // Determine route based on user role
+                  const isAdmin = profile?.role === 'admin' || profile?.role === 'økonomi';
+                  router.push(isAdmin ? '/refusjon/admin' : '/refusjon/min');
+                }}
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive("/refusjon")
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
                 title="Refusjon hjemmelading"
+                style={{ display: shouldShowRefusjon ? 'flex' : 'none' }}
               >
                 <Zap className="h-5 w-5" />
                 <span className="hidden xl:inline">Refusjon</span>
@@ -271,6 +340,10 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
                   <DropdownMenuItem onClick={() => router.push(`/min/uke/${getCurrentYear()}/${getCurrentWeek()}`)}>
                     <BarChart3 className="h-4 w-4 mr-2" />
                     <span>Min uke</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push("/refusjon/min")}>
+                    <Zap className="h-4 w-4 mr-2" />
+                    <span>Mine refusjoner</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
