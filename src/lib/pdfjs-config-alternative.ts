@@ -24,7 +24,7 @@ async function configurePdfjs() {
     }
   }
 
-  pdfjsInstance.GlobalWorkerOptions.workerSrc = null;
+  pdfjsInstance.GlobalWorkerOptions.workerSrc = '';
   return pdfjsInstance;
 }
 

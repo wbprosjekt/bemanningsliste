@@ -240,7 +240,7 @@ export default function AdminNavigation({ profile }: AdminNavigationProps) {
               <button
                 onClick={() => {
                   // Determine route based on user role
-                  const isAdmin = profile?.role === 'admin' || profile?.role === 'økonomi';
+                  const isAdmin = userRole === 'admin' || userRole === 'økonomi';
                   router.push(isAdmin ? '/refusjon/admin' : '/refusjon/min');
                 }}
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${

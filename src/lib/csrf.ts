@@ -148,7 +148,9 @@ export function withCSRFProtection(
       }
       
       // Get user ID if available
-      const userId = context?.user?.id || getUserId(request, userIdParam);
+      const userIdFromContext = (context?.user as { id?: string } | undefined)?.id;
+      const userIdFromParam = getUserId(request, userIdParam);
+      const userId = userIdFromContext ?? userIdFromParam ?? undefined;
       
       // Verify CSRF token
       if (!verifyCSRFToken(sessionId, csrfToken, userId)) {

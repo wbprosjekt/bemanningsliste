@@ -152,7 +152,6 @@ const ProjectSelector = ({
         sideOffset={5}
         avoidCollisions={true}
         collisionPadding={20}
-        modal={false}
       >
         <Command>
           <div className="flex items-center border-b px-3">

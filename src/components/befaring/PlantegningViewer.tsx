@@ -558,6 +558,7 @@ export default function PlantegningViewer({
       const renderContext = {
         canvasContext: context,
         viewport: scaledViewport,
+        canvas: tempCanvas,
       };
       
       const newRenderTask = page.render(renderContext);

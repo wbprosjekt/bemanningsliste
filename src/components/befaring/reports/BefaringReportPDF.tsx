@@ -200,7 +200,7 @@ async function loadFriBefaring(befaringId: string): Promise<BefaringReportData |
     return null;
   }
 
-  const punkter: ReportPunkt[] = (data.befaring_punkter || []).map((punkt: any) => ({
+  const punkter: ReportPunkt[] = ((data as any)?.befaring_punkter || []).map((punkt: any) => ({
     id: punkt.id,
     punkt_nummer: punkt.punkt_nummer,
     title: punkt.title,

@@ -174,7 +174,7 @@ export async function matchToUTimeWindow(
     }
     
     // Find window that matches the time range
-    const matchingWindow = windows.find(w => {
+    const matchingWindow = windows.find((w: any) => {
       return isTimeInRange(timeStr, w.start_time, w.end_time);
     });
     
