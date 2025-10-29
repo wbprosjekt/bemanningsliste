@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +14,7 @@ import {
   Users, 
   Image as ImageIcon, 
   FileText, 
-  MapPin,
+  MapPin, 
   Star,
   Settings,
   Plus,
@@ -22,9 +22,21 @@ import {
   Building,
   User,
   Phone,
-  Mail
+  Mail,
+  ExternalLink,
+  Loader2,
+  Upload
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import ImageGallery from '@/components/ImageGallery';
+import ProjectPhotoUpload from '@/components/ProjectPhotoUpload';
+import CreateBefaringDialog from '@/components/befaring/CreateBefaringDialog';
 
 import { Database } from '@/types/supabase';
 
@@ -71,6 +83,9 @@ interface Activity {
   status?: string;
   created_at: string | null;
   updated_at: string | null;
+  activity_type: string; // Original activity_type from database
+  related_id?: string | null; // ID of related object (befaring, oppgave, bilde)
+  related_type?: string | null; // Type of related object ('befaring', 'oppgave', 'bilde')
 }
 
 interface ProjectPhoto {
@@ -132,7 +147,78 @@ export default function ProjectDetailPage() {
   const [galleryInitialIndex, setGalleryInitialIndex] = useState(0);
   const [galleryOppgaveInfo, setGalleryOppgaveInfo] = useState<any>(null);
 
+  // Befaringer dialog state
+  const [befaringerDialogOpen, setBefaringerDialogOpen] = useState(false);
+  const [befaringerList, setBefaringerList] = useState<any[]>([]);
+  const [loadingBefaringer, setLoadingBefaringer] = useState(false);
+
+  // Photo upload dialog state
+  const [photoUploadDialogOpen, setPhotoUploadDialogOpen] = useState(false);
+
+  // Create befaring dialog state
+  const [createBefaringDialogOpen, setCreateBefaringDialogOpen] = useState(false);
+
   const projectId = params.projectId as string;
+
+  const getActivityTitle = (activityType: string): string => {
+    switch (activityType) {
+      case 'image_uploaded':
+        return 'Nytt bilde lagt til';
+      case 'befaring_created':
+        return 'Ny befaring opprettet';
+      case 'befaring_moved':
+        return 'Befaring flyttet til prosjekt';
+      case 'befaring_completed':
+        return 'Befaring fullført';
+      case 'oppgave_created':
+        return 'Ny oppgave opprettet';
+      case 'oppgave_completed':
+        return 'Oppgave fullført';
+      case 'oppgave_updated':
+        return 'Oppgave oppdatert';
+      default:
+        return 'Aktivitet';
+    }
+  };
+
+  const loadActivities = useCallback(async () => {
+    if (!projectId) return;
+    
+    const { data: activitiesData, error: activitiesError } = await supabase
+      .from('project_activity')
+      .select(`
+        id,
+        activity_type,
+        description,
+        related_id,
+        related_type,
+        created_at
+      `)
+      .eq('project_id', projectId)
+      .neq('activity_type', 'comment') // Exclude comments from activity feed
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (activitiesError) {
+      console.warn('Could not load activities:', activitiesError);
+      setActivities([]);
+    } else {
+      const formattedActivities: Activity[] = (activitiesData || []).map(activity => ({
+        id: activity.id,
+        type: activity.activity_type.includes('image') ? 'bilde' :
+              activity.activity_type.includes('oppgave') ? 'oppgaver' :
+              activity.activity_type.includes('befaring') ? 'befaring' : 'bilde',
+        title: getActivityTitle(activity.activity_type),
+        description: activity.description,
+        created_at: activity.created_at,
+        updated_at: activity.created_at, // Use created_at since updated_at doesn't exist
+        activity_type: activity.activity_type,
+        related_id: activity.related_id,
+        related_type: activity.related_type
+      }));
+      setActivities(formattedActivities);
+    }
+  }, [projectId]);
 
   useEffect(() => {
     if (user && projectId) {
@@ -140,6 +226,36 @@ export default function ProjectDetailPage() {
       loadProfile();
     }
   }, [user, projectId]);
+
+  // Real-time subscription for project activities
+  useEffect(() => {
+    if (!projectId) return;
+
+    console.log('🔄 Setting up Realtime subscription for project_activity');
+
+    const channel = supabase
+      .channel(`project_activity_${projectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'project_activity',
+          filter: `project_id=eq.${projectId}`
+        },
+        (payload) => {
+          console.log('🔔 New activity received:', payload);
+          // Reload activities to show new entry
+          loadActivities();
+        }
+      )
+      .subscribe();
+
+      return () => {
+      console.log('🔌 Unsubscribing from project_activity Realtime');
+      supabase.removeChannel(channel);
+    };
+  }, [projectId, loadActivities]);
 
   const loadProfile = async () => {
     if (!user) return;
@@ -487,36 +603,8 @@ export default function ProjectDetailPage() {
       // Load project comments
       await loadComments();
 
-      // Load recent activities from project_activity table
-      const { data: activitiesData, error: activitiesError } = await supabase
-        .from('project_activity')
-        .select(`
-          id,
-          activity_type,
-          description,
-          created_at
-        `)
-        .eq('project_id', projectId)
-        .neq('activity_type', 'comment') // Exclude comments from activity feed
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (activitiesError) {
-        console.warn('Could not load activities:', activitiesError);
-        setActivities([]);
-      } else {
-        const formattedActivities: Activity[] = (activitiesData || []).map(activity => ({
-          id: activity.id,
-          type: activity.activity_type.includes('image') ? 'bilde' :
-                activity.activity_type.includes('oppgave') ? 'oppgaver' :
-                activity.activity_type.includes('befaring') ? 'befaring' : 'bilde',
-          title: getActivityTitle(activity.activity_type),
-          description: activity.description,
-          created_at: activity.created_at,
-          updated_at: activity.created_at // Use created_at since updated_at doesn't exist
-        }));
-        setActivities(formattedActivities);
-      }
+      // Load recent activities
+      await loadActivities();
 
     } catch (error) {
       console.error('Error loading project data:', error);
@@ -525,24 +613,77 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const getActivityTitle = (activityType: string): string => {
-    switch (activityType) {
-      case 'image_uploaded':
-        return 'Nytt bilde lagt til';
-      case 'befaring_created':
-        return 'Ny befaring opprettet';
-      case 'befaring_completed':
-        return 'Befaring fullført';
-      case 'oppgave_created':
-        return 'Ny oppgave opprettet';
-      case 'oppgave_completed':
-        return 'Oppgave fullført';
-      case 'oppgave_updated':
-        return 'Oppgave oppdatert';
-      default:
-        return 'Aktivitet';
+  const loadBefaringer = useCallback(async () => {
+    if (!project?.tripletex_project_id) return;
+    
+    setLoadingBefaringer(true);
+    try {
+      // Hent både vanlige befaringer og fri befaringer
+      const [befaringerData, friBefaringerData] = await Promise.all([
+        supabase
+          .from('befaringer')
+          .select(`
+            id,
+            title,
+            description,
+            befaring_date,
+            befaring_type,
+            status,
+            created_at,
+            tripletex_project_id
+          `)
+          .eq('tripletex_project_id', project.tripletex_project_id)
+          .order('created_at', { ascending: false }),
+        
+        supabase
+          .from('fri_befaringer')
+          .select(`
+            id,
+            title,
+            description,
+            befaring_date,
+            status,
+            created_at,
+            tripletex_project_id
+          `)
+          .eq('tripletex_project_id', project.tripletex_project_id)
+          .order('created_at', { ascending: false })
+      ]);
+
+      const befaringer = (befaringerData.data || []).map(b => ({
+        ...b,
+        type: 'regular' as const,
+        url: `/befaring/${b.id}`
+      }));
+      
+      const friBefaringer = (friBefaringerData.data || []).map(b => ({
+        ...b,
+        type: 'fri' as const,
+        befaring_type: null,
+        url: `/fri-befaring/${b.id}`
+      }));
+
+      // Kombiner og sorter etter dato
+      const allBefaringer = [...befaringer, ...friBefaringer].sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      setBefaringerList(allBefaringer);
+    } catch (error) {
+      console.error('Error loading befaringer:', error);
+      setBefaringerList([]);
+    } finally {
+      setLoadingBefaringer(false);
     }
-  };
+  }, [project?.tripletex_project_id]);
+
+  useEffect(() => {
+    if (befaringerDialogOpen && project?.tripletex_project_id) {
+      loadBefaringer();
+    }
+  }, [befaringerDialogOpen, project?.tripletex_project_id, loadBefaringer]);
 
   const handleAddComment = async () => {
     if (!newComment.trim() || !user) return;
@@ -614,6 +755,143 @@ export default function ProjectDetailPage() {
     setGalleryPhotos([]);
     setGalleryInitialIndex(0);
     setGalleryOppgaveInfo(null);
+  };
+
+  const handleActivityClick = async (activity: Activity) => {
+    if (!activity.related_id) {
+      console.warn('Activity has no related_id, cannot navigate');
+      return;
+    }
+
+    try {
+      if (activity.type === 'bilde' || activity.activity_type === 'image_uploaded') {
+        // For bilder: Åpne ImageGallery med alle prosjektbilder, start på det spesifikke
+        const { data: imageData } = await supabase
+          .from('oppgave_bilder')
+          .select('*')
+          .eq('id', activity.related_id)
+          .single();
+
+        if (imageData) {
+          // Get all project photos to show in gallery
+          const allProjectPhotos = projectPhotos;
+          const imageIndex = allProjectPhotos.findIndex(p => p.id === imageData.id);
+          
+          if (imageIndex >= 0) {
+            openImageGallery(allProjectPhotos, imageIndex);
+          } else {
+            // If image not in current list, create single-item gallery
+            const singlePhoto: ProjectPhoto = {
+              id: imageData.id,
+              image_url: imageData.image_url,
+              uploaded_by: imageData.uploaded_by,
+              uploaded_by_email: imageData.uploaded_by_email,
+              created_at: imageData.created_at || imageData.uploaded_at,
+              oppgave_info: imageData.oppgave_id ? {
+                id: imageData.oppgave_id,
+                title: null,
+                fag: null,
+                status: null,
+                oppgave_nummer: null
+              } : undefined
+            };
+            openImageGallery([singlePhoto], 0);
+          }
+        }
+      } else if (activity.type === 'befaring' || activity.activity_type.includes('befaring')) {
+        // For befaringer: Sjekk om det er vanlig eller fri befaring
+        if (!activity.related_id) return;
+
+        // Check if it's a regular befaring first
+        const { data: regularBefaring } = await supabase
+          .from('befaringer')
+          .select('id')
+          .eq('id', activity.related_id)
+          .maybeSingle();
+
+        if (regularBefaring) {
+          router.push(`/befaring/${activity.related_id}`);
+        } else {
+          // Check if it's a fri befaring
+          const { data: friBefaring } = await supabase
+            .from('fri_befaringer')
+            .select('id')
+            .eq('id', activity.related_id)
+            .maybeSingle();
+
+          if (friBefaring) {
+            router.push(`/fri-befaring/${activity.related_id}`);
+          } else {
+            console.warn('Befaring not found:', activity.related_id);
+          }
+        }
+      } else if (activity.type === 'oppgaver' || activity.activity_type.includes('oppgave')) {
+        // For oppgaver: Naviger til oppgavesiden (må sjekke hvor oppgaven er)
+        if (!activity.related_id) return;
+
+        // Get oppgave with all possible parent references
+        const { data: oppgaveData } = await supabase
+          .from('oppgaver')
+          .select(`
+            id,
+            befaring_id,
+            plantegning_id,
+            project_id
+          `)
+          .eq('id', activity.related_id)
+          .maybeSingle();
+
+        if (!oppgaveData) {
+          console.warn('Oppgave not found:', activity.related_id);
+          return;
+        }
+
+        // Check project_id first (direct project task)
+        if (oppgaveData.project_id === projectId) {
+          // Oppgave belongs directly to this project - could show in a project tasks view
+          // For now, navigate to befaring list page
+          router.push('/befaring');
+        } 
+        // Check befaring_id (direct befaring task)
+        else if (oppgaveData.befaring_id) {
+          router.push(`/befaring/${oppgaveData.befaring_id}`);
+        } 
+        // Check plantegning_id (plantegning task)
+        else if (oppgaveData.plantegning_id) {
+          const { data: plantegningData } = await supabase
+            .from('plantegninger')
+            .select('befaring_id')
+            .eq('id', oppgaveData.plantegning_id)
+            .maybeSingle();
+
+          if (plantegningData?.befaring_id) {
+            router.push(`/befaring/${plantegningData.befaring_id}`);
+          } else {
+            // Check if oppgave belongs to fri_befaring via befaring_punkter
+            const { data: befaringPunktData } = await supabase
+              .from('befaring_oppgaver')
+              .select(`
+                befaring_punkt_id,
+                befaring_punkter!inner(fri_befaring_id)
+              `)
+              .eq('oppgave_id', activity.related_id)
+              .maybeSingle();
+
+            if (befaringPunktData?.befaring_punkter?.fri_befaring_id) {
+              router.push(`/fri-befaring/${(befaringPunktData.befaring_punkter as any).fri_befaring_id}`);
+            } else {
+              console.warn('Oppgave has no befaring connection:', oppgaveData);
+              router.push('/befaring');
+            }
+          }
+        } else {
+          console.warn('Oppgave has no parent connection:', oppgaveData);
+          router.push('/befaring');
+        }
+      }
+    } catch (error) {
+      console.error('Error handling activity click:', error);
+    }
   };
 
   const handleDeleteComment = async (commentId: string) => {
@@ -755,7 +1033,11 @@ export default function ProjectDetailPage() {
             <Settings className="h-4 w-4 mr-2 flex-shrink-0" />
             <span className="truncate">Innstillinger</span>
           </Button>
-          <Button size="sm" className="flex-1 min-w-0">
+          <Button 
+            size="sm" 
+            className="flex-1 min-w-0"
+            onClick={() => setCreateBefaringDialogOpen(true)}
+          >
             <Plus className="h-4 w-4 mr-2 flex-shrink-0" />
             <span className="truncate">Ny befaring</span>
           </Button>
@@ -764,14 +1046,22 @@ export default function ProjectDetailPage() {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card 
+          className={stats.total_befaringer > 0 ? "cursor-pointer hover:shadow-md transition-shadow" : ""}
+          onClick={() => stats.total_befaringer > 0 && setBefaringerDialogOpen(true)}
+        >
           <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <FileText className="h-4 w-4 text-blue-600" />
-              <div>
-                <p className="text-xs text-muted-foreground">Befaringer</p>
-                <p className="text-lg font-semibold">{stats.total_befaringer}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <FileText className="h-4 w-4 text-blue-600" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Befaringer</p>
+                  <p className="text-lg font-semibold">{stats.total_befaringer}</p>
+                </div>
               </div>
+              {stats.total_befaringer > 0 && (
+                <ExternalLink className="h-4 w-4 text-muted-foreground opacity-50" />
+              )}
             </div>
           </CardContent>
         </Card>
@@ -825,7 +1115,13 @@ export default function ProjectDetailPage() {
             <CardContent className="space-y-4">
               {activities.length > 0 ? (
                 activities.map((activity) => (
-                  <div key={activity.id} className="flex items-start space-x-3 p-3 border rounded-lg">
+                  <div 
+                    key={activity.id} 
+                    className={`flex items-start space-x-3 p-3 border rounded-lg ${
+                      activity.related_id ? 'cursor-pointer hover:bg-gray-50 hover:shadow-md transition-all' : ''
+                    }`}
+                    onClick={() => activity.related_id && handleActivityClick(activity)}
+                  >
                     <div className="flex-shrink-0">
                       {activity.type === 'bilde' && <ImageIcon className="h-5 w-5 text-orange-600" />}
                       {activity.type === 'oppgaver' && <Calendar className="h-5 w-5 text-green-600" />}
@@ -840,6 +1136,9 @@ export default function ProjectDetailPage() {
                         {activity.created_at ? new Date(activity.created_at).toLocaleString('no-NO') : 'Ukjent dato'}
                       </p>
                     </div>
+                    {activity.related_id && (
+                      <ExternalLink className="h-4 w-4 text-muted-foreground ml-2 flex-shrink-0 opacity-50" />
+                    )}
                   </div>
                 ))
               ) : (
@@ -853,10 +1152,21 @@ export default function ProjectDetailPage() {
           {/* Foto-bibliotek */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center">
-                <ImageIcon className="h-5 w-5 mr-2 text-orange-600" />
-                Foto-bibliotek ({projectPhotos.length} bilder)
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center">
+                  <ImageIcon className="h-5 w-5 mr-2 text-orange-600" />
+                  Foto-bibliotek ({projectPhotos.length} bilder)
+                </CardTitle>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPhotoUploadDialogOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  Last opp
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               {projectPhotos.length > 0 ? (
@@ -915,13 +1225,18 @@ export default function ProjectDetailPage() {
                             <Badge variant="outline" className="text-xs">{photos.length} bilder</Badge>
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {photos.map((photo) => (
+                            {photos.map((photo, index) => (
                               <div key={photo.id} className="relative group">
                                 <img
                                   src={photo.image_url}
                                   alt="Befaring photo"
                                   className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                                  onClick={() => {/* TODO: Open full-size view */}}
+                                  onClick={() => {
+                                    // Flatten all befaring photos for gallery
+                                    const allBefaringPhotos = Object.values(photosByCategory.befaringer).flat();
+                                    const globalIndex = allBefaringPhotos.findIndex(p => p.id === photo.id);
+                                    openImageGallery(allBefaringPhotos, globalIndex >= 0 ? globalIndex : index);
+                                  }}
                                 />
                                 <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <Button 
@@ -1003,10 +1318,10 @@ export default function ProjectDetailPage() {
                   )}
                 </>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ImageIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Ingen bilder i prosjektbiblioteket</p>
-                  <p className="text-xs mt-1">Bilder tagget til prosjektet vises her</p>
+                <div className="text-center py-12 text-muted-foreground">
+                  <ImageIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-sm font-medium mb-2">Ingen bilder i prosjektbiblioteket</p>
+                  <p className="text-xs">Bilder tagget til prosjektet vises her</p>
                 </div>
               )}
             </CardContent>
@@ -1267,6 +1582,122 @@ export default function ProjectDetailPage() {
         </div>
       </div>
       
+      {/* Befaringer Dialog */}
+      <Dialog open={befaringerDialogOpen} onOpenChange={setBefaringerDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Befaringer ({stats.total_befaringer})</DialogTitle>
+            <DialogDescription>
+              Oversikt over alle befaringer knyttet til dette prosjektet
+            </DialogDescription>
+          </DialogHeader>
+          
+          {loadingBefaringer ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Laster befaringer...</span>
+            </div>
+          ) : befaringerList.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-sm">Ingen befaringer funnet</p>
+            </div>
+          ) : (
+            <div className="space-y-3 mt-4">
+              {befaringerList.map((befaring) => (
+                <Card
+                  key={befaring.id}
+                  className="hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => {
+                    router.push(befaring.url);
+                  }}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                          <h3 className="text-base font-semibold truncate">
+                            {befaring.title || 'Uten tittel'}
+                          </h3>
+                          {befaring.type === 'fri' && (
+                            <Badge variant="outline" className="text-xs">
+                              Fri befaring
+                            </Badge>
+                          )}
+                          {befaring.befaring_type && (
+                            <Badge variant="secondary" className="text-xs">
+                              {befaring.befaring_type}
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        {befaring.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                            {befaring.description}
+                          </p>
+                        )}
+                        
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          {befaring.befaring_date && (
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              <span>{new Date(befaring.befaring_date).toLocaleDateString('no-NO')}</span>
+                            </div>
+                          )}
+                          {befaring.status && (
+                            <Badge 
+                              variant={befaring.status === 'aktiv' ? 'default' : 'secondary'}
+                              className="text-xs"
+                            >
+                              {befaring.status}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <ExternalLink className="h-4 w-4 text-muted-foreground ml-2 flex-shrink-0 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Photo Upload Dialog */}
+      {project && profile?.org_id && (
+        <ProjectPhotoUpload
+          open={photoUploadDialogOpen}
+          onOpenChange={(open) => {
+            setPhotoUploadDialogOpen(open);
+            // Reload project data after upload to refresh photo list
+            if (!open && project) {
+              loadProjectData();
+            }
+          }}
+          orgId={profile.org_id}
+          initialProjectId={projectId} // Pre-select current project
+        />
+      )}
+
+      {/* Create Befaring Dialog */}
+      {user && profile?.org_id && project?.tripletex_project_id && (
+        <CreateBefaringDialog
+          orgId={profile.org_id}
+          userId={user.id}
+          open={createBefaringDialogOpen}
+          onOpenChange={setCreateBefaringDialogOpen}
+          initialProjectId={project.tripletex_project_id} // Pre-select current project
+          onSuccess={() => {
+            // Reload project data to update stats and befaringer list
+            loadProjectData();
+            // Activity feed will update automatically via real-time subscription
+          }}
+        />
+      )}
+
       {/* Image Gallery Modal */}
       <ImageGallery
         photos={galleryPhotos}

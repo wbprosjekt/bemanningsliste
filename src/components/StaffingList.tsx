@@ -2114,8 +2114,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             <div className="flex gap-1">
                               <Button 
                                 size="sm" 
-                                variant="default" 
-                                className="bg-green-600 hover:bg-green-700 text-xs px-1.5 py-0.5 h-5"
+                                variant="outline" 
+                                className="border-green-500 text-green-600 hover:bg-green-50 text-xs px-1.5 py-0.5 h-5"
                                 onClick={() => confirmApproveAllEntriesForWeek(safeWeek.week, safeWeek.year)}
                                 title="Godkjenn alle timer for uken"
                               >
@@ -2136,8 +2136,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                             <div className="flex gap-1">
                               <Button 
                                 size="sm" 
-                                variant="default" 
-                                className="bg-blue-600 hover:bg-blue-700 text-xs px-1.5 py-0.5 h-5"
+                                variant="outline" 
+                                className="border-blue-500 text-blue-600 hover:bg-blue-50 text-xs px-1.5 py-0.5 h-5"
                                 onClick={() => confirmSendAllToTripletexForWeek(safeWeek.week, safeWeek.year)}
                                 title="Send alle godkjente timer til Tripletex"
                               >
