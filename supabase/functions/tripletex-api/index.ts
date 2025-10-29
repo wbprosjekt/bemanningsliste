@@ -512,13 +512,24 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
         err.status = response.status;
         throw err;
       }
-      console.error('Tripletex API error:', { 
-        status: response.status, 
-        url: url,
-        message: responseData?.message,
-        validationMessages: responseData?.validationMessages,
-        fullResponse: responseData 
-      });
+      
+      // 409 RevisionException on DELETE is expected (line already deleted/modified) - log as info, not error
+      const isDelete409 = method === 'DELETE' && response.status === 409;
+      if (isDelete409) {
+        console.log('Tripletex API info (409 on DELETE - line already deleted/modified):', { 
+          status: response.status, 
+          url: url,
+          message: responseData?.message || 'RevisionException'
+        });
+      } else {
+        console.error('Tripletex API error:', { 
+          status: response.status, 
+          url: url,
+          message: responseData?.message,
+          validationMessages: responseData?.validationMessages,
+          fullResponse: responseData 
+        });
+      }
       
       // Include validation details in error message if available
       let errorMessage = responseData?.message || `HTTP ${response.status}`;
@@ -2188,25 +2199,83 @@ Deno.serve(async (req) => {
       case 'sync_vehicle_entries': {
         const { vakt_id, employee_id, project_id, date } = payload;
 
+        console.log('🚗 sync_vehicle_entries called:', { vakt_id, employee_id, project_id, date, orgId });
+
         if (!vakt_id || !employee_id || !project_id || !date) {
+          console.error('❌ Missing required fields:', { vakt_id, employee_id, project_id, date });
           result = { success: false, error: 'Missing required fields for vehicle sync' };
           break;
         }
 
-        const { data: vehicleEntries, error: vehicleError } = await supabase
+        // First, check ALL vehicle entries for this vakt (for debugging)
+        const { data: allVehicleEntries, error: allError } = await supabase
           .from('vehicle_entries')
           .select('*')
-          .eq('vakt_id', vakt_id)
-          .in('sync_status', ['pending', 'failed', 'pending_delete']);
+          .eq('vakt_id', vakt_id);
+
+        console.log('📋 All vehicle entries for vakt:', { 
+          count: allVehicleEntries?.length || 0,
+          entries: allVehicleEntries?.map(e => ({ 
+            id: e.id, 
+            vehicle_type: e.vehicle_type, 
+            sync_status: e.sync_status,
+            distance_km: e.distance_km,
+            tripletex_entry_id: e.tripletex_entry_id
+          })) || [],
+          error: allError 
+        });
+
+        // SKUDDSIKKER QUERY: Hent ALLE entries og filtrer manuelt
+        // Dette sikrer at vi får med alle entries som skal synkroniseres
+        const { data: allVehicleEntriesFinal, error: vehicleError } = await supabase
+          .from('vehicle_entries')
+          .select('*')
+          .eq('vakt_id', vakt_id);
 
         if (vehicleError) {
-          console.error('Error fetching vehicle entries:', vehicleError);
+          console.error('❌ Error fetching vehicle entries:', vehicleError);
           result = { success: false, error: 'Kunne ikke hente kjøretøyregistreringer' };
           break;
         }
 
+        // Filtrer entries som skal synkroniseres:
+        // 1. pending, failed, pending_delete - alltid synkroniser
+        // 2. synced uten tripletex_entry_id - ble synced før, men ID mangler (skal opprettes på nytt)
+        // 3. synced med tripletex_entry_id - skal oppdateres, ikke opprettes på nytt
+        const vehicleEntries = (allVehicleEntriesFinal || []).filter(entry => {
+          if (entry.sync_status === 'pending' || entry.sync_status === 'failed' || entry.sync_status === 'pending_delete') {
+            return true; // Alltid inkluder disse
+          }
+          
+          if (entry.sync_status === 'synced') {
+            // Inkluder synced entries - de skal enten oppdateres (hvis de har ID) eller opprettes på nytt (hvis de mangler ID)
+            // Dette håndterer tilfeller hvor entry ble synced før, men skal re-synkroniseres
+            return true;
+          }
+          
+          // Ekskluder alle andre statuser (f.eks. hvis vi legger til nye statuser senere)
+          return false;
+        });
+
+        console.log('✅ Vehicle entries to sync:', { 
+          total_found: allVehicleEntriesFinal?.length || 0,
+          filtered_count: vehicleEntries.length,
+          entries: vehicleEntries.map(e => ({ 
+            id: e.id, 
+            vehicle_type: e.vehicle_type, 
+            sync_status: e.sync_status,
+            distance_km: e.distance_km,
+            tripletex_entry_id: e.tripletex_entry_id,
+            reason: e.sync_status === 'synced' ? (e.tripletex_entry_id ? 'will_update' : 'will_create_new') : 'standard_sync'
+          }))
+        });
+
         if (!vehicleEntries || vehicleEntries.length === 0) {
-          result = { success: true, data: { processed: 0 } };
+          console.log('ℹ️ No vehicle entries to sync', {
+            total_entries_found: allVehicleEntriesFinal?.length || 0,
+            all_statuses: allVehicleEntriesFinal?.map(e => e.sync_status) || []
+          });
+          result = { success: true, data: { processed: 0, message: 'No vehicle entries found that need synchronization', total_entries: allVehicleEntriesFinal?.length || 0 } };
           break;
         }
 
@@ -2227,6 +2296,14 @@ Deno.serve(async (req) => {
             productMap.set(item.product_type, item.tripletex_product_id);
           }
         });
+
+        const allVehicleProductIds = Array.from(
+          new Set(
+            Array.from(productMap.values()).filter(
+              (value): value is number => typeof value === 'number' && !Number.isNaN(value)
+            )
+          )
+        );
 
         const entryDate = new Date(date).toISOString().split('T')[0];
         const summary: Array<{ id: string; status: string; message?: string }> = [];
@@ -2265,7 +2342,7 @@ Deno.serve(async (req) => {
               }
 
               const deleteResponse = await callTripletexAPI(
-                `/order/orderline/${entry.tripletex_entry_id}`,
+                `/project/orderline/${entry.tripletex_entry_id}`,
                 'DELETE',
                 undefined,
                 orgId
@@ -2315,40 +2392,351 @@ Deno.serve(async (req) => {
               continue;
             }
 
-            const description = entry.vehicle_type === 'km_utenfor'
+            // Get employee name for description
+            // Try to get from person table via vakt.person_id first (fastest)
+            let employeeName = '';
+            const { data: vaktData } = await supabase
+              .from('vakt')
+              .select('person:person_id (fornavn, etternavn)')
+              .eq('id', vakt_id)
+              .single();
+
+            if (vaktData && (vaktData as any).person) {
+              const person = (vaktData as any).person;
+              employeeName = `${person.fornavn || ''} ${person.etternavn || ''}`.trim();
+            }
+
+            // Fallback: Try to get from ttx_employee_cache if person lookup failed
+            if (!employeeName && employee_id) {
+              const { data: employeeData } = await supabase
+                .from('ttx_employee_cache')
+                .select('fornavn, etternavn')
+                .eq('tripletex_employee_id', employee_id)
+                .eq('org_id', orgId)
+                .single();
+
+              if (employeeData) {
+                employeeName = `${employeeData.fornavn || ''} ${employeeData.etternavn || ''}`.trim();
+              }
+            }
+
+            // Build description with employee name (clean format for Tripletex UI)
+            const baseDescription = entry.vehicle_type === 'km_utenfor'
               ? `Km utenfor Oslo/Akershus (${quantity} km)`
               : entry.vehicle_type === 'servicebil'
                 ? 'Servicebil Oslo/Akershus'
                 : 'Tilhenger';
+            
+            // Format: "{Employee Name} - {Type}" (clean, readable description)
+            const descriptionBase = employeeName 
+              ? `${employeeName} - ${baseDescription}`
+              : baseDescription;
 
-            // For vehicle compensation (products/order lines), we need to use /order/orderline endpoint
-            // /timesheet/entry is only for time entries with activities, not products
-            const payload = {
-              order: {
-                project: { id: Number(project_id) }
-              },
+            // Generate canonical + legacy tokens so we can always locate/update orderlines
+            const canonicalToken = `[vehicle:${vakt_id}:${entry.vehicle_type}]`;
+            const legacyToken = `[vehicle:${entry.id}]`;
+            const candidateTokens = [legacyToken, canonicalToken];
+
+            // Attach token to description for matching (Tripletex doesn't support externalId on project orderlines)
+            const description = `${descriptionBase} ${canonicalToken}`;
+
+            const baseDescriptionLower = baseDescription.toLowerCase();
+            const descriptionPattern = descriptionBase;
+            const descriptionPatternLower = descriptionPattern.toLowerCase();
+            const canonicalTokenLower = canonicalToken.toLowerCase();
+            const legacyTokenLower = legacyToken.toLowerCase();
+            const candidateTokensLower = [legacyTokenLower, canonicalTokenLower];
+            const employeeNameLower = employeeName ? employeeName.toLowerCase() : null;
+
+            type TripletexOrderline = {
+              id: number;
+              description?: string;
+              product?: { id?: number };
+              count?: number;
+            };
+
+            type AggregatedOrderline = TripletexOrderline & { sources: string[] };
+
+            const chooseMatchingLine = (lines: TripletexOrderline[] | undefined | null): TripletexOrderline | null => {
+              if (!lines || lines.length === 0) return null;
+
+              // Match on tokens in description (Tripletex doesn't support externalId on project orderlines)
+              const tokenMatch = lines.find(line => {
+                const descLower = (line.description || '').toLowerCase();
+                return candidateTokensLower.some(token => descLower.includes(token));
+              });
+              if (tokenMatch) return tokenMatch;
+
+              const exactPatternMatch = lines.find(
+                line => (line.description || '').trim() === descriptionPattern
+              );
+              if (exactPatternMatch) return exactPatternMatch;
+
+              const fallbackMatch = lines.find(line => {
+                const descLower = (line.description || '').toLowerCase();
+                if (employeeNameLower && !descLower.includes(employeeNameLower)) {
+                  return false;
+                }
+                return descLower.includes(descriptionPatternLower) || descLower.includes(baseDescriptionLower);
+              });
+
+              return fallbackMatch || null;
+            };
+
+            const runExpandedSearch = async (
+              contextLabel: string
+            ): Promise<{ match: TripletexOrderline | null; aggregated: AggregatedOrderline[] }> => {
+              const aggregatedMap = new Map<number, AggregatedOrderline>();
+
+              const attemptSearch = async (
+                label: string,
+                productIdOverride: number | null | undefined
+              ): Promise<TripletexOrderline | null> => {
+                const params = new URLSearchParams({
+                  projectId: String(project_id),
+                  date: entryDate,
+                  fields: 'id,description,count,product(id)'
+                });
+
+                if (typeof productIdOverride === 'number' && !Number.isNaN(productIdOverride)) {
+                  params.set('productId', String(productIdOverride));
+                }
+
+                const url = `/project/orderline?${params.toString()}`;
+                const searchResponse = await callTripletexAPI(url, 'GET', undefined, orgId);
+
+                if (searchResponse.success && Array.isArray(searchResponse.data?.values)) {
+                  const lines = searchResponse.data.values as TripletexOrderline[];
+                  lines.forEach(line => {
+                    if (!line || typeof line.id !== 'number') return;
+                    const existing = aggregatedMap.get(line.id);
+                    if (existing) {
+                      existing.sources.push(label);
+                    } else {
+                      aggregatedMap.set(line.id, { ...line, sources: [label] });
+                    }
+                  });
+
+                  const match = chooseMatchingLine(lines);
+                  console.log(`🔍 Search results [${contextLabel}/${label}]:`, {
+                    product_filter: typeof productIdOverride === 'number' ? productIdOverride : 'all',
+                    total_lines_found: lines.length,
+                    matching_line: match ? { id: match.id, description: match.description } : null,
+                    description_pattern: descriptionPattern,
+                    tokens: candidateTokens,
+                    all_lines: lines.map(l => ({
+                      id: l.id,
+                      description: l.description,
+                      product_id: l.product?.id
+                    }))
+                  });
+
+                  if (match) {
+                    return match;
+                  }
+                } else {
+                  console.log(`⚠️ Search failed [${contextLabel}/${label}]:`, {
+                    status: searchResponse.status,
+                    error: searchResponse.error,
+                    product_filter: typeof productIdOverride === 'number' ? productIdOverride : 'all'
+                  });
+                }
+
+                return null;
+              };
+
+              let searchMatch: TripletexOrderline | null = null;
+
+              if (typeof productId === 'number' && !Number.isNaN(productId)) {
+                searchMatch = await attemptSearch('primaryProduct', productId);
+                if (searchMatch) {
+                  return { match: searchMatch, aggregated: Array.from(aggregatedMap.values()) };
+                }
+              }
+
+              const additionalProductIds = allVehicleProductIds.filter(id => {
+                if (typeof productId === 'number' && !Number.isNaN(productId)) {
+                  return id !== productId;
+                }
+                return true;
+              });
+
+              for (const altProductId of additionalProductIds) {
+                searchMatch = await attemptSearch(`altProduct:${altProductId}`, altProductId);
+                if (searchMatch) {
+                  return { match: searchMatch, aggregated: Array.from(aggregatedMap.values()) };
+                }
+              }
+
+              searchMatch = await attemptSearch('projectDateAll', undefined);
+              return { match: searchMatch, aggregated: Array.from(aggregatedMap.values()) };
+            };
+
+            // Build payload for /project/orderline
+            // NOTE: Do NOT include vatType for project orderlines - it causes "Ordrelinjen er ikke fakturerbar" error
+            // Tripletex will use the product's default VAT type automatically
+            // Try adding isChargeable: true to make the orderline billable/facturerbar
+            const payload: any = {
+              project: { id: Number(project_id) },
               product: { id: Number(productId) },
-              quantity: quantity,
-              unitPriceExcludingVatCurrency: 0, // Will use product default price
+              date: entryDate,
+              count: quantity,
               description: description,
+              unitPriceExcludingVatCurrency: 0, // Will use product default price
+              isChargeable: true, // Set orderline as billable/facturerbar
             };
 
             let response;
+            let existingLineId: number | null = null;
+
+            // Step 1: Check if we have a stored Tripletex ID
             if (entry.tripletex_entry_id) {
-              // Update existing order line
-              response = await callTripletexAPI(
-                `/order/orderline/${entry.tripletex_entry_id}`,
-                'PUT',
-                payload,
+              console.log(`🔍 Step 1: Checking existing Tripletex orderline for entry ${entry.id}:`, {
+                entry_id: entry.id,
+                vehicle_type: entry.vehicle_type,
+                tripletex_entry_id: entry.tripletex_entry_id,
+                sync_status: entry.sync_status
+              });
+
+              // Try to get existing orderline by ID
+              const getResponse = await callTripletexAPI(
+                `/project/orderline/${entry.tripletex_entry_id}?fields=id,project(id),product(id),date,count,description`,
+                'GET',
+                undefined,
                 orgId
               );
+
+              if (getResponse.success && getResponse.data?.value?.id) {
+                // Line exists, update it
+                existingLineId = Number(entry.tripletex_entry_id);
+                console.log(`✅ Found existing orderline, updating: ${existingLineId}`);
+                response = await callTripletexAPI(
+                  `/project/orderline/${existingLineId}`,
+                  'PUT',
+                  payload,
+                  orgId
+                );
+              } else if (getResponse.status === 404) {
+                // Line was deleted in Tripletex, treat as new
+                console.log(`⚠️ Tripletex orderline ${entry.tripletex_entry_id} not found (404), creating new`);
+                existingLineId = null;
+                response = await callTripletexAPI('/project/orderline', 'POST', payload, orgId);
+              } else {
+                // Other error - try fallback search
+                console.log(`⚠️ Failed to get existing orderline (status: ${getResponse.status}), will search instead`);
+                existingLineId = null;
+                response = getResponse; // Will fall through to search logic
+              }
             } else {
-              // Create new order line
-              response = await callTripletexAPI('/order/orderline', 'POST', payload, orgId);
+              console.log(`🆕 Step 1: No stored Tripletex ID for entry ${entry.id}, will search/create new`, {
+                entry_id: entry.id,
+                vehicle_type: entry.vehicle_type,
+                sync_status: entry.sync_status
+              });
             }
 
+            // Step 2: If no ID or GET failed, run expanded search across products/date
+            if (!entry.tripletex_entry_id || !response || (!response.success && response.status !== 404)) {
+              const { match: searchMatch, aggregated } = await runExpandedSearch('initial-search');
+
+              if (searchMatch) {
+                existingLineId = searchMatch.id;
+                console.log('✅ Found matching line via expanded search, updating existing orderline', {
+                  entry_id: entry.id,
+                  vehicle_type: entry.vehicle_type,
+                  matching_line: { id: searchMatch.id, description: searchMatch.description }
+                });
+                response = await callTripletexAPI(
+                  `/project/orderline/${existingLineId}`,
+                  'PUT',
+                  payload,
+                  orgId
+                );
+              } else {
+                console.log('🆕 No matching line found after expanded search, creating new orderline', {
+                  entry_id: entry.id,
+                  vehicle_type: entry.vehicle_type,
+                  aggregated_lines_found: aggregated.map(line => ({
+                    id: line.id,
+                    description: line.description,
+                    product_id: line.product?.id,
+                    sources: line.sources
+                  }))
+                });
+                existingLineId = null;
+                response = await callTripletexAPI('/project/orderline', 'POST', payload, orgId);
+              }
+            }
+
+            // Handle response
+            if (response.status === 409 || response.status === 422) {
+              console.log(`⚠️ Got ${response.status} error for entry ${entry.id}, attempting revision search:`, {
+                entry_id: entry.id,
+                vehicle_type: entry.vehicle_type,
+                status: response.status,
+                error: response.error
+              });
+
+              // Duplicate or validation error - try search and revision
+              // Wait a short moment to ensure the line is committed in Tripletex (race condition handling)
+              await new Promise(resolve => setTimeout(resolve, 500));
+
+              const { match: revisionMatch, aggregated: revisionAggregated } = await runExpandedSearch('revision-search');
+
+              if (revisionMatch) {
+                existingLineId = revisionMatch.id;
+                console.log(`✅ Found matching line after ${response.status}, updating existing orderline`, {
+                  entry_id: entry.id,
+                  vehicle_type: entry.vehicle_type,
+                  matching_line: { id: revisionMatch.id, description: revisionMatch.description }
+                });
+                response = await callTripletexAPI(
+                  `/project/orderline/${revisionMatch.id}`,
+                  'PUT',
+                  payload,
+                  orgId
+                );
+
+                if (response.status === 409 || response.status === 422) {
+                  console.log(`⚠️ Update also returned ${response.status}, but line exists - treating as success`, {
+                    entry_id: entry.id,
+                    line_id: revisionMatch.id
+                  });
+                  response = { ...response, success: true, data: { value: { id: revisionMatch.id } } };
+                }
+              } else {
+                console.error(`❌ No matching line found after ${response.status}, cannot recover`, {
+                  entry_id: entry.id,
+                  vehicle_type: entry.vehicle_type,
+                  aggregated_lines_found: revisionAggregated.map(line => ({
+                    id: line.id,
+                    description: line.description,
+                    product_id: line.product?.id,
+                    sources: line.sources
+                  }))
+                });
+              }
+
+              // If still no success, mark as failed
+              if (!response.success) {
+                await supabase
+                  .from('vehicle_entries')
+                  .update({
+                    sync_status: 'failed',
+                    sync_log: response.error || `Kunne ikke opprette eller oppdatere ordrelinje i Tripletex (${response.status})`,
+                  })
+                  .eq('id', entry.id);
+
+                summary.push({ id: entry.id, status: 'failed', message: response.error || 'Tripletex-feil ved opprettelse/oppdatering' });
+                continue;
+              }
+            }
+
+            // Handle successful response
             if (response.success) {
-              const tripletexId = entry.tripletex_entry_id || response?.data?.value?.id || null;
+              // Get the Tripletex ID from response or use existing
+              const tripletexId = existingLineId || Number(response?.data?.value?.id) || entry.tripletex_entry_id || null;
+              
               const { error: updateError } = await supabase
                 .from('vehicle_entries')
                 .update({
@@ -2364,9 +2752,11 @@ Deno.serve(async (req) => {
                 console.error('Failed to update vehicle entry after Tripletex sync:', updateError);
                 summary.push({ id: entry.id, status: 'warning', message: 'Tripletex ok, lokal oppdatering feilet' });
               } else {
-                summary.push({ id: entry.id, status: 'synced' });
+                const actionType = existingLineId ? 'updated' : 'created';
+                summary.push({ id: entry.id, status: 'synced', message: `Ordrelinje ${actionType} successfully` });
               }
             } else {
+              // Handle failed response (already handled 409/422 above, this is for other errors)
               await supabase
                 .from('vehicle_entries')
                 .update({
@@ -2485,6 +2875,421 @@ Deno.serve(async (req) => {
           // Delete from Tripletex if we have the ID
           if (tripletex_entry_id) {
             deleteResponse = await callTripletexAPI(`/timesheet/entry/${tripletex_entry_id}`, 'DELETE', undefined, orgId);
+          }
+
+          // Also delete associated vehicle orderlines
+          if (deleteVaktTimerId) {
+            // Get vakt_id from vakt_timer
+            const { data: timerData, error: timerError } = await supabase
+              .from('vakt_timer')
+              .select('vakt_id')
+              .eq('id', deleteVaktTimerId)
+              .single();
+
+            if (!timerError && timerData?.vakt_id) {
+              // SKUDDSIKKER TILBAKEKALLING: Tripletex er "source of truth"
+              // 1. Hent vakt-data (project, date, employee)
+              // 2. Hent employee-navn
+              // 3. For hver vehicle_type: Søk i Tripletex og slett alle matching linjer
+              // 4. Nullstill alle lokale entries
+
+              const { data: vaktData, error: vaktError } = await supabase
+                .from('vakt')
+                .select('project_id, dato, person_id')
+                .eq('id', timerData.vakt_id)
+                .single();
+
+              if (vaktError || !vaktData) {
+                console.error('❌ Failed to fetch vakt data for vehicle deletion:', vaktError);
+                // Still try to reset any existing vehicle entries
+                const { data: vehicleEntries } = await supabase
+                  .from('vehicle_entries')
+                  .select('id')
+                  .eq('vakt_id', timerData.vakt_id);
+                
+                if (vehicleEntries && vehicleEntries.length > 0) {
+                  await supabase
+                    .from('vehicle_entries')
+                    .update({
+                      sync_status: 'pending',
+                      tripletex_entry_id: null,
+                      sync_log: 'Recall failed - vakt data not found',
+                    })
+                    .eq('vakt_id', timerData.vakt_id);
+                }
+                // Can't process without vakt data - return early
+                return deleteResponse;
+              }
+
+              // Get employee name for matching
+              let employeeName = '';
+              const { data: personData } = await supabase
+                .from('person')
+                .select('fornavn, etternavn')
+                .eq('id', vaktData.person_id)
+                .single();
+
+              if (personData) {
+                employeeName = `${personData.fornavn || ''} ${personData.etternavn || ''}`.trim();
+              } else {
+                // Fallback: Try ttx_employee_cache via vakt_timer
+                const { data: timerWithEmployee } = await supabase
+                  .from('vakt_timer')
+                  .select(`
+                    person:person_id (fornavn, etternavn),
+                    vakt!inner (person_id)
+                  `)
+                  .eq('vakt_id', timerData.vakt_id)
+                  .limit(1)
+                  .single();
+
+                if (timerWithEmployee && (timerWithEmployee as any).person) {
+                  const person = (timerWithEmployee as any).person;
+                  employeeName = `${person.fornavn || ''} ${person.etternavn || ''}`.trim();
+                }
+              }
+
+              console.log('🗑️ Starting robust vehicle recall:', {
+                vakt_id: timerData.vakt_id,
+                project_id: vaktData.project_id,
+                date: vaktData.dato,
+                employee_name: employeeName || 'NOT FOUND',
+                person_id: vaktData.person_id
+              });
+
+              // Get all vehicle entries for this vakt
+              const { data: vehicleEntries, error: vehicleError } = await supabase
+                .from('vehicle_entries')
+                .select('id, vehicle_type, tripletex_entry_id')
+                .eq('vakt_id', timerData.vakt_id);
+
+              if (vehicleError) {
+                console.error('❌ Failed to fetch vehicle entries:', vehicleError);
+                // Continue with execution even if fetch failed
+              }
+
+              // Get all vehicle product configs
+              const { data: productConfigs } = await supabase
+                .from('vehicle_products')
+                .select('product_type, tripletex_product_id')
+                .eq('org_id', orgId);
+
+              const productMap = new Map<string, number>();
+              (productConfigs || []).forEach((pc) => {
+                if (pc.product_type && pc.tripletex_product_id) {
+                  productMap.set(pc.product_type, pc.tripletex_product_id);
+                }
+              });
+
+              // Get project_id (might be UUID, need to get Tripletex project ID)
+              const { data: projectData } = await supabase
+                .from('ttx_project_cache')
+                .select('tripletex_project_id')
+                .eq('id', vaktData.project_id)
+                .single();
+
+              if (!projectData?.tripletex_project_id) {
+                console.error('❌ No Tripletex project ID found for project:', vaktData.project_id);
+                // Reset all entries anyway
+                if (vehicleEntries && vehicleEntries.length > 0) {
+                  await supabase
+                    .from('vehicle_entries')
+                    .update({
+                      sync_status: 'pending',
+                      tripletex_entry_id: null,
+                      sync_log: 'Recall failed - no Tripletex project ID',
+                    })
+                    .eq('vakt_id', timerData.vakt_id);
+                }
+                // Can't continue without Tripletex project ID - return early
+                return deleteResponse;
+              }
+
+              const entryDate = new Date(vaktData.dato).toISOString().split('T')[0];
+              const tripletexProjectId = projectData.tripletex_project_id;
+
+              // Build base description patterns for matching
+              const baseDescriptions: Record<string, string> = {
+                'servicebil': 'Servicebil Oslo/Akershus',
+                'km_utenfor': 'Km utenfor Oslo/Akershus',
+                'tilhenger': 'Tilhenger'
+              };
+
+              // CRITICAL: Search ALL vehicle products for this date/project
+              // Linjer kan være opprettet med feil produkt (f.eks. "km_utenfor" med "servicebil" produkt)
+              // Derfor må vi søke på ALLE vehicle produkter for å finne ALLE linjer
+              
+              // Collect all vehicle product IDs for this org
+              const allVehicleProductIds = Array.from(productMap.values());
+              
+              if (allVehicleProductIds.length === 0) {
+                console.warn('⚠️ No vehicle products configured');
+                // Reset entries anyway
+                if (vehicleEntries && vehicleEntries.length > 0) {
+                  await supabase
+                    .from('vehicle_entries')
+                    .update({
+                      sync_status: 'pending',
+                      tripletex_entry_id: null,
+                      sync_log: 'Recall failed - no vehicle products configured',
+                    })
+                    .eq('vakt_id', timerData.vakt_id);
+                }
+                return deleteResponse;
+              }
+
+              // Search for ALL vehicle orderlines for this project/date (any vehicle product)
+              // We'll collect all lines first, then match by description
+              let allLines: Array<{ id: number; description?: string; product?: { id?: number } }> = [];
+              
+              for (const productId of allVehicleProductIds) {
+                const searchResponse = await callTripletexAPI(
+                  `/project/orderline?projectId=${tripletexProjectId}&date=${entryDate}&productId=${productId}&fields=id,description,product(id)`,
+                  'GET',
+                  undefined,
+                  orgId
+                );
+
+                if (searchResponse.success && searchResponse.data?.values) {
+                  const lines = searchResponse.data.values as Array<{ id: number; description?: string; product?: { id?: number } }>;
+                  allLines = allLines.concat(lines);
+                  console.log(`🔍 Found ${lines.length} lines for product ${productId}:`, {
+                    product_id: productId,
+                    lines: lines.map(l => ({ id: l.id, description: l.description }))
+                  });
+                }
+              }
+
+              console.log(`📋 Total vehicle lines found across all products: ${allLines.length}`, {
+                all_lines: allLines.map(l => ({ 
+                  id: l.id, 
+                  description: l.description,
+                  product_id: l.product?.id 
+                }))
+              });
+
+              // For each entry, attempt to delete exposed Tripletex lines
+              let remainingLines = allLines.slice();
+              let totalDeleted = 0;
+
+              for (const vehicleEntry of vehicleEntries || []) {
+                const baseDescription = baseDescriptions[vehicleEntry.vehicle_type] || vehicleEntry.vehicle_type;
+                const canonicalToken = `[vehicle:${timerData.vakt_id}:${vehicleEntry.vehicle_type}]`;
+                const legacyToken = `[vehicle:${vehicleEntry.id}]`;
+                const tokenCandidates = [canonicalToken, legacyToken];
+                const canonicalTokenLower = canonicalToken.toLowerCase();
+                const legacyTokenLower = legacyToken.toLowerCase();
+                const tokenCandidatesLower = tokenCandidates.map(token => token.toLowerCase());
+                const entryLogContext = {
+                  entry_id: vehicleEntry.id,
+                  vehicle_type: vehicleEntry.vehicle_type,
+                  tripletex_entry_id: vehicleEntry.tripletex_entry_id,
+                  base_description: baseDescription,
+                  tokens: tokenCandidates
+                };
+
+                console.log('🔁 Processing vehicle entry for recall:', entryLogContext);
+
+                // Step A: attempt direct delete by stored Tripletex ID
+                if (vehicleEntry.tripletex_entry_id) {
+                  const deleteByIdResponse = await callTripletexAPI(
+                    `/project/orderline/${vehicleEntry.tripletex_entry_id}`,
+                    'DELETE',
+                    undefined,
+                    orgId
+                  );
+
+                  if (deleteByIdResponse.success || deleteByIdResponse.status === 404) {
+                    totalDeleted++;
+                    console.log('✅ Deleted vehicle orderline by ID:', {
+                      ...entryLogContext,
+                      deleted_line_id: vehicleEntry.tripletex_entry_id,
+                      status: deleteByIdResponse.status
+                    });
+                    remainingLines = remainingLines.filter(line => line.id !== Number(vehicleEntry.tripletex_entry_id));
+                  } else if (deleteByIdResponse.status === 409) {
+                    // 409 RevisionException - line exists but was modified/recreated
+                    // Don't remove from remainingLines - let Step B (token matching) find and delete it
+                    console.log('ℹ️ Line has RevisionException (modified/recreated), will try token matching:', {
+                      ...entryLogContext,
+                      deleted_line_id: vehicleEntry.tripletex_entry_id,
+                      status: deleteByIdResponse.status
+                    });
+                  } else {
+                    console.warn('⚠️ Failed to delete line by stored ID, will fall back to token matching', {
+                      ...entryLogContext,
+                      status: deleteByIdResponse.status,
+                      error: deleteByIdResponse.error
+                    });
+                  }
+                }
+                
+                // Step B: delete any remaining lines that contain this entry's token (in description)
+                const tokenMatches = remainingLines.filter(line => {
+                  const descLower = (line.description || '').toLowerCase();
+                  return tokenCandidatesLower.some(token => descLower.includes(token));
+                });
+
+                if (tokenMatches.length > 0) {
+                  console.log('🔑 Token matches found for vehicle entry:', {
+                    ...entryLogContext,
+                    remaining_lines_count: remainingLines.length,
+                    token_candidates: tokenCandidatesLower,
+                    matching_lines: tokenMatches.map(l => ({ id: l.id, description: l.description, product_id: l.product?.id }))
+                  });
+
+                  for (const line of tokenMatches) {
+                    const deleteResponse = await callTripletexAPI(
+                      `/project/orderline/${line.id}`,
+                      'DELETE',
+                      undefined,
+                      orgId
+                    );
+
+                    if (deleteResponse.success || deleteResponse.status === 404 || deleteResponse.status === 409) {
+                      totalDeleted++;
+                      console.log('✅ Deleted vehicle orderline via token match:', {
+                        ...entryLogContext,
+                        line_id: line.id,
+                        status: deleteResponse.status
+                      });
+                      remainingLines = remainingLines.filter(l => l.id !== line.id);
+                    } else {
+                      console.warn('⚠️ Failed to delete line via token match:', {
+                        ...entryLogContext,
+                        line_id: line.id,
+                        status: deleteResponse.status,
+                        error: deleteResponse.error
+                      });
+                    }
+                  }
+
+                  continue; // Skip legacy heuristics if token matches handled it
+                } else {
+                  console.log('🔍 No token matches found, will try fallback matching:', {
+                    ...entryLogContext,
+                    remaining_lines_count: remainingLines.length,
+                    token_candidates: tokenCandidatesLower,
+                    all_remaining_descriptions: remainingLines.map(l => l.description).filter(Boolean)
+                  });
+                }
+
+                // Step C: fallback to legacy heuristic matching
+                const vehicleTypePatterns: Record<string, string[]> = {
+                  'servicebil': [
+                    'servicebil oslo/akershus',
+                    'servicebil',
+                    'servicebil/transport',
+                    'service bil',
+                    'transport'
+                  ],
+                  'km_utenfor': [
+                    'km utenfor oslo/akershus',
+                    'km utenfor',
+                    'kilometer utenfor',
+                    'kilometer',
+                    'km'
+                  ],
+                  'tilhenger': [
+                    'tilhenger',
+                    'trailer'
+                  ]
+                };
+
+                const fallbackMatches = remainingLines.filter((line) => {
+                  if (!line.description) return false;
+
+                  const descriptionLower = line.description.toLowerCase();
+                  const patterns = vehicleTypePatterns[vehicleEntry.vehicle_type] || [baseDescription.toLowerCase()];
+                  const matchesVehicleType = patterns.some(pattern =>
+                    descriptionLower.includes(pattern)
+                  );
+
+                  if (!matchesVehicleType) return false;
+
+                  if (employeeName) {
+                    const employeeNameLower = employeeName.toLowerCase();
+                    if (descriptionLower.includes(employeeNameLower)) {
+                      return true;
+                    }
+                    const exactPattern = `${employeeNameLower} - ${baseDescription.toLowerCase()}`;
+                    if (descriptionLower === exactPattern || descriptionLower.includes(exactPattern)) {
+                      return true;
+                    }
+                    return false;
+                  }
+
+                  return true;
+                });
+
+                console.log('🔍 Fallback search results for vehicle entry:', {
+                  ...entryLogContext,
+                  employee_name: employeeName || 'N/A',
+                  total_lines_remaining: remainingLines.length,
+                  all_remaining_lines: remainingLines.map(l => ({ id: l.id, description: l.description, product_id: l.product?.id })),
+                  fallback_matching_count: fallbackMatches.length,
+                  fallback_matching_lines: fallbackMatches.map(l => ({ id: l.id, description: l.description, product_id: l.product?.id })),
+                  search_patterns: vehicleTypePatterns[vehicleEntry.vehicle_type] || [baseDescription.toLowerCase()]
+                });
+
+                for (const line of fallbackMatches) {
+                  const deleteResponse = await callTripletexAPI(
+                    `/project/orderline/${line.id}`,
+                    'DELETE',
+                    undefined,
+                    orgId
+                  );
+
+                  if (deleteResponse.success || deleteResponse.status === 404 || deleteResponse.status === 409) {
+                    totalDeleted++;
+                    console.log('✅ Deleted vehicle orderline via fallback matching:', {
+                      ...entryLogContext,
+                      line_id: line.id,
+                      status: deleteResponse.status
+                    });
+                    remainingLines = remainingLines.filter(l => l.id !== line.id);
+                  } else {
+                    console.warn('⚠️ Failed to delete line via fallback matching:', {
+                      ...entryLogContext,
+                      line_id: line.id,
+                      status: deleteResponse.status,
+                      error: deleteResponse.error
+                    });
+                  }
+                }
+              }
+
+              // Reset ALL vehicle entries for this vakt to pending (regardless of whether we found them in Tripletex)
+              if (vehicleEntries && vehicleEntries.length > 0) {
+                const { error: resetError } = await supabase
+                  .from('vehicle_entries')
+                  .update({
+                    sync_status: 'pending',
+                    tripletex_entry_id: null,
+                    sync_log: null,
+                  })
+                  .eq('vakt_id', timerData.vakt_id);
+
+                console.log(`🔄 Reset all vehicle entries to pending:`, {
+                  entries_reset: vehicleEntries.length,
+                  vehicle_types: vehicleEntries.map(e => e.vehicle_type),
+                  lines_deleted_from_tripletex: totalDeleted,
+                  reset_error: resetError?.message
+                });
+              } else {
+                console.log('ℹ️ No vehicle entries found for this vakt');
+              }
+
+              // Final summary log
+              console.log(`✅ Vehicle recall completed:`, {
+                vakt_id: timerData.vakt_id,
+                employee_name: employeeName || 'NOT FOUND',
+                project_id: tripletexProjectId,
+                date: entryDate,
+                entries_processed: vehicleEntries?.length || 0,
+                lines_deleted: totalDeleted
+              });
+            }
           }
 
         if (deleteResponse.success && deleteVaktTimerId) {
