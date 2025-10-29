@@ -2538,7 +2538,7 @@ Deno.serve(async (req) => {
 
           while (hasMore) {
             const response = await callTripletexAPI(
-              `/product?page=${page}&count=${pageSize}&fields=id,name,number,unit,type`,
+              `/product?page=${page}&count=${pageSize}`,
               'GET',
               undefined,
               orgId
@@ -2567,16 +2567,49 @@ Deno.serve(async (req) => {
             }
           }
 
-          const products = aggregated.map((product: any) => ({
-            id: product.id,
-            name: product.name,
-            number: product.number,
-            unit: product.unit,
-            type: product.type,
-            isService: product.type === 'SERVICE',
-            isProduct: product.type === 'PRODUCT',
-            isOutlay: product.type === 'OUTLAY',
-          }));
+          const extractUnit = (product: any): string | null => {
+            const candidates = [
+              product.unit,
+              product.unitType,
+              product.unitOfMeasurement,
+              product.unitOfMeasure,
+            ];
+
+            for (const candidate of candidates) {
+              if (!candidate) continue;
+              if (typeof candidate === 'string' && candidate.trim().length > 0) {
+                return candidate;
+              }
+              if (typeof candidate === 'object') {
+                const name =
+                  candidate.name ??
+                  candidate.displayName ??
+                  candidate.description ??
+                  candidate.code ??
+                  candidate.value;
+                if (typeof name === 'string' && name.trim().length > 0) {
+                  return name;
+                }
+              }
+            }
+
+            return null;
+          };
+
+          const products = aggregated.map((product: any) => {
+            const unit = extractUnit(product);
+
+            return {
+              id: product.id,
+              name: product.name,
+              number: product.number,
+              unit: unit ?? undefined,
+              type: product.type,
+              isService: product.type === 'SERVICE',
+              isProduct: product.type === 'PRODUCT',
+              isOutlay: product.type === 'OUTLAY',
+            };
+          });
 
           return { success: true, data: products };
         });
