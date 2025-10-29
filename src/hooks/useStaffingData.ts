@@ -119,6 +119,9 @@ export function useTimeEntryMutation() {
         existingEntryId?: string | null;
         existingTripletexEntryId?: number | null;
       };
+      tilhengerEnabled?: boolean;
+      existingTilhengerEntryId?: string | null;
+      existingTilhengerTripletexEntryId?: number | null;
     }) => {
       // Validate inputs
       validateUUID(data.vaktId);
@@ -149,6 +152,7 @@ export function useTimeEntryMutation() {
 
       if (error) throw error;
 
+      // Save primary vehicle entry (servicebil or km_utenfor)
       let vehicleResult = null;
       if (data.vehicle) {
         vehicleResult = await saveVehicleEntry({
@@ -162,7 +166,57 @@ export function useTimeEntryMutation() {
         });
       }
 
-      return { success: true, vehicle: vehicleResult };
+      // Save tilhenger entry separately if enabled
+      let tilhengerResult = null;
+      if (data.tilhengerEnabled) {
+        // Find existing tilhenger entry if it exists
+        const { data: existingTilhenger } = await supabase
+          .from('vehicle_entries')
+          .select('id, tripletex_entry_id')
+          .eq('vakt_id', data.vaktId)
+          .eq('vehicle_type', 'tilhenger')
+          .maybeSingle();
+
+        tilhengerResult = await saveVehicleEntry({
+          supabase,
+          vaktId: data.vaktId,
+          orgId: data.orgId,
+          vehicleType: 'tilhenger',
+          distanceKm: 0,
+          existingEntryId: existingTilhenger?.id ?? data.existingTilhengerEntryId ?? null,
+          existingTripletexEntryId: existingTilhenger?.tripletex_entry_id ?? data.existingTilhengerTripletexEntryId ?? null,
+        });
+      } else {
+        // Remove tilhenger entry if it exists
+        const { data: existingTilhenger } = await supabase
+          .from('vehicle_entries')
+          .select('id, tripletex_entry_id')
+          .eq('vakt_id', data.vaktId)
+          .eq('vehicle_type', 'tilhenger')
+          .maybeSingle();
+
+        if (existingTilhenger) {
+          if (!existingTilhenger.tripletex_entry_id) {
+            // Not synced yet - delete directly
+            await supabase
+              .from('vehicle_entries')
+              .delete()
+              .eq('id', existingTilhenger.id);
+          } else {
+            // Mark for deletion
+            await supabase
+              .from('vehicle_entries')
+              .update({
+                sync_status: 'pending_delete' as const,
+                sync_log: null,
+                distance_km: 0,
+              })
+              .eq('id', existingTilhenger.id);
+          }
+        }
+      }
+
+      return { success: true, vehicle: vehicleResult, tilhenger: tilhengerResult };
     },
     onSuccess: () => {
       // Invalidate all staffing queries to refetch data

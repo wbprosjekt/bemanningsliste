@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Clock, MessageSquare, Paperclip, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -303,29 +304,62 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
           setStatus('utkast');
         }
 
-        // Load existing vehicle entry linked to this vakt
-        const { data: vehicleData, error: vehicleError } = await supabase
+        // Load ALL existing vehicle entries linked to this vakt (støtter flere entries, f.eks. servicebil + tilhenger)
+        const { data: vehicleDataList, error: vehicleError } = await supabase
           .from('vehicle_entries')
           .select('id, vehicle_type, distance_km, sync_status, tripletex_entry_id')
           .eq('vakt_id', vaktId)
-          .maybeSingle();
+          .order('created_at', { ascending: true }); // Sorter for konsistent håndtering
 
         if (vehicleError) {
-          console.error('Failed to load vehicle entry:', vehicleError);
+          console.error('Failed to load vehicle entries:', vehicleError);
         }
 
-        if (vehicleData) {
-          setVehicleEntryId(vehicleData.id);
-          setVehicleType((vehicleData.vehicle_type as VehicleTypeOption) ?? 'none');
-          setVehicleDistanceKm(Number(vehicleData.distance_km ?? 0));
-          setVehicleSyncStatus((vehicleData.sync_status as VehicleSyncStatus) ?? null);
-          setVehicleTripletexEntryId(vehicleData.tripletex_entry_id ?? null);
+        if (vehicleDataList && vehicleDataList.length > 0) {
+          // Finn primær type (servicebil eller km_utenfor - ikke tilhenger)
+          const primaryEntry = vehicleDataList.find(
+            entry => entry.vehicle_type === 'servicebil' || entry.vehicle_type === 'km_utenfor'
+          );
+          
+          // Sjekk om tilhenger finnes
+          const tilhengerEntry = vehicleDataList.find(
+            entry => entry.vehicle_type === 'tilhenger'
+          );
+
+          if (primaryEntry) {
+            // Vi har en primær type (servicebil eller km_utenfor)
+            setVehicleEntryId(primaryEntry.id);
+            setVehicleType((primaryEntry.vehicle_type as VehicleTypeOption) ?? 'none');
+            setVehicleDistanceKm(Number(primaryEntry.distance_km ?? 0));
+            setVehicleSyncStatus((primaryEntry.sync_status as VehicleSyncStatus) ?? null);
+            setVehicleTripletexEntryId(primaryEntry.tripletex_entry_id ?? null);
+            
+            // Sett tilhenger state hvis tilhenger-entry finnes
+            setTilhengerEnabled(!!tilhengerEntry);
+          } else if (tilhengerEntry) {
+            // Kun tilhenger (ingen primær type)
+            setVehicleEntryId(tilhengerEntry.id);
+            setVehicleType('tilhenger');
+            setVehicleDistanceKm(0);
+            setVehicleSyncStatus((tilhengerEntry.sync_status as VehicleSyncStatus) ?? null);
+            setVehicleTripletexEntryId(tilhengerEntry.tripletex_entry_id ?? null);
+            setTilhengerEnabled(true);
+          } else {
+            // Fallback (skal ikke skje)
+            setVehicleEntryId(null);
+            setVehicleType('none');
+            setVehicleDistanceKm(0);
+            setVehicleSyncStatus(null);
+            setVehicleTripletexEntryId(null);
+            setTilhengerEnabled(false);
+          }
         } else {
           setVehicleEntryId(null);
           setVehicleType('none');
           setVehicleDistanceKm(0);
           setVehicleSyncStatus(null);
           setVehicleTripletexEntryId(null);
+          setTilhengerEnabled(false);
         }
       } catch (error) {
         console.error('Error loading existing timer entries:', error);
@@ -376,12 +410,72 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
     setMinutes(roundedMinutes);
   };
 
-  const handleVehicleSelect = (value: VehicleTypeOption) => {
-    setVehicleType(value);
-    if (value !== 'km_utenfor') {
-      setVehicleDistanceKm(0);
-    } else if (vehicleDistanceKm <= 0) {
-      setVehicleDistanceKm(1);
+  // Separate state for vehicle types (støtter kombinasjoner)
+  const [servicebilEnabled, setServicebilEnabled] = useState(false);
+  const [kmUtenforEnabled, setKmUtenforEnabled] = useState(false);
+  const [tilhengerEnabled, setTilhengerEnabled] = useState(false);
+
+  // Sync separate states with vehicleType when vehicleType changes externally
+  useEffect(() => {
+    setServicebilEnabled(vehicleType === 'servicebil');
+    setKmUtenforEnabled(vehicleType === 'km_utenfor');
+    setTilhengerEnabled(vehicleType === 'tilhenger');
+  }, [vehicleType]);
+
+  const handleVehicleToggle = (type: 'servicebil' | 'km_utenfor' | 'tilhenger', checked: boolean) => {
+    if (type === 'servicebil') {
+      setServicebilEnabled(checked);
+      if (checked) {
+        // Servicebil aktivert - deaktiver km_utenfor
+        setKmUtenforEnabled(false);
+        setVehicleType('servicebil');
+        setVehicleDistanceKm(0);
+      } else {
+        // Servicebil deaktivert
+        if (tilhengerEnabled) {
+          setVehicleType('tilhenger');
+        } else {
+          setVehicleType('none');
+        }
+      }
+    } else if (type === 'km_utenfor') {
+      setKmUtenforEnabled(checked);
+      if (checked) {
+        // Km utenfor aktivert - deaktiver servicebil
+        setServicebilEnabled(false);
+        setVehicleType('km_utenfor');
+        if (vehicleDistanceKm <= 0) {
+          setVehicleDistanceKm(1);
+        }
+      } else {
+        // Km utenfor deaktivert
+        setVehicleDistanceKm(0);
+        if (tilhengerEnabled) {
+          setVehicleType('tilhenger');
+        } else {
+          setVehicleType('none');
+        }
+      }
+    } else if (type === 'tilhenger') {
+      setTilhengerEnabled(checked);
+      // Tilhenger kan være aktiv uavhengig av servicebil/km_utenfor
+      // Men siden vehicleType kun kan ha én verdi, prioriterer vi servicebil/km_utenfor
+      if (!checked) {
+        // Hvis tilhenger er deaktivert, sjekk hva som skal være aktiv
+        if (servicebilEnabled) {
+          setVehicleType('servicebil');
+        } else if (kmUtenforEnabled) {
+          setVehicleType('km_utenfor');
+        } else {
+          setVehicleType('none');
+        }
+      } else {
+        // Tilhenger aktivert - hvis ingen annen type er aktiv, sett til tilhenger
+        if (!servicebilEnabled && !kmUtenforEnabled) {
+          setVehicleType('tilhenger');
+        }
+        // Hvis servicebil eller km_utenfor er aktiv, beholde den (vehicleType forblir som den er)
+      }
     }
   };
 
@@ -616,17 +710,28 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
     // Use React Query mutation
     const previousTripletexEntryId = vehicleTripletexEntryId;
 
+    // Find existing tilhenger entry ID if it exists separately
+    const { data: existingTilhengerData } = await supabase
+      .from('vehicle_entries')
+      .select('id, tripletex_entry_id')
+      .eq('vakt_id', vaktId)
+      .eq('vehicle_type', 'tilhenger')
+      .maybeSingle();
+
     timeEntryMutation.mutate(
       {
         vaktId,
         orgId,
         entries,
-        vehicle: {
+        vehicle: vehicleType !== 'none' && vehicleType !== 'tilhenger' ? {
           type: vehicleType,
           distanceKm: vehicleDistanceKm,
           existingEntryId: vehicleEntryId,
           existingTripletexEntryId: vehicleTripletexEntryId,
-        }
+        } : undefined,
+        tilhengerEnabled: tilhengerEnabled,
+        existingTilhengerEntryId: existingTilhengerData?.id ?? null,
+        existingTilhengerTripletexEntryId: existingTilhengerData?.tripletex_entry_id ?? null,
       },
       {
         onSuccess: (result) => {
@@ -815,7 +920,7 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
             <SelectTrigger className={!aktivitetId ? "border-red-300 focus:border-red-500" : ""}>
               <SelectValue placeholder={activities.length === 0 ? "Ingen aktiviteter tilgjengelig" : "Velg aktivitet"} />
             </SelectTrigger>
-            <SelectContent className="bg-background border z-50">
+            <SelectContent className="bg-background border z-[110]">
               {activities.length === 0 ? (
                 <div className="px-2 py-1.5 text-sm text-muted-foreground">
                   Ingen aktiviteter tilgjengelig
@@ -833,6 +938,73 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
             <p className="text-sm text-muted-foreground">
               Kontakt administrator for å få aktiviteter konfigurert.
             </p>
+          )}
+        </div>
+
+        {/* Kjøretøy-kompensasjon */}
+        <div className="space-y-3">
+          <Label>Kjøretøy-kompensasjon</Label>
+          
+          <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+            {/* Servicebil */}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="servicebil-switch" className="cursor-pointer font-normal">
+                Servicebil Oslo/Akershus
+              </Label>
+              <Switch
+                id="servicebil-switch"
+                checked={servicebilEnabled}
+                onCheckedChange={(checked) => handleVehicleToggle('servicebil', checked)}
+                disabled={isLocked || kmUtenforEnabled}
+              />
+            </div>
+
+            {/* Km utenfor */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="km-utenfor-switch" className="cursor-pointer font-normal">
+                  Km utenfor Oslo/Akershus
+                </Label>
+                <Switch
+                  id="km-utenfor-switch"
+                  checked={kmUtenforEnabled}
+                  onCheckedChange={(checked) => handleVehicleToggle('km_utenfor', checked)}
+                  disabled={isLocked || servicebilEnabled}
+                />
+              </div>
+              {kmUtenforEnabled && (
+                <div className="flex items-center gap-3 pl-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={Number.isFinite(vehicleDistanceKm) ? vehicleDistanceKm : 0}
+                    onChange={(event) => setVehicleDistanceKm(Math.max(0, Number(event.target.value) || 0))}
+                    className="w-32"
+                    disabled={isLocked}
+                    placeholder="0"
+                  />
+                  <span className="text-sm text-muted-foreground">km</span>
+                </div>
+              )}
+            </div>
+
+            {/* Tilhenger */}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="tilhenger-switch" className="cursor-pointer font-normal">
+                Tilhenger
+              </Label>
+              <Switch
+                id="tilhenger-switch"
+                checked={tilhengerEnabled}
+                onCheckedChange={(checked) => handleVehicleToggle('tilhenger', checked)}
+                disabled={isLocked}
+              />
+            </div>
+          </div>
+
+          {vehicleStatusLabel() && (
+            <p className="text-xs text-muted-foreground">{vehicleStatusLabel()}</p>
           )}
         </div>
 
@@ -998,42 +1170,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
             rows={3}
             disabled={isLocked}
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Kjøretøy-kompensasjon</Label>
-          <Select
-            value={vehicleType}
-            onValueChange={(value) => handleVehicleSelect(value as VehicleTypeOption)}
-            disabled={isLocked}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Ingen" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Ingen</SelectItem>
-              <SelectItem value="servicebil">Servicebil Oslo/Akershus</SelectItem>
-              <SelectItem value="km_utenfor">Km utenfor Oslo/Akershus</SelectItem>
-              <SelectItem value="tilhenger">Tilhenger</SelectItem>
-            </SelectContent>
-          </Select>
-          {vehicleType === 'km_utenfor' && (
-            <div className="flex items-center gap-3">
-              <Input
-                type="number"
-                min="0"
-                step="0.1"
-                value={Number.isFinite(vehicleDistanceKm) ? vehicleDistanceKm : 0}
-                onChange={(event) => setVehicleDistanceKm(Math.max(0, Number(event.target.value) || 0))}
-                className="w-32"
-                disabled={isLocked}
-              />
-              <span className="text-sm text-muted-foreground">km</span>
-            </div>
-          )}
-          {vehicleStatusLabel() && (
-            <p className="text-xs text-muted-foreground">{vehicleStatusLabel()}</p>
-          )}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">

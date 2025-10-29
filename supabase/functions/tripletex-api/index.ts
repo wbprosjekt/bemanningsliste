@@ -2265,7 +2265,7 @@ Deno.serve(async (req) => {
               }
 
               const deleteResponse = await callTripletexAPI(
-                `/timesheet/entry/${entry.tripletex_entry_id}`,
+                `/order/orderline/${entry.tripletex_entry_id}`,
                 'DELETE',
                 undefined,
                 orgId
@@ -2321,26 +2321,30 @@ Deno.serve(async (req) => {
                 ? 'Servicebil Oslo/Akershus'
                 : 'Tilhenger';
 
+            // For vehicle compensation (products/order lines), we need to use /order/orderline endpoint
+            // /timesheet/entry is only for time entries with activities, not products
             const payload = {
-              date: entryDate,
-              employee: { id: Number(employee_id) },
-              project: { id: Number(project_id) },
-              activity: { id: Number(productId) },
-              hours: 0,
-              quantity,
-              comment: description,
+              order: {
+                project: { id: Number(project_id) }
+              },
+              product: { id: Number(productId) },
+              quantity: quantity,
+              unitPriceExcludingVatCurrency: 0, // Will use product default price
+              description: description,
             };
 
             let response;
             if (entry.tripletex_entry_id) {
+              // Update existing order line
               response = await callTripletexAPI(
-                `/timesheet/entry/${entry.tripletex_entry_id}`,
+                `/order/orderline/${entry.tripletex_entry_id}`,
                 'PUT',
                 payload,
                 orgId
               );
             } else {
-              response = await callTripletexAPI('/timesheet/entry', 'POST', payload, orgId);
+              // Create new order line
+              response = await callTripletexAPI('/order/orderline', 'POST', payload, orgId);
             }
 
             if (response.success) {

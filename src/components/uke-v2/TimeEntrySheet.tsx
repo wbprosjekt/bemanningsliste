@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { saveVehicleEntry, VehicleTypeOption } from '@/lib/vehicleEntries';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -50,6 +52,18 @@ export default function TimeEntrySheet({
   const [vehicleType, setVehicleType] = useState<VehicleTypeOption>('none');
   const [vehicleDistanceKm, setVehicleDistanceKm] = useState<number>(0);
   
+  // Separate state for vehicle types
+  const [servicebilEnabled, setServicebilEnabled] = useState(false);
+  const [kmUtenforEnabled, setKmUtenforEnabled] = useState(false);
+  const [tilhengerEnabled, setTilhengerEnabled] = useState(false);
+
+  // Sync separate states with vehicleType when vehicleType changes externally
+  useEffect(() => {
+    setServicebilEnabled(vehicleType === 'servicebil');
+    setKmUtenforEnabled(vehicleType === 'km_utenfor');
+    setTilhengerEnabled(vehicleType === 'tilhenger');
+  }, [vehicleType]);
+  
   // Dialog states
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [showActivitySelector, setShowActivitySelector] = useState(false);
@@ -64,6 +78,9 @@ export default function TimeEntrySheet({
       setComment('');
       setVehicleType('none');
       setVehicleDistanceKm(0);
+      setServicebilEnabled(false);
+      setKmUtenforEnabled(false);
+      setTilhengerEnabled(false);
     }
   }, [open, entryId]);
 
@@ -76,12 +93,59 @@ export default function TimeEntrySheet({
     setMinutes(mins);
   };
 
-  const handleVehicleSelect = (value: VehicleTypeOption) => {
-    setVehicleType(value);
-    if (value !== 'km_utenfor') {
-      setVehicleDistanceKm(0);
-    } else if (vehicleDistanceKm <= 0) {
-      setVehicleDistanceKm(1);
+  const handleVehicleToggle = (type: 'servicebil' | 'km_utenfor' | 'tilhenger', checked: boolean) => {
+    if (type === 'servicebil') {
+      setServicebilEnabled(checked);
+      if (checked) {
+        // Servicebil aktivert - deaktiver km_utenfor
+        setKmUtenforEnabled(false);
+        setVehicleType('servicebil');
+        setVehicleDistanceKm(0);
+      } else {
+        // Servicebil deaktivert
+        if (tilhengerEnabled) {
+          setVehicleType('tilhenger');
+        } else {
+          setVehicleType('none');
+        }
+      }
+    } else if (type === 'km_utenfor') {
+      setKmUtenforEnabled(checked);
+      if (checked) {
+        // Km utenfor aktivert - deaktiver servicebil
+        setServicebilEnabled(false);
+        setVehicleType('km_utenfor');
+        if (vehicleDistanceKm <= 0) {
+          setVehicleDistanceKm(1);
+        }
+      } else {
+        // Km utenfor deaktivert
+        setVehicleDistanceKm(0);
+        if (tilhengerEnabled) {
+          setVehicleType('tilhenger');
+        } else {
+          setVehicleType('none');
+        }
+      }
+    } else if (type === 'tilhenger') {
+      setTilhengerEnabled(checked);
+      // Tilhenger kan være aktiv uavhengig av servicebil/km_utenfor
+      if (!checked) {
+        // Hvis tilhenger er deaktivert, sjekk hva som skal være aktiv
+        if (servicebilEnabled) {
+          setVehicleType('servicebil');
+        } else if (kmUtenforEnabled) {
+          setVehicleType('km_utenfor');
+        } else {
+          setVehicleType('none');
+        }
+      } else {
+        // Tilhenger aktivert - hvis ingen annen type er aktiv, sett til tilhenger
+        if (!servicebilEnabled && !kmUtenforEnabled) {
+          setVehicleType('tilhenger');
+        }
+        // Hvis servicebil eller km_utenfor er aktiv, beholde den
+      }
     }
   };
 
@@ -165,7 +229,8 @@ export default function TimeEntrySheet({
 
       if (timerError) throw timerError;
 
-      if (vehicleType !== 'none') {
+      // Save primary vehicle entry (servicebil or km_utenfor)
+      if (vehicleType !== 'none' && vehicleType !== 'tilhenger') {
         await saveVehicleEntry({
           supabase,
           vaktId,
@@ -173,6 +238,55 @@ export default function TimeEntrySheet({
           vehicleType,
           distanceKm: vehicleDistanceKm,
         });
+      }
+
+      // Save tilhenger entry separately if enabled
+      if (tilhengerEnabled) {
+        // Find existing tilhenger entry if it exists
+        const { data: existingTilhenger } = await supabase
+          .from('vehicle_entries')
+          .select('id, tripletex_entry_id')
+          .eq('vakt_id', vaktId)
+          .eq('vehicle_type', 'tilhenger')
+          .maybeSingle();
+
+        await saveVehicleEntry({
+          supabase,
+          vaktId,
+          orgId,
+          vehicleType: 'tilhenger',
+          distanceKm: 0,
+          existingEntryId: existingTilhenger?.id ?? null,
+          existingTripletexEntryId: existingTilhenger?.tripletex_entry_id ?? null,
+        });
+      } else {
+        // Remove tilhenger entry if it exists
+        const { data: existingTilhenger } = await supabase
+          .from('vehicle_entries')
+          .select('id, tripletex_entry_id')
+          .eq('vakt_id', vaktId)
+          .eq('vehicle_type', 'tilhenger')
+          .maybeSingle();
+
+        if (existingTilhenger) {
+          if (!existingTilhenger.tripletex_entry_id) {
+            // Not synced yet - delete directly
+            await supabase
+              .from('vehicle_entries')
+              .delete()
+              .eq('id', existingTilhenger.id);
+          } else {
+            // Mark for deletion
+            await supabase
+              .from('vehicle_entries')
+              .update({
+                sync_status: 'pending_delete',
+                sync_log: null,
+                distance_km: 0,
+              })
+              .eq('id', existingTilhenger.id);
+          }
+        }
       }
 
       toast({
@@ -312,35 +426,64 @@ export default function TimeEntrySheet({
             </div>
 
             {/* Vehicle compensation */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <label className="text-sm text-gray-700 font-medium">Kjøretøy-kompensasjon</label>
-              <Select
-                value={vehicleType}
-                onValueChange={(value) => handleVehicleSelect(value as VehicleTypeOption)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Ingen" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Ingen</SelectItem>
-                  <SelectItem value="servicebil">Servicebil Oslo/Akershus</SelectItem>
-                  <SelectItem value="km_utenfor">Km utenfor Oslo/Akershus</SelectItem>
-                  <SelectItem value="tilhenger">Tilhenger</SelectItem>
-                </SelectContent>
-              </Select>
-              {vehicleType === 'km_utenfor' && (
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={Number.isFinite(vehicleDistanceKm) ? vehicleDistanceKm : 0}
-                    onChange={(event) => setVehicleDistanceKm(Math.max(0, Number(event.target.value) || 0))}
-                    className="w-32"
+              
+              <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+                {/* Servicebil */}
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="servicebil-switch-sheet" className="cursor-pointer font-normal">
+                    Servicebil Oslo/Akershus
+                  </Label>
+                  <Switch
+                    id="servicebil-switch-sheet"
+                    checked={servicebilEnabled}
+                    onCheckedChange={(checked) => handleVehicleToggle('servicebil', checked)}
+                    disabled={kmUtenforEnabled}
                   />
-                  <span className="text-sm text-gray-500">km</span>
                 </div>
-              )}
+
+                {/* Km utenfor */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="km-utenfor-switch-sheet" className="cursor-pointer font-normal">
+                      Km utenfor Oslo/Akershus
+                    </Label>
+                    <Switch
+                      id="km-utenfor-switch-sheet"
+                      checked={kmUtenforEnabled}
+                      onCheckedChange={(checked) => handleVehicleToggle('km_utenfor', checked)}
+                      disabled={servicebilEnabled}
+                    />
+                  </div>
+                  {kmUtenforEnabled && (
+                    <div className="flex items-center gap-3 pl-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={Number.isFinite(vehicleDistanceKm) ? vehicleDistanceKm : 0}
+                        onChange={(event) => setVehicleDistanceKm(Math.max(0, Number(event.target.value) || 0))}
+                        className="w-32"
+                        placeholder="0"
+                      />
+                      <span className="text-sm text-gray-500">km</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tilhenger */}
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="tilhenger-switch-sheet" className="cursor-pointer font-normal">
+                    Tilhenger
+                  </Label>
+                  <Switch
+                    id="tilhenger-switch-sheet"
+                    checked={tilhengerEnabled}
+                    onCheckedChange={(checked) => handleVehicleToggle('tilhenger', checked)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

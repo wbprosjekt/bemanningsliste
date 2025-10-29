@@ -182,7 +182,7 @@ export default function VehicleProductSettingsDialog({ open, onOpenChange, orgId
         <SelectTrigger>
           <SelectValue placeholder="Velg produkt" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="z-[110]">
           {sortedProducts.map((product) => (
             <SelectItem key={product.id} value={String(product.id)}>
               <div className="flex flex-col">
