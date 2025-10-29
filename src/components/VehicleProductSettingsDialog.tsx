@@ -20,7 +20,10 @@ interface TripletexProductOption {
   name?: string;
   number?: number;
   unit?: string;
-  productType?: string;
+  type?: string;
+  isService?: boolean;
+  isProduct?: boolean;
+  isOutlay?: boolean;
 }
 
 interface VehicleSelectionState {
@@ -187,6 +190,7 @@ export default function VehicleProductSettingsDialog({ open, onOpenChange, orgId
                 <span className="text-xs text-muted-foreground">
                   {product.number ? `#${product.number}` : 'Uten nummer'}
                   {product.unit ? ` • ${product.unit}` : ''}
+                  {product.type ? ` • ${product.type}` : ''}
                 </span>
               </div>
             </SelectItem>

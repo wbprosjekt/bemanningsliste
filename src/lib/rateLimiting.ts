@@ -133,9 +133,6 @@ type NextRequestContext = {
 
 type NextRequestHandler = (request: Request, context?: NextRequestContext) => Promise<Response> | Response;
 
-// Explicit function type to avoid Function type lint error
-type HandlerFunction = (request: Request, context?: NextRequestContext) => Promise<Response> | Response;
-
 export function withRateLimit(
   handler: NextRequestHandler,
   config?: RateLimitConfig,

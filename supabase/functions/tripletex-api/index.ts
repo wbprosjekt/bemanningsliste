@@ -2538,7 +2538,7 @@ Deno.serve(async (req) => {
 
           while (hasMore) {
             const response = await callTripletexAPI(
-              `/product?productType=SALARY&page=${page}&count=${pageSize}&fields=id,name,number,unit,productType`,
+              `/product?page=${page}&count=${pageSize}&fields=id,name,number,unit,type`,
               'GET',
               undefined,
               orgId
@@ -2572,7 +2572,10 @@ Deno.serve(async (req) => {
             name: product.name,
             number: product.number,
             unit: product.unit,
-            productType: product.productType,
+            type: product.type,
+            isService: product.type === 'SERVICE',
+            isProduct: product.type === 'PRODUCT',
+            isOutlay: product.type === 'OUTLAY',
           }));
 
           return { success: true, data: products };

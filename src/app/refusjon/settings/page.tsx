@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Key, Zap, Settings, Plus, Trash2, TestTube } from 'lucide-react';
@@ -24,7 +25,7 @@ export default function RefusjonSettingsPage() {
 
   // RFID Keys
   const [rfidKeys, setRfidKeys] = useState<any[]>([]);
-  const [newRfidKey, setNewRfidKey] = useState({ value: '', description: '' });
+  const [newRfidKey, setNewRfidKey] = useState({ value: '', description: '', type: 'privat' as 'bedrift' | 'privat' });
 
   // Chargers
   const [chargers, setChargers] = useState<any[]>([]);
@@ -146,9 +147,9 @@ export default function RefusjonSettingsPage() {
         .from('ref_rfid_keys')
         .insert({
           org_id: orgId,
-          rfid_value: newRfidKey.value.trim(),
-          description: newRfidKey.description.trim() || null,
-          is_company_key: false, // Default to private
+          easee_key_id: newRfidKey.value.trim(),
+          label: newRfidKey.description.trim() || null,
+          type: newRfidKey.type,
         })
         .select()
         .single();
@@ -156,7 +157,7 @@ export default function RefusjonSettingsPage() {
       if (error) throw error;
 
       setRfidKeys([data, ...rfidKeys]);
-      setNewRfidKey({ value: '', description: '' });
+      setNewRfidKey({ value: '', description: '', type: 'privat' });
       
       toast({
         title: 'RFID-nøkkel lagt til',
@@ -182,7 +183,7 @@ export default function RefusjonSettingsPage() {
           org_id: orgId,
           name: newCharger.name.trim(),
           address: newCharger.address.trim() || null,
-          price_area: newCharger.area,
+          area: newCharger.area,
           timezone: newCharger.timezone,
         })
         .select()
@@ -538,6 +539,21 @@ export default function RefusjonSettingsPage() {
                     onChange={(e) => setNewRfidKey({ ...newRfidKey, description: e.target.value })}
                   />
                 </div>
+                <div>
+                  <Label htmlFor="rfid-type">Type</Label>
+                  <Select
+                    value={newRfidKey.type}
+                    onValueChange={(value: 'bedrift' | 'privat') => setNewRfidKey({ ...newRfidKey, type: value })}
+                  >
+                    <SelectTrigger id="rfid-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="privat">Privat</SelectItem>
+                      <SelectItem value="bedrift">Bedrift</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="col-span-2">
                   <Button onClick={addRfidKey}>
                     <Plus className="mr-2 h-4 w-4" />
@@ -551,15 +567,15 @@ export default function RefusjonSettingsPage() {
                 {rfidKeys.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Ingen RFID-nøkler registrert</p>
                 ) : (
-                  rfidKeys.map((key) => (
+                  rfidKeys.map((key: any) => (
                     <div key={key.id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div>
-                        <p className="font-medium">{key.rfid_value}</p>
-                        {key.description && (
-                          <p className="text-sm text-muted-foreground">{key.description}</p>
+                        <p className="font-medium">{key.easee_key_id}</p>
+                        {key.label && (
+                          <p className="text-sm text-muted-foreground">{key.label}</p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                          {key.is_company_key ? 'Firma-nøkkel' : 'Privat nøkkel'}
+                          {key.type === 'bedrift' ? 'Firma-nøkkel' : 'Privat nøkkel'}
                         </p>
                       </div>
                       <Button variant="ghost" size="sm">
