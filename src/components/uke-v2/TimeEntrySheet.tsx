@@ -5,9 +5,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { saveVehicleEntry, VehicleTypeOption } from '@/lib/vehicleEntries';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import ProjectSelector from './ProjectSelector';
 import ActivitySelector from './ActivitySelector';
 
@@ -19,6 +21,7 @@ interface TimeEntrySheetProps {
   orgId: string;
   entryId?: string; // For editing existing entry
 }
+
 
 const QUICK_HOURS = [
   { label: '0t 30m', value: 0.5 },
@@ -44,6 +47,8 @@ export default function TimeEntrySheet({
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
   const [comment, setComment] = useState('');
+  const [vehicleType, setVehicleType] = useState<VehicleTypeOption>('none');
+  const [vehicleDistanceKm, setVehicleDistanceKm] = useState<number>(0);
   
   // Dialog states
   const [showProjectSelector, setShowProjectSelector] = useState(false);
@@ -57,6 +62,8 @@ export default function TimeEntrySheet({
       setHours(0);
       setMinutes(0);
       setComment('');
+      setVehicleType('none');
+      setVehicleDistanceKm(0);
     }
   }, [open, entryId]);
 
@@ -67,6 +74,15 @@ export default function TimeEntrySheet({
     const mins = Math.round((value - wholeHours) * 60);
     setHours(wholeHours);
     setMinutes(mins);
+  };
+
+  const handleVehicleSelect = (value: VehicleTypeOption) => {
+    setVehicleType(value);
+    if (value !== 'km_utenfor') {
+      setVehicleDistanceKm(0);
+    } else if (vehicleDistanceKm <= 0) {
+      setVehicleDistanceKm(1);
+    }
   };
 
   const handleSave = async () => {
@@ -88,11 +104,20 @@ export default function TimeEntrySheet({
       return;
     }
 
+    if (vehicleType === 'km_utenfor' && vehicleDistanceKm <= 0) {
+      toast({
+        title: 'Manglende kilometer',
+        description: 'Oppgi antall kilometer for kjøring utenfor Oslo/Akershus.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
       // First, create or get vakt entry
-      const { data: existingVakt, error: vaktFindError } = await supabase
+      const { data: existingVakt, error: vaktError } = await supabase
         .from('vakt')
         .select('id')
         .eq('person_id', personId)
@@ -100,6 +125,10 @@ export default function TimeEntrySheet({
         .eq('project_id', selectedProject.id)
         .eq('org_id', orgId)
         .single();
+
+      if (vaktError && vaktError.code !== 'PGRST116') {
+        throw vaktError;
+      }
 
       let vaktId = existingVakt?.id;
 
@@ -135,6 +164,16 @@ export default function TimeEntrySheet({
         });
 
       if (timerError) throw timerError;
+
+      if (vehicleType !== 'none') {
+        await saveVehicleEntry({
+          supabase,
+          vaktId,
+          orgId,
+          vehicleType,
+          distanceKm: vehicleDistanceKm,
+        });
+      }
 
       toast({
         title: 'Lagret',
@@ -271,6 +310,38 @@ export default function TimeEntrySheet({
                 Sensitive opplysninger bør ikke inkluderes her.
               </p>
             </div>
+
+            {/* Vehicle compensation */}
+            <div className="space-y-2">
+              <label className="text-sm text-gray-700 font-medium">Kjøretøy-kompensasjon</label>
+              <Select
+                value={vehicleType}
+                onValueChange={(value) => handleVehicleSelect(value as VehicleTypeOption)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Ingen" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Ingen</SelectItem>
+                  <SelectItem value="servicebil">Servicebil Oslo/Akershus</SelectItem>
+                  <SelectItem value="km_utenfor">Km utenfor Oslo/Akershus</SelectItem>
+                  <SelectItem value="tilhenger">Tilhenger</SelectItem>
+                </SelectContent>
+              </Select>
+              {vehicleType === 'km_utenfor' && (
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={Number.isFinite(vehicleDistanceKm) ? vehicleDistanceKm : 0}
+                    onChange={(event) => setVehicleDistanceKm(Math.max(0, Number(event.target.value) || 0))}
+                    className="w-32"
+                  />
+                  <span className="text-sm text-gray-500">km</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -322,4 +393,3 @@ export default function TimeEntrySheet({
     </>
   );
 }
-

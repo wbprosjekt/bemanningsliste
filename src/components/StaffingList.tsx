@@ -97,7 +97,7 @@ interface StaffingListProps {
   weeksToShow?: number;
 }
 
-interface TimeEntry {
+interface TimeEntryRecord {
   id: string;
   timer: number;
   aktivitet_id?: string;
@@ -210,7 +210,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
     isVisible: false,
     message: '',
   });
-  const [editDialog, setEditDialog] = useState<{ vaktId: string; existingEntry?: TimeEntry } | null>(null);
+  const [editDialog, setEditDialog] = useState<{ vaktId: string; existingEntry?: TimeEntryRecord } | null>(null);
   const [freeBubbleEditDialog, setFreeBubbleEditDialog] = useState<{
     bubbleId: string;
     text: string;
@@ -1245,9 +1245,30 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       // Wait for all activities to be sent
       await Promise.all(activityPromises);
 
+      if (entry.person.tripletex_employee_id && entry.project?.tripletex_project_id) {
+        const vehicleResponse = await supabase.functions.invoke('tripletex-api', {
+          body: {
+            action: 'sync_vehicle_entries',
+            vakt_id: entry.id,
+            employee_id: entry.person.tripletex_employee_id,
+            project_id: entry.project.tripletex_project_id,
+            date: entry.date,
+            orgId: profile?.org_id || '',
+          },
+        });
+
+        if (vehicleResponse.error) {
+          throw vehicleResponse.error;
+        }
+
+        if (!vehicleResponse.data?.success) {
+          throw new Error(vehicleResponse.data?.error || 'Kunne ikke synkronisere kjøretøy-kompensasjon');
+        }
+      }
+
       // Calculate total hours sent
       const totalHours = entry.activities.reduce((sum, activity) => sum + activity.timer, 0);
-      
+
       toast({
         title: "Timer sendt til Tripletex",
         description: `${formatTimeValue(totalHours)} timer (${entry.activities.length} ${entry.activities.length === 1 ? 'aktivitet' : 'aktiviteter'}) sendt for ${entry.project.project_name}`

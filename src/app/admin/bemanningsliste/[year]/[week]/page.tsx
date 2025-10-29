@@ -2,13 +2,16 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import StaffingList from "@/components/StaffingList";
 import { getWeekNumber } from "@/lib/displayNames";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserProfile } from "@/hooks/useStaffingData";
+import VehicleProductSettingsDialog from "@/components/VehicleProductSettingsDialog";
 
 const getWeeksInYear = (targetYear: number) => {
   const dec28 = new Date(targetYear, 11, 28);
@@ -18,6 +21,10 @@ const getWeeksInYear = (targetYear: number) => {
 export default function BemanningslisteWeekPage() {
   const params = useParams<{ year: string; week: string }>();
   const router = useRouter();
+  const { user } = useAuth();
+  const { data: profile } = useUserProfile(user?.id);
+  const orgId = profile?.org_id;
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const now = new Date();
   const defaultYear = now.getFullYear();
@@ -65,23 +72,43 @@ export default function BemanningslisteWeekPage() {
     <ProtectedRoute requiredRole="any-admin">
       <div className="min-h-screen bg-background">
         <div className="border-b bg-card p-4">
-          <div className="mx-auto flex max-w-7xl items-center justify-center gap-4">
-            <Button variant="outline" onClick={() => navigateWeeks(-6)}>
-              <ChevronLeft className="h-4 w-4" />
-              Forrige 6 uker
-            </Button>
-            <div className="text-lg font-medium">
+          <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between gap-2 sm:justify-start">
+              <Button variant="outline" onClick={() => navigateWeeks(-6)}>
+                <ChevronLeft className="h-4 w-4" />
+                Forrige 6 uker
+              </Button>
+              <Button variant="outline" onClick={() => navigateWeeks(6)}>
+                Neste 6 uker
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="text-center text-lg font-medium sm:flex-1 sm:text-right">
               Fra uke {currentWeek}, {currentYear}
             </div>
-            <Button variant="outline" onClick={() => navigateWeeks(6)}>
-              Neste 6 uker
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setSettingsOpen(true)}
+                disabled={!orgId}
+              >
+                <Settings className="h-4 w-4" />
+                <span className="ml-2 hidden sm:inline">Innstillinger</span>
+              </Button>
+            </div>
           </div>
         </div>
 
         <StaffingList startWeek={currentWeek} startYear={currentYear} weeksToShow={6} />
       </div>
+
+      {orgId && (
+        <VehicleProductSettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          orgId={orgId}
+        />
+      )}
     </ProtectedRoute>
   );
 }

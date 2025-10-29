@@ -4,15 +4,16 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Clock, MessageSquare, Paperclip, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatTimeValue, validateTimeStep } from '@/lib/displayNames';
 import { validateHours, validateUUID, validateStatus, validateFreeLineText, ValidationError } from '@/lib/validation';
-import { useCSRFToken } from '@/lib/csrf';
 import { useTimeEntryMutation, useDeleteTimeEntry } from '@/hooks/useStaffingData';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { VehicleSyncStatus, VehicleTypeOption } from '@/lib/vehicleEntries';
 
 interface TimeEntryProps {
   vaktId: string;
@@ -39,6 +40,7 @@ interface Activity {
   navn: string;
 }
 
+
 const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existingEntry }: TimeEntryProps) => {
   const [hours, setHours] = useState(Math.floor(existingEntry?.timer || defaultTimer));
   const [minutes, setMinutes] = useState(Math.round(((existingEntry?.timer || defaultTimer) % 1) * 60));
@@ -48,7 +50,6 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { addCSRFHeader } = useCSRFToken();
   const isOnline = useOnlineStatus();
   
   // React Query mutations
@@ -70,6 +71,12 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
   const [overtime50Minutes, setOvertime50Minutes] = useState(0);
   const [showOvertime, setShowOvertime] = useState(false); // Collapsed by default
   const [isLocked, setIsLocked] = useState(false); // Will be set based on loaded data
+
+  const [vehicleType, setVehicleType] = useState<VehicleTypeOption>('none');
+  const [vehicleDistanceKm, setVehicleDistanceKm] = useState<number>(0);
+  const [vehicleEntryId, setVehicleEntryId] = useState<string | null>(null);
+  const [vehicleTripletexEntryId, setVehicleTripletexEntryId] = useState<number | null>(null);
+  const [vehicleSyncStatus, setVehicleSyncStatus] = useState<VehicleSyncStatus | null>(null);
 
   // Calculate total timer value from hours and minutes
   const timer = hours + (minutes / 60);
@@ -295,6 +302,31 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
           setNotat('');
           setStatus('utkast');
         }
+
+        // Load existing vehicle entry linked to this vakt
+        const { data: vehicleData, error: vehicleError } = await supabase
+          .from('vehicle_entries')
+          .select('id, vehicle_type, distance_km, sync_status, tripletex_entry_id')
+          .eq('vakt_id', vaktId)
+          .maybeSingle();
+
+        if (vehicleError) {
+          console.error('Failed to load vehicle entry:', vehicleError);
+        }
+
+        if (vehicleData) {
+          setVehicleEntryId(vehicleData.id);
+          setVehicleType((vehicleData.vehicle_type as VehicleTypeOption) ?? 'none');
+          setVehicleDistanceKm(Number(vehicleData.distance_km ?? 0));
+          setVehicleSyncStatus((vehicleData.sync_status as VehicleSyncStatus) ?? null);
+          setVehicleTripletexEntryId(vehicleData.tripletex_entry_id ?? null);
+        } else {
+          setVehicleEntryId(null);
+          setVehicleType('none');
+          setVehicleDistanceKm(0);
+          setVehicleSyncStatus(null);
+          setVehicleTripletexEntryId(null);
+        }
       } catch (error) {
         console.error('Error loading existing timer entries:', error);
         // Fallback to existingEntry if database load fails
@@ -316,6 +348,11 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
             !!existingEntry.tripletex_synced_at
           );
         }
+        setVehicleEntryId(null);
+        setVehicleType('none');
+        setVehicleDistanceKm(0);
+        setVehicleSyncStatus(null);
+        setVehicleTripletexEntryId(null);
       }
     };
 
@@ -337,6 +374,31 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
     // Ensure minutes are in 15-minute intervals
     const roundedMinutes = Math.round(newMinutes / 15) * 15;
     setMinutes(roundedMinutes);
+  };
+
+  const handleVehicleSelect = (value: VehicleTypeOption) => {
+    setVehicleType(value);
+    if (value !== 'km_utenfor') {
+      setVehicleDistanceKm(0);
+    } else if (vehicleDistanceKm <= 0) {
+      setVehicleDistanceKm(1);
+    }
+  };
+
+  const vehicleStatusLabel = () => {
+    if (!vehicleEntryId || !vehicleSyncStatus) return null;
+    switch (vehicleSyncStatus) {
+      case 'synced':
+        return 'Synket til Tripletex';
+      case 'pending':
+        return 'Avventer eksport til Tripletex';
+      case 'failed':
+        return 'Feil ved synk – prøv igjen';
+      case 'pending_delete':
+        return 'Markert for sletting i Tripletex';
+      default:
+        return null;
+    }
   };
 
   const adjustOvertime100Hours = (delta: number) => {
@@ -501,6 +563,15 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
     }
 
     const previousStatus = status;
+    if (vehicleType === 'km_utenfor' && vehicleDistanceKm <= 0) {
+      toast({
+        title: 'Manglende kilometer',
+        description: 'Oppgi antall kilometer for kjøring utenfor Oslo/Akershus.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setStatus(nextStatus);
     setLoading(true);
 
@@ -543,14 +614,38 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
     }
 
     // Use React Query mutation
+    const previousTripletexEntryId = vehicleTripletexEntryId;
+
     timeEntryMutation.mutate(
       {
         vaktId,
         orgId,
-        entries
+        entries,
+        vehicle: {
+          type: vehicleType,
+          distanceKm: vehicleDistanceKm,
+          existingEntryId: vehicleEntryId,
+          existingTripletexEntryId: vehicleTripletexEntryId,
+        }
       },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
+          if (result?.vehicle) {
+            setVehicleEntryId(result.vehicle.id);
+            setVehicleSyncStatus(result.vehicle.syncStatus);
+            if (result.vehicle.syncStatus === 'pending_delete') {
+              setVehicleTripletexEntryId(previousTripletexEntryId ?? null);
+            } else if (result.vehicle.syncStatus === 'pending') {
+              setVehicleTripletexEntryId(previousTripletexEntryId ?? null);
+            } else if (!result.vehicle.id) {
+              setVehicleTripletexEntryId(null);
+            }
+          } else if (vehicleType === 'none') {
+            setVehicleEntryId(null);
+            setVehicleSyncStatus(null);
+            setVehicleTripletexEntryId(null);
+          }
+
           toast({
             title: "Lagret",
             description: `Timeføring lagret${totalOvertimeTimer > 0 ? ` med ${formatTimeValue(totalOvertimeTimer)} overtid` : ''}.`
@@ -903,6 +998,42 @@ const TimeEntry = ({ vaktId, orgId, onSave, onClose, defaultTimer = 0.0, existin
             rows={3}
             disabled={isLocked}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Kjøretøy-kompensasjon</Label>
+          <Select
+            value={vehicleType}
+            onValueChange={(value) => handleVehicleSelect(value as VehicleTypeOption)}
+            disabled={isLocked}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Ingen" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Ingen</SelectItem>
+              <SelectItem value="servicebil">Servicebil Oslo/Akershus</SelectItem>
+              <SelectItem value="km_utenfor">Km utenfor Oslo/Akershus</SelectItem>
+              <SelectItem value="tilhenger">Tilhenger</SelectItem>
+            </SelectContent>
+          </Select>
+          {vehicleType === 'km_utenfor' && (
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                min="0"
+                step="0.1"
+                value={Number.isFinite(vehicleDistanceKm) ? vehicleDistanceKm : 0}
+                onChange={(event) => setVehicleDistanceKm(Math.max(0, Number(event.target.value) || 0))}
+                className="w-32"
+                disabled={isLocked}
+              />
+              <span className="text-sm text-muted-foreground">km</span>
+            </div>
+          )}
+          {vehicleStatusLabel() && (
+            <p className="text-xs text-muted-foreground">{vehicleStatusLabel()}</p>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">

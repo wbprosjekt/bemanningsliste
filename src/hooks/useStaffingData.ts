@@ -15,6 +15,7 @@ import {
 } from '@/lib/databaseOptimized';
 import { validateUUID } from '@/lib/validation';
 import { useToast } from '@/hooks/use-toast';
+import { saveVehicleEntry, VehicleTypeOption } from '@/lib/vehicleEntries';
 
 /**
  * Hook for loading staffing data with React Query
@@ -112,6 +113,12 @@ export function useTimeEntryMutation() {
         lonnstype: string;
         overtimeAktivitetId?: string;
       }>;
+      vehicle?: {
+        type: VehicleTypeOption;
+        distanceKm: number;
+        existingEntryId?: string | null;
+        existingTripletexEntryId?: number | null;
+      };
     }) => {
       // Validate inputs
       validateUUID(data.vaktId);
@@ -142,9 +149,22 @@ export function useTimeEntryMutation() {
 
       if (error) throw error;
 
-      return { success: true };
+      let vehicleResult = null;
+      if (data.vehicle) {
+        vehicleResult = await saveVehicleEntry({
+          supabase,
+          vaktId: data.vaktId,
+          orgId: data.orgId,
+          vehicleType: data.vehicle.type,
+          distanceKm: data.vehicle.distanceKm,
+          existingEntryId: data.vehicle.existingEntryId,
+          existingTripletexEntryId: data.vehicle.existingTripletexEntryId ?? null,
+        });
+      }
+
+      return { success: true, vehicle: vehicleResult };
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       // Invalidate all staffing queries to refetch data
       queryClient.invalidateQueries({ queryKey: ['staffing'] });
       
@@ -262,4 +282,3 @@ export function useUserProfile(userId: string | undefined) {
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
 }
-

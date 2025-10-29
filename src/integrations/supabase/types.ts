@@ -2672,6 +2672,98 @@ export type Database = {
           },
         ]
       }
+      vehicle_entries: {
+        Row: {
+          created_at: string
+          distance_km: number
+          id: string
+          org_id: string
+          sync_log: string | null
+          sync_status: "pending" | "synced" | "failed" | "pending_delete"
+          synced_at: string | null
+          tripletex_entry_id: number | null
+          updated_at: string
+          vakt_id: string
+          vehicle_type: "servicebil" | "km_utenfor" | "tilhenger"
+        }
+        Insert: {
+          created_at?: string
+          distance_km?: number
+          id?: string
+          org_id: string
+          sync_log?: string | null
+          sync_status?: "pending" | "synced" | "failed" | "pending_delete"
+          synced_at?: string | null
+          tripletex_entry_id?: number | null
+          updated_at?: string
+          vakt_id: string
+          vehicle_type: "servicebil" | "km_utenfor" | "tilhenger"
+        }
+        Update: {
+          created_at?: string
+          distance_km?: number
+          id?: string
+          org_id?: string
+          sync_log?: string | null
+          sync_status?: "pending" | "synced" | "failed" | "pending_delete"
+          synced_at?: string | null
+          tripletex_entry_id?: number | null
+          updated_at?: string
+          vakt_id?: string
+          vehicle_type?: "servicebil" | "km_utenfor" | "tilhenger"
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_entries_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_entries_vakt_id_fkey"
+            columns: ["vakt_id"]
+            isOneToOne: false
+            referencedRelation: "vakt"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_products: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          product_type: "servicebil" | "km_utenfor" | "tilhenger"
+          tripletex_product_id: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          product_type: "servicebil" | "km_utenfor" | "tilhenger"
+          tripletex_product_id: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          product_type?: "servicebil" | "km_utenfor" | "tilhenger"
+          tripletex_product_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_products_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "org"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tripletex_sync_state: {
         Row: {
           checksum: string | null

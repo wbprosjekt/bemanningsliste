@@ -2185,6 +2185,216 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'sync_vehicle_entries': {
+        const { vakt_id, employee_id, project_id, date } = payload;
+
+        if (!vakt_id || !employee_id || !project_id || !date) {
+          result = { success: false, error: 'Missing required fields for vehicle sync' };
+          break;
+        }
+
+        const { data: vehicleEntries, error: vehicleError } = await supabase
+          .from('vehicle_entries')
+          .select('*')
+          .eq('vakt_id', vakt_id)
+          .in('sync_status', ['pending', 'failed', 'pending_delete']);
+
+        if (vehicleError) {
+          console.error('Error fetching vehicle entries:', vehicleError);
+          result = { success: false, error: 'Kunne ikke hente kjøretøyregistreringer' };
+          break;
+        }
+
+        if (!vehicleEntries || vehicleEntries.length === 0) {
+          result = { success: true, data: { processed: 0 } };
+          break;
+        }
+
+        const { data: productConfig, error: productError } = await supabase
+          .from('vehicle_products')
+          .select('product_type, tripletex_product_id')
+          .eq('org_id', orgId);
+
+        if (productError) {
+          console.error('Failed to load vehicle product configuration:', productError);
+          result = { success: false, error: 'Kunne ikke laste Tripletex-produkter for kjøretøy' };
+          break;
+        }
+
+        const productMap = new Map<string, number>();
+        (productConfig || []).forEach((item) => {
+          if (item.product_type && item.tripletex_product_id) {
+            productMap.set(item.product_type, item.tripletex_product_id);
+          }
+        });
+
+        const entryDate = new Date(date).toISOString().split('T')[0];
+        const summary: Array<{ id: string; status: string; message?: string }> = [];
+
+        for (const entry of vehicleEntries) {
+          try {
+            const productId = productMap.get(entry.vehicle_type);
+
+            if (!productId) {
+              await supabase
+                .from('vehicle_entries')
+                .update({
+                  sync_status: 'failed',
+                  sync_log: `Ingen Tripletex-produkt registrert for typen ${entry.vehicle_type}`,
+                })
+                .eq('id', entry.id);
+
+              summary.push({ id: entry.id, status: 'failed', message: 'Mangler Tripletex-produkt' });
+              continue;
+            }
+
+            if (entry.sync_status === 'pending_delete') {
+              if (!entry.tripletex_entry_id) {
+                const { error: deleteLocalError } = await supabase
+                  .from('vehicle_entries')
+                  .delete()
+                  .eq('id', entry.id);
+
+                if (deleteLocalError) {
+                  console.error('Failed to delete local vehicle entry without Tripletex ID:', deleteLocalError);
+                  summary.push({ id: entry.id, status: 'failed', message: 'Kunne ikke slette lokal rad' });
+                } else {
+                  summary.push({ id: entry.id, status: 'deleted' });
+                }
+                continue;
+              }
+
+              const deleteResponse = await callTripletexAPI(
+                `/timesheet/entry/${entry.tripletex_entry_id}`,
+                'DELETE',
+                undefined,
+                orgId
+              );
+
+              if (deleteResponse.success) {
+                const { error: deleteLocal } = await supabase
+                  .from('vehicle_entries')
+                  .delete()
+                  .eq('id', entry.id);
+
+                if (deleteLocal) {
+                  console.error('Failed to delete local vehicle entry after Tripletex deletion:', deleteLocal);
+                  summary.push({ id: entry.id, status: 'warning', message: 'Tripletex slettet, men lokal rad ble ikke fjernet' });
+                } else {
+                  summary.push({ id: entry.id, status: 'deleted' });
+                }
+              } else {
+                await supabase
+                  .from('vehicle_entries')
+                  .update({
+                    sync_status: 'failed',
+                    sync_log: deleteResponse.error || 'Kunne ikke slette entry i Tripletex',
+                  })
+                  .eq('id', entry.id);
+
+                summary.push({ id: entry.id, status: 'failed', message: deleteResponse.error || 'Sletting i Tripletex feilet' });
+              }
+
+              continue;
+            }
+
+            const quantity = entry.vehicle_type === 'km_utenfor'
+              ? Number(entry.distance_km ?? 0)
+              : 1;
+
+            if (entry.vehicle_type === 'km_utenfor' && quantity <= 0) {
+              await supabase
+                .from('vehicle_entries')
+                .update({
+                  sync_status: 'failed',
+                  sync_log: 'Antall kilometer må være større enn 0',
+                })
+                .eq('id', entry.id);
+
+              summary.push({ id: entry.id, status: 'failed', message: 'Antall kilometer må være større enn 0' });
+              continue;
+            }
+
+            const description = entry.vehicle_type === 'km_utenfor'
+              ? `Km utenfor Oslo/Akershus (${quantity} km)`
+              : entry.vehicle_type === 'servicebil'
+                ? 'Servicebil Oslo/Akershus'
+                : 'Tilhenger';
+
+            const payload = {
+              date: entryDate,
+              employee: { id: Number(employee_id) },
+              project: { id: Number(project_id) },
+              activity: { id: Number(productId) },
+              hours: 0,
+              quantity,
+              comment: description,
+            };
+
+            let response;
+            if (entry.tripletex_entry_id) {
+              response = await callTripletexAPI(
+                `/timesheet/entry/${entry.tripletex_entry_id}`,
+                'PUT',
+                payload,
+                orgId
+              );
+            } else {
+              response = await callTripletexAPI('/timesheet/entry', 'POST', payload, orgId);
+            }
+
+            if (response.success) {
+              const tripletexId = entry.tripletex_entry_id || response?.data?.value?.id || null;
+              const { error: updateError } = await supabase
+                .from('vehicle_entries')
+                .update({
+                  tripletex_entry_id: tripletexId,
+                  sync_status: 'synced',
+                  sync_log: null,
+                  synced_at: new Date().toISOString(),
+                  distance_km: quantity,
+                })
+                .eq('id', entry.id);
+
+              if (updateError) {
+                console.error('Failed to update vehicle entry after Tripletex sync:', updateError);
+                summary.push({ id: entry.id, status: 'warning', message: 'Tripletex ok, lokal oppdatering feilet' });
+              } else {
+                summary.push({ id: entry.id, status: 'synced' });
+              }
+            } else {
+              await supabase
+                .from('vehicle_entries')
+                .update({
+                  sync_status: 'failed',
+                  sync_log: response.error || 'Ukjent feil ved sending til Tripletex',
+                })
+                .eq('id', entry.id);
+
+              summary.push({ id: entry.id, status: 'failed', message: response.error || 'Tripletex-feil' });
+            }
+          } catch (error) {
+            console.error('Unexpected error while syncing vehicle entry:', error);
+            await supabase
+              .from('vehicle_entries')
+              .update({
+                sync_status: 'failed',
+                sync_log: error instanceof Error ? error.message : 'Ukjent feil',
+              })
+              .eq('id', entry.id);
+
+            summary.push({
+              id: entry.id,
+              status: 'failed',
+              message: error instanceof Error ? error.message : 'Ukjent feil',
+            });
+          }
+        }
+
+        result = { success: true, data: { processed: summary.length, details: summary } };
+        break;
+      }
+
       case 'approve_timesheet_entries': {
         const { entry_ids, approved_by_user_id } = payload;
         
@@ -2315,6 +2525,57 @@ Deno.serve(async (req) => {
           return deleteResponse.success 
             ? { success: true, data: { message: 'Timesheet entry deleted successfully' } }
             : deleteResponse;
+        });
+        break;
+      }
+
+      case 'list_vehicle_products': {
+        result = await exponentialBackoff(async () => {
+          const aggregated: unknown[] = [];
+          let page = 0;
+          const pageSize = 100;
+          let hasMore = true;
+
+          while (hasMore) {
+            const response = await callTripletexAPI(
+              `/product?productType=SALARY&page=${page}&count=${pageSize}&fields=id,name,number,unit,productType`,
+              'GET',
+              undefined,
+              orgId
+            );
+
+            if (!response.success) {
+              return response;
+            }
+
+            const values = Array.isArray(response.data?.value)
+              ? response.data?.value
+              : Array.isArray(response.data?.values)
+                ? response.data?.values
+                : [];
+
+            aggregated.push(...values);
+
+            const meta: TripletexListMeta | undefined =
+              (response.data?.meta as TripletexListMeta | undefined) ||
+              (response.data?.metadata as TripletexListMeta | undefined);
+
+            if (!meta || meta.isLastPage === true || meta.nextPage == null) {
+              hasMore = false;
+            } else {
+              page = meta.nextPage ?? page + 1;
+            }
+          }
+
+          const products = aggregated.map((product: any) => ({
+            id: product.id,
+            name: product.name,
+            number: product.number,
+            unit: product.unit,
+            productType: product.productType,
+          }));
+
+          return { success: true, data: products };
         });
         break;
       }
