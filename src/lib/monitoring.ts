@@ -138,7 +138,7 @@ export function logSecurityEvent(
 /**
  * Get request context from various sources
  */
-export function getRequestContext(request?: Request, userId?: string): {
+export function getRequestContext(request?: Request, _userId?: string): {
   ip?: string;
   userAgent?: string;
   requestId?: string;
@@ -176,8 +176,13 @@ export function generateRequestId(): string {
 /**
  * Request monitoring middleware
  */
+type RequestHandler = (request: Request, context?: RequestContext) => Promise<Response> | Response;
+type RequestContext = {
+  user?: { id?: string };
+} & Record<string, unknown>;
+
 export function withRequestMonitoring(
-  handler: Function,
+  handler: RequestHandler,
   options: {
     logLevel?: LogEntry['level'];
     category?: string;
@@ -192,7 +197,7 @@ export function withRequestMonitoring(
     trackErrors = true,
   } = options;
 
-  return async (request: Request, context?: any) => {
+  return async (request: Request, context?: RequestContext) => {
     const requestId = generateRequestId();
     const startTime = Date.now();
     const requestContext = getRequestContext(request, context?.user?.id);
@@ -407,7 +412,7 @@ export function clearOldLogs(): void {
 /**
  * Send to external logging service (placeholder)
  */
-async function sendToLoggingService(logEntry: LogEntry): Promise<void> {
+async function sendToLoggingService(_logEntry: LogEntry): Promise<void> {
   // In production, implement actual logging service integration
   // Examples: DataDog, LogRocket, Sentry, etc.
   try {
@@ -425,7 +430,7 @@ async function sendToLoggingService(logEntry: LogEntry): Promise<void> {
 /**
  * Send to security monitoring service (placeholder)
  */
-async function sendToSecurityService(event: SecurityEvent): Promise<void> {
+async function sendToSecurityService(_event: SecurityEvent): Promise<void> {
   // In production, implement actual security monitoring integration
   // Examples: AWS GuardDuty, Azure Security Center, etc.
   try {
@@ -475,4 +480,3 @@ export function getMonitoringHealth(): {
     newestLog: logStore[logStore.length - 1]?.timestamp,
   };
 }
-

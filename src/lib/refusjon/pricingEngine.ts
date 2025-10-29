@@ -4,7 +4,7 @@
  * Handles MVA normalization and TOU nettariff
  */
 
-import type { TimeBits } from './timeSplitter';
+// Removed unused import: TimeBits
 
 export type PricePolicy = 'norgespris' | 'spot_med_stromstotte';
 
@@ -64,9 +64,6 @@ export function calculateReimbursementForBit(params: {
   let energyNok = 0;
   let nettNok = 0;
   let supportNok = 0;
-  
-  // Convert spot price to including VAT
-  const spotInclMva = spotPricePerKwhExVat * 1.25;
   
   // TOU nettariff
   if (touWindow && nettProfile) {
@@ -205,8 +202,5 @@ function timeSplitIntoHourlyBits(
   return bits;
 }
 
-/**
- * Import timeSplitter for real splitting
- */
-import { splitIntoTimeBits } from './timeSplitter';
+// Removed unused import: splitIntoTimeBits
 

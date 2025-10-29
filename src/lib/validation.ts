@@ -117,7 +117,7 @@ export function validatePersonName(name: string): string {
   }
   
   // Allow letters, spaces, hyphens, and common name characters
-  const nameRegex = /^[a-zA-ZæøåÆØÅ\s\-\.]+$/;
+  const nameRegex = /^[a-zA-ZæøåÆØÅ\s\-.]+$/;
   if (!nameRegex.test(sanitized)) {
     throw new ValidationError('Name contains invalid characters', 'personName');
   }
@@ -274,7 +274,7 @@ export function validateFreeLineText(text: string): string {
   const sanitized = sanitizeString(text, { maxLength: 500 });
   
   // Allow basic punctuation and line breaks
-  const textRegex = /^[a-zA-ZæøåÆØÅ0-9\s\-\.\,\!\?\:\;\(\)\n\r]*$/;
+  const textRegex = /^[a-zA-ZæøåÆØÅ0-9\s\-.,!?:;()\n\r]*$/;
   if (!textRegex.test(sanitized)) {
     throw new ValidationError('Text contains invalid characters', 'freeLineText');
   }

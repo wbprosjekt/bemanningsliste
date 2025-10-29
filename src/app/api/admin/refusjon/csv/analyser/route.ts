@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
         .select('id, name')
         .eq('org_id', orgId);
 
-      const list = availableNetProfiles || [];
+      const list = (availableNetProfiles || []) as unknown as Array<{ id: string; name: string }>;
       if (list.length === 1) {
         netProfileId = list[0].id;
         console.log('ℹ️ Ingen nettprofil var satt – bruker standard:', list[0].id, list[0].name);

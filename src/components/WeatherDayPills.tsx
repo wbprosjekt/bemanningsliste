@@ -230,7 +230,7 @@ export default function WeatherDayPills({
           showTemp: false
         };
       
-      case 'today':
+      case 'today': {
         // For today, use current weather if available, otherwise forecast
         const todayWeather = weather || (currentTemp ? { 
           date: date.toISOString().split('T')[0], 
@@ -246,6 +246,7 @@ export default function WeatherDayPills({
           icon: todayWeatherInfo?.emoji ?? '🌡️',
           showTemp: currentTemp !== null
         };
+      }
       
       case 'future':
         return {

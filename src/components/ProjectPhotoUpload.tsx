@@ -177,7 +177,7 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
           .getPublicUrl(filePath);
 
         // Insert into database
-        // @ts-ignore - comment and prosjekt_id columns will be added via migration
+        // @ts-expect-error - comment and prosjekt_id columns will be added via migration
         const { error: insertError } = await supabase
           .from('oppgave_bilder')
           .insert({

@@ -119,11 +119,11 @@ export default function RefusjonTilgangPage() {
         ]);
         
         setNetProfiles(
-          (nettProfileData || []).map(np => ({ id: np.id, name: np.name }))
+          ((nettProfileData || []) as unknown as Array<{ id: string; name: string }>).map(np => ({ id: np.id, name: np.name }))
         );
         
         const policyMap = new Map(
-          (policyData || []).map(p => [p.profile_id, { policy: p.policy, netProfileId: p.net_profile_id }])
+          ((policyData || []) as unknown as Array<{ profile_id: string; policy: string; net_profile_id: string | null }>).map(p => [p.profile_id, { policy: p.policy, netProfileId: p.net_profile_id }])
         );
 
         // Map profiles to employees (only show those with login)
@@ -146,7 +146,7 @@ export default function RefusjonTilgangPage() {
               id: prof.id, // This is profile.id
               fornavn,
               etternavn,
-              role: prof.role,
+              role: prof.role || undefined,
               isAdmin,
               moduleAccess: isAdmin ? true : moduleAccess, // Admin always has access
               profileId: prof.id, // Store profile.id for toggle
@@ -395,7 +395,7 @@ export default function RefusjonTilgangPage() {
 
       const { error } = await supabase
         .from('ref_employee_settings')
-        .update({ net_profile_id: netProfileId })
+        .update({ nett_profile_id: netProfileId } as any)
         .eq('profile_id', profileId)
         .is('effective_to', null);
 
@@ -443,9 +443,10 @@ export default function RefusjonTilgangPage() {
       
       if (checkError || !profileCheck) {
         console.error('Profile check failed:', checkError);
+        const profileName = (profileCheck as any)?.display_name || profileId;
         toast({
           title: 'Feil',
-          description: `Kunne ikke finne gyldig profil for ${profileCheck?.display_name || profileId}`,
+          description: `Kunne ikke finne gyldig profil for ${profileName}`,
           variant: 'destructive',
         });
         return;

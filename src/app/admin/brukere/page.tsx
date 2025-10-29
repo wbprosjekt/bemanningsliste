@@ -213,7 +213,6 @@ const AdminBrukerePage = () => {
     try {
       const newRole = currentStatus ? "inactive" : "user";
 
-      // @ts-ignore - Supabase types not fully configured
       const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", userId);
 
       if (error) throw error;
@@ -262,7 +261,6 @@ const AdminBrukerePage = () => {
 
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
-      // @ts-ignore - Supabase types not fully configured
       const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", userId);
 
       if (error) throw error;
@@ -580,5 +578,4 @@ const AdminBrukerePage = () => {
 };
 
 export default AdminBrukerePage;
-
 

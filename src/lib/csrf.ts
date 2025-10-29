@@ -106,14 +106,16 @@ export function getOrCreateCSRFToken(sessionId: string, userId?: string): string
 /**
  * CSRF protection middleware for API routes
  */
+type Handler = (request: Request, context?: Record<string, unknown>) => Promise<Response> | Response;
+
 export function withCSRFProtection(
-  handler: Function,
+  handler: Handler,
   options: { 
     requireToken?: boolean;
     userIdParam?: string;
   } = {}
 ) {
-  return async (request: Request, context?: any) => {
+  return async (request: Request, context?: Record<string, unknown>) => {
     const { requireToken = true, userIdParam = 'userId' } = options;
     
     if (!requireToken) {
@@ -352,4 +354,3 @@ export function useCSRFToken(): {
     invalidateToken: () => manager.invalidateToken(),
   };
 }
-

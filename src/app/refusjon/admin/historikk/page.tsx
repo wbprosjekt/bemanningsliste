@@ -57,7 +57,18 @@ export default function RefusjonHistorikkPage() {
 
   async function loadEmployees() {
     try {
-      const emp = await loadEmployeesOptimized();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.org_id) return;
+
+      const emp = await loadEmployeesOptimized(profile.org_id);
       setEmployees(emp);
     } catch (error) {
       console.error('Error loading employees:', error);

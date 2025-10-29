@@ -127,12 +127,21 @@ export function getClientIdentifier(request: Request, userId?: string): string {
 /**
  * Rate limiting middleware for Next.js API routes
  */
+type NextRequestContext = {
+  user?: { id?: string };
+} & Record<string, unknown>;
+
+type NextRequestHandler = (request: Request, context?: NextRequestContext) => Promise<Response> | Response;
+
+// Explicit function type to avoid Function type lint error
+type HandlerFunction = (request: Request, context?: NextRequestContext) => Promise<Response> | Response;
+
 export function withRateLimit(
-  handler: Function,
+  handler: NextRequestHandler,
   config?: RateLimitConfig,
   endpoint?: string
 ) {
-  return async (request: Request, context?: any) => {
+  return async (request: Request, context?: NextRequestContext) => {
     try {
       const identifier = getClientIdentifier(request, context?.user?.id);
       const rateLimitResult = checkRateLimit(identifier, config, endpoint);

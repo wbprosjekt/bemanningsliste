@@ -10,7 +10,6 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
 } from '@react-pdf/renderer';
 
 // Define types matching the contract

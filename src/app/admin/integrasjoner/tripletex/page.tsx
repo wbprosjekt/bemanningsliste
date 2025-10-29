@@ -174,7 +174,7 @@ const TripletexIntegrationPage = () => {
         let title = "API-sesjon feilet";
         let description = errorMsg;
 
-        if (/(401|403|Unauthorized)/.test(errorMsg)) {
+        if (/\b(401|403|Unauthorized)\b/.test(errorMsg)) {
           title = "Ugyldige nøkler";
           description = "API-nøklene er ikke gyldige eller mangler tilgang";
         } else if (errorMsg.includes("429")) {
