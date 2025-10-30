@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import RootProviders from "@/components/RootProviders";
+import ClientLayoutShell from "@/components/layout/ClientLayoutShell";
 
 export const metadata: Metadata = {
   title: "FieldNote",
@@ -23,7 +24,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans">
-        <RootProviders>{children}</RootProviders>
+        <RootProviders>
+          <ClientLayoutShell>{children}</ClientLayoutShell>
+        </RootProviders>
       </body>
     </html>
   );

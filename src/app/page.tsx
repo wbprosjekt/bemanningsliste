@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/button";
+// import { Button } from "@/components/ui/button"; // fjernet – håndteres i topbar
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getWeekNumber } from "@/lib/displayNames";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -99,9 +99,7 @@ function DashboardContent() {
               )}
             </p>
           </div>
-          <Button onClick={signOut} variant="outline">
-            Logg ut
-          </Button>
+          {/* Logg ut flyttet til topbar dropdown */}
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

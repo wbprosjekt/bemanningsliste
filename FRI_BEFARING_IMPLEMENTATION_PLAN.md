@@ -255,3 +255,4 @@ ADD COLUMN befaring_punkt_id uuid REFERENCES befaring_punkter(id);
 
 
 
+

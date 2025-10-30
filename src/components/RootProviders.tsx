@@ -13,6 +13,7 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { CookieConsentProvider } from "@/components/providers/CookieConsentProvider";
 import { CookieSettingsButton } from "@/components/CookieSettingsButton";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
+import { FEATURE_GLOBAL_NAV } from "@/config";
 
 interface RootProvidersProps {
   children: React.ReactNode;
@@ -55,7 +56,7 @@ export default function RootProviders({ children }: RootProvidersProps) {
         <AuthProvider>
           <TooltipProvider>
             <CookieConsentProvider>
-              <NavigationWrapper />
+              {!FEATURE_GLOBAL_NAV && <NavigationWrapper />}
               <OfflineBanner />
               <CookieConsentBanner />
               <CookieSettingsButton />

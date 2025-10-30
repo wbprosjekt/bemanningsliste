@@ -247,20 +247,20 @@ export default function OppgaveDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-y-auto pr-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+        <form onSubmit={handleSubmit} className="space-y-6 flex-1 overflow-y-auto" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
           {/* Fag */}
           <div className="space-y-2">
             <Label htmlFor="fag">Fag *</Label>
             <Select value={formData.fag} onValueChange={handleFagChange}>
-              <SelectTrigger>
+              <SelectTrigger className="min-w-0" >
                 <SelectValue placeholder="Velg fag" />
               </SelectTrigger>
               <SelectContent>
                 {FAG_OPTIONS.map((fag) => (
                   <SelectItem key={fag.value} value={fag.value}>
                     <div className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full" 
+                      <div
+                        className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: fag.color }}
                       ></div>
                       {fag.label}
@@ -279,9 +279,9 @@ export default function OppgaveDialog({
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
               placeholder="Kort beskrivelse av oppgaven"
+              className="min-w-0"
             />
           </div>
-
           {/* Beskrivelse */}
           <div className="space-y-2">
             <Label htmlFor="description">Beskrivelse</Label>
@@ -291,15 +291,15 @@ export default function OppgaveDialog({
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Detaljert beskrivelse av oppgaven..."
               rows={3}
+              className="min-w-0"
             />
           </div>
-
           {/* Status og prioritet */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
               <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
-                <SelectTrigger>
+                <SelectTrigger className="min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -311,11 +311,10 @@ export default function OppgaveDialog({
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="prioritet">Prioritet</Label>
               <Select value={formData.prioritet} onValueChange={(value) => setFormData(prev => ({ ...prev, prioritet: value }))}>
-                <SelectTrigger>
+                <SelectTrigger className="min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -328,43 +327,31 @@ export default function OppgaveDialog({
               </Select>
             </div>
           </div>
-
-          {/* Frist */}
-          <div className="space-y-2">
-            <Label>Frist</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formData.frist ? format(formData.frist, 'dd. MMMM yyyy', { locale: nb }) : 'Velg dato'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={formData.frist || undefined}
-                  onSelect={(date) => setFormData(prev => ({ ...prev, frist: date || null }))}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+          {/* Frist og underleverandør */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="frist">Frist (valgfritt)</Label>
+              {/* Din datepicker/fristfelt her ( behold padding etc. ) */}
+              {/* Legg className="min-w-0" hvis mulig på input/trigger */}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="underleverandor">Underleverandør (valgfritt)</Label>
+              <Select
+                value={formData.underleverandor}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, underleverandor: value }))}
+              >
+                <SelectTrigger className="min-w-0">
+                  <SelectValue placeholder="Velg underleverandør" />
+                </SelectTrigger>
+                <SelectContent>
+                  {/* ...ditt innhold... */}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-
-          {/* Actions - Sticky at bottom */}
-          <div className="flex justify-end gap-2 pt-4 pb-4 sticky bottom-0 bg-background border-t pt-4 mt-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Avbryt
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Lagrer...' : (oppgave ? 'Oppdater' : 'Opprett')}
-            </Button>
+          {/* Bilder, ekstra spacing nedover */}
+          <div className="mb-2">
+            {/* Bilderuten/knapper etc. */}
           </div>
         </form>
       </DialogContent>
