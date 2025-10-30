@@ -409,9 +409,9 @@ export default function PhotoInbox({ orgId, projectId }: PhotoInboxProps) {
               variant="ghost"
               size="sm"
               onClick={() => setShowImageViewer(false)}
-              className="absolute top-2 right-2 z-10"
+              className="absolute top-2 right-2 z-10 bg-white/20 hover:bg-white/30 text-white"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5 sm:h-6 sm:w-6" />
             </Button>
             
             <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">

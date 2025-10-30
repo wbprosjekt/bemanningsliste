@@ -18,12 +18,12 @@ export default function Topbar({ onSearch }: { onSearch: () => void }) {
         if (!user) return;
         const { data, error } = await supabase
           .from("profiles")
-          .select("fornavn, etternavn")
+          .select("display_name")
           .eq("user_id", user.id)
           .maybeSingle();
         if (error) throw error;
         if (cancelled) return;
-        const name = [data?.fornavn, data?.etternavn].filter(Boolean).join(" ").trim();
+        const name = data?.display_name;
         setDisplayName(name || user.email || "Bruker");
       } catch (e) {
         setDisplayName(user?.email || "Bruker");

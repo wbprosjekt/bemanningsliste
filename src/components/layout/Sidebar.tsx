@@ -22,9 +22,10 @@ function getCurrentWeek() {
 interface SidebarProps {
   collapsed?: boolean;
   onToggle?: () => void;
+  onOpenPhoto?: () => void;
 }
 
-export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed = false, onToggle, onOpenPhoto }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
@@ -70,10 +71,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   }, [router, isAdminRole]);
 
   const triggerPhotoDialog = useCallback(() => {
-    alert("Åpner fotoopplastingsdialog!");
-  }, []);
+    if (onOpenPhoto) onOpenPhoto();
+  }, [onOpenPhoto]);
 
-  const wrap = (label: string, node: JSX.Element) =>
+  const wrap = (label: string, node: React.ReactElement) =>
     collapsed ? (
       <TooltipProvider>
         <Tooltip>

@@ -786,7 +786,9 @@ export default function ProjectDetailPage() {
               image_url: imageData.image_url,
               uploaded_by: imageData.uploaded_by,
               uploaded_by_email: imageData.uploaded_by_email,
-              created_at: imageData.created_at || imageData.uploaded_at,
+              created_at: imageData.created_at || null,
+              oppgave_id: imageData.oppgave_id || null,
+              prosjekt_id: imageData.prosjekt_id || null,
               oppgave_info: imageData.oppgave_id ? {
                 id: imageData.oppgave_id,
                 title: null,

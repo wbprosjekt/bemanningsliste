@@ -12,9 +12,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check, ChevronDown } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 
 interface TagPhotoDialogProps {
   open: boolean;
@@ -48,6 +50,7 @@ export default function TagPhotoDialog({
 }: TagPhotoDialogProps) {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [projects, setProjects] = useState<Project[]>([]);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const { toast } = useToast();
@@ -58,6 +61,9 @@ export default function TagPhotoDialog({
   useEffect(() => {
     if (open) {
       loadProjects();
+      // Reset state when dialog opens
+      setSelectedProject('');
+      setIsPopoverOpen(false);
     }
   }, [open]);
 
@@ -74,7 +80,7 @@ export default function TagPhotoDialog({
       
       if (error) throw error;
       
-      // Sanitize and filter projects
+      // Sanitize projects
       const sanitizedProjects = (data || [])
         .filter((project) => project.tripletex_project_id !== null)
         .map((project) => ({
@@ -143,83 +149,143 @@ export default function TagPhotoDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isBulkTagging ? `Tagge ${photoIds.length} bilder` : 'Tagge bilde'}
-          </DialogTitle>
-          <DialogDescription>
-            Velg hvilket prosjekt bildet tilhører
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>
+              {isBulkTagging ? `Tagge ${photoIds.length} bilder` : 'Tagge bilde'}
+            </DialogTitle>
+            <DialogDescription>
+              Velg hvilket prosjekt bildet tilhører
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4">
-          {!isBulkTagging && (
-            <div className="flex justify-center">
-              <img
-                src={photo.image_url}
-                alt="Photo to tag"
-                className="max-h-64 rounded-lg"
-              />
-            </div>
-          )}
-          
-          {isBulkTagging && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm font-medium text-blue-900">
-                Du tagger {photoIds.length} bilder samtidig
-              </p>
-            </div>
-          )}
-
-          <div>
-            <Label htmlFor="project-select">Velg prosjekt</Label>
-            <Select
-              value={selectedProject}
-              onValueChange={setSelectedProject}
-              disabled={loadingProjects}
-            >
-              <SelectTrigger id="project-select" className="mt-1">
-                <SelectValue placeholder={loadingProjects ? "Laster prosjekter..." : "Velg prosjekt..."} />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map(p => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.project_name} #{p.project_number}
-                    {p.customer_name && ` - ${p.customer_name}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {projects.length === 0 && !loadingProjects && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Ingen aktive prosjekter funnet
-              </p>
+          <div className="space-y-4 max-h-[calc(90vh-180px)] overflow-y-auto pr-2">
+            {!isBulkTagging && (
+              <div className="flex justify-center">
+                <img
+                  src={photo.image_url}
+                  alt="Photo to tag"
+                  className="max-h-64 rounded-lg"
+                />
+              </div>
             )}
+            
+            {isBulkTagging && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm font-medium text-blue-900">
+                  Du tagger {photoIds.length} bilder samtidig
+                </p>
+              </div>
+            )}
+
+            <div className="relative" id="project-select-container">
+              <Label htmlFor="project-select">Velg prosjekt</Label>
+              {selectedProject && (
+                <div className="mt-1 mb-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                  <div className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-800">
+                      Prosjekt valgt: {projects.find(p => p.id === selectedProject)?.project_name || 'Ukjent'}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between mt-1"
+                    disabled={loadingProjects}
+                  >
+                    {selectedProject ? (
+                      <span className="truncate">
+                        {projects.find(p => p.id === selectedProject)?.project_name || 'Ukjent'} 
+                        {' '}#{projects.find(p => p.id === selectedProject)?.project_number}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Søk etter prosjekt...</span>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Søk prosjekter..." />
+                    <CommandList className="max-h-[300px]">
+                      <CommandEmpty>
+                        {loadingProjects ? (
+                          <div className="py-6 text-center text-sm">Laster prosjekter...</div>
+                        ) : (
+                          <div className="py-6 text-center text-sm">Ingen prosjekter funnet</div>
+                        )}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {projects.map((project) => {
+                          const isSelected = selectedProject === project.id;
+                          
+                          return (
+                            <CommandItem
+                              key={project.id}
+                              value={`${project.project_name} ${project.project_number} ${project.customer_name || ''}`}
+                              onSelect={() => {
+                                setSelectedProject(project.id);
+                                setIsPopoverOpen(false);
+                                
+                                // Show confirmation toast
+                                toast({
+                                  title: 'Prosjekt valgt',
+                                  description: `${project.project_name} #${project.project_number} er valgt`,
+                                });
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  isSelected ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex-1">
+                                <div className="font-medium text-sm">{project.project_name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  #{project.project_number}
+                                  {project.customer_name && ` • ${project.customer_name}`}
+                                </div>
+                              </div>
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-            Avbryt
-          </Button>
-          <Button 
-            onClick={handleTag} 
-            disabled={loading || !selectedProject}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Lagrer...
-              </>
-            ) : (
-              isBulkTagging ? `Tagge ${photoIds.length} bilder` : 'Tagge bilde'
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+              Avbryt
+            </Button>
+            <Button 
+              onClick={handleTag} 
+              disabled={loading || !selectedProject}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Lagrer...
+                </>
+              ) : (
+                isBulkTagging ? `Tagge ${photoIds.length} bilder` : 'Tagge bilde'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

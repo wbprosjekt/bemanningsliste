@@ -13,7 +13,11 @@ import {
   Star, 
   Plus,
   Filter,
-  Building
+  Building,
+  ClipboardCheck,
+  Clock,
+  Camera,
+  User
 } from 'lucide-react';
 import TagPhotoDialog from '@/components/TagPhotoDialog';
 import MoveToProjectDialog from '@/components/fri-befaring/MoveToProjectDialog';
@@ -62,6 +66,15 @@ interface UntaggedBefaring {
   status: 'aktiv' | 'signert' | 'arkivert';
 }
 
+interface ActivityFeedItem {
+  id: string;
+  type: 'timer' | 'befaring' | 'photo' | 'oppgave';
+  description: string;
+  created_at: string;
+  created_by_name?: string;
+  related_url?: string;
+}
+
 export default function ProjectDashboard() {
   const { user } = useAuth();
   const router = useRouter();
@@ -93,6 +106,8 @@ export default function ProjectDashboard() {
   const [selectedBefaringer, setSelectedBefaringer] = useState<Set<string>>(new Set());
   const [showBulkTagDialog, setShowBulkTagDialog] = useState(false);
   const [showBulkMoveDialog, setShowBulkMoveDialog] = useState(false);
+  const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
 
   // Load profile when user is available
   useEffect(() => {
@@ -250,20 +265,15 @@ export default function ProjectDashboard() {
         .order('inbox_date', { ascending: false })
         .limit(12); // Top 12 for dashboard preview
       
-      // Filter by org_id and check if photo is truly untagged
+      // Filter by org_id and check if photo is truly untagged (matching PhotoInbox logic)
       const filteredUntaggedPhotos = (untaggedPhotosData || []).filter((photo: any) => {
         // A photo is untagged if BOTH oppgave_id AND befaring_punkt_id are NULL
         if (photo.oppgave_id || photo.befaring_punkt_id) {
           return false; // Skip photos that are already tagged to an oppgave or befaring punkt
         }
         
-        // If photo has prosjekt_id, check if it matches org
-        if (photo.prosjekt_id && photo.ttx_project_cache?.org_id) {
-          return photo.ttx_project_cache.org_id === profile.org_id;
-        }
-        
-        // Include photos without project
-        return true;
+        // Only show photos without project (matching PhotoInbox when no projectId provided)
+        return !photo.prosjekt_id;
       });
 
       // Transform data for display
@@ -329,9 +339,130 @@ export default function ProjectDashboard() {
     }
   };
 
+  const loadActivityFeed = async () => {
+    if (!profile?.org_id) return;
+    
+    setLoadingActivities(true);
+    try {
+      // Get recent activities from vakt_timer, befaringer, and photos
+      const [timerResult, befaringResult, photoResult] = await Promise.all([
+        // Get recent timer entries
+        supabase
+          .from('vakt_timer')
+          .select(`
+            id,
+            timer,
+            created_at,
+            created_by,
+            profiles:created_by(fornavn, etternavn),
+            vakt(vaktplan_dato, project_id),
+            ttx_activity_cache(navn),
+            ttx_project_cache:project_id(project_name, project_number)
+          `)
+          .eq('org_id', profile.org_id)
+          .order('created_at', { ascending: false })
+          .limit(10),
+        
+        // Get recent befaringer
+        supabase
+          .from('befaringer')
+          .select(`
+            id,
+            title,
+            befaring_date,
+            status,
+            created_at,
+            profiles:created_by(fornavn, etternavn),
+            tripletex_project_id
+          `)
+          .eq('org_id', profile.org_id)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        
+        // Get recent photo uploads
+        supabase
+          .from('oppgave_bilder')
+          .select(`
+            id,
+            uploaded_at,
+            created_by,
+            profiles:created_by(fornavn, etternavn),
+            ttx_project_cache:prosjekt_id(project_name, project_number)
+          `)
+          .not('created_by', 'is', null)
+          .order('uploaded_at', { ascending: false })
+          .limit(5)
+      ]);
+
+      const activities: ActivityFeedItem[] = [];
+
+      // Process timer entries
+      if (timerResult.data) {
+        timerResult.data.forEach((entry: any) => {
+          const profile = Array.isArray(entry.profiles) ? entry.profiles[0] : entry.profiles;
+          const projectName = entry.ttx_project_cache?.project_name || 'Ukjent prosjekt';
+          const activityName = entry.ttx_activity_cache?.navn || '';
+          const userName = profile ? `${profile.fornavn} ${profile.etternavn}` : 'Ukjent bruker';
+          
+          activities.push({
+            id: entry.id,
+            type: 'timer',
+            description: `${userName} logget ${entry.timer}t på ${projectName}${activityName ? ` (${activityName})` : ''}`,
+            created_at: entry.created_at,
+            created_by_name: userName,
+          });
+        });
+      }
+
+      // Process befaringer
+      if (befaringResult.data) {
+        befaringResult.data.forEach((befaring: any) => {
+          const profile = Array.isArray(befaring.profiles) ? befaring.profiles[0] : befaring.profiles;
+          const userName = profile ? `${profile.fornavn} ${profile.etternavn}` : 'Ukjent bruker';
+          const title = befaring.title || 'Befaring';
+          
+          activities.push({
+            id: befaring.id,
+            type: 'befaring',
+            description: `${userName} opprettet befaring "${title}"`,
+            created_at: befaring.created_at || befaring.befaring_date,
+            created_by_name: userName,
+            related_url: `/befaring/${befaring.id}`,
+          });
+        });
+      }
+
+      // Process photos
+      if (photoResult.data) {
+        photoResult.data.forEach((photo: any) => {
+          const profile = Array.isArray(photo.profiles) ? photo.profiles[0] : photo.profiles;
+          const userName = profile ? `${profile.fornavn} ${profile.etternavn}` : 'Ukjent bruker';
+          const projectName = photo.ttx_project_cache?.project_name || 'Ukjent prosjekt';
+          
+          activities.push({
+            id: photo.id,
+            type: 'photo',
+            description: `${userName} lastet opp bilde til ${projectName}`,
+            created_at: photo.uploaded_at,
+            created_by_name: userName,
+          });
+        });
+      }
+
+      // Sort by created_at and limit to 15 most recent
+      activities.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setActivityFeed(activities.slice(0, 15));
+    } catch (error) {
+      console.error('Error loading activity feed:', error);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
   useEffect(() => {
     if (profile?.org_id) {
       loadProjects();
+      loadActivityFeed();
     } else {
       console.log('🔄 ProjectDashboard: Waiting for profile.org_id...');
     }
@@ -371,6 +502,38 @@ export default function ProjectDashboard() {
     setFilteredProjects(filtered);
   }, [searchTerm, projects]);
 
+  // Helper functions for activity feed
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'timer':
+        return <Clock className="h-5 w-5 text-blue-500" />;
+      case 'befaring':
+        return <ClipboardCheck className="h-5 w-5 text-green-500" />;
+      case 'photo':
+        return <Camera className="h-5 w-5 text-orange-500" />;
+      case 'oppgave':
+        return <Building className="h-5 w-5 text-purple-500" />;
+      default:
+        return <User className="h-5 w-5 text-gray-500" />;
+    }
+  };
+
+  const getTimeAgo = (date: string) => {
+    const now = new Date();
+    const then = new Date(date);
+    const diffMs = now.getTime() - then.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Akkurat nå';
+    if (diffMins < 60) return `For ${diffMins} min siden`;
+    if (diffHours < 24) return `For ${diffHours} timer siden`;
+    if (diffDays === 1) return 'I går';
+    if (diffDays < 7) return `For ${diffDays} dager siden`;
+    return then.toLocaleDateString('no-NO', { day: 'numeric', month: 'short' });
+  };
+
   if (profileLoading || loading) {
     return (
       <div className="container mx-auto p-6">
@@ -388,11 +551,11 @@ export default function ProjectDashboard() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header - Kondensert versjon */}
+      {/* Modern Header */}
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">🏗️ FieldNote Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
             Oversikt over alle aktive prosjekter
           </p>
         </div>
@@ -405,310 +568,125 @@ export default function ProjectDashboard() {
         </div>
       </div>
 
-      {/* 🔍 GLOBAL SEARCH - Supersøk */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
-            <div className="flex-1">
-              <GlobalSearchBar 
-                className="w-full"
-                placeholder="Søk i alle prosjekter, befaringer og brukere..."
-              />
+      {/* KPI Cards - Compact Overview */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-blue-200 bg-blue-50 hover:shadow-md transition-shadow cursor-pointer">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm font-medium text-blue-600 mb-1">AKTIVE PROSJEKTER</div>
+                <div className="text-3xl font-bold text-blue-800">{stats.active_projects}</div>
+                <div className="text-xs text-blue-600 mt-2">Totalt {stats.total_projects} prosjekter</div>
+              </div>
+              <Building className="h-8 w-8 text-blue-400" />
             </div>
-            
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-1" />
-                Filter
-              </Button>
-              <Button variant="outline" size="sm">
-                <Star className="h-4 w-4 mr-1" />
-                Favoritter
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="w-full mt-4 text-blue-700 hover:text-blue-800"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            >
+              Scroll opp →
+            </Button>
+          </CardContent>
+        </Card>
 
-      {/* 📷 FOTO-INNBOKS - Hybrid strategi */}
-      <Card className="border-orange-200 bg-orange-50">
-        <CardHeader>
-          <CardTitle className="text-orange-700 flex items-center">
-            📷 FOTO-INNBOKS
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {stats.untagged_photos > 0 ? (
-            <div className="space-y-3">
-              
-              {/* Show untagged photos */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Uten prosjekt: {stats.untagged_photos} bilder</span>
-                  <div className="flex items-center space-x-2">
-                    {selectedPhotos.size > 0 && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-xs"
-                        onClick={() => setShowBulkTagDialog(true)}
-                      >
-                        Tag {selectedPhotos.size} bilder
-                      </Button>
-                    )}
-                    <Button 
-                      variant="link" 
-                      size="sm" 
-                      className="text-orange-600 text-xs"
-                      onClick={() => router.push('/photo-inbox')}
-                    >
-                      Se alle →
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-6 gap-2">
-                  {untaggedPhotos.slice(0, 6).map((photo) => (
-                    <div
-                      key={photo.id}
-                      className={`aspect-square rounded border-2 overflow-hidden relative group cursor-pointer ${
-                        selectedPhotos.has(photo.id) 
-                          ? 'border-orange-500 bg-orange-100' 
-                          : 'border-orange-200 hover:border-orange-300'
-                      }`}
-                      onClick={() => {
-                        const newSelected = new Set(selectedPhotos);
-                        if (newSelected.has(photo.id)) {
-                          newSelected.delete(photo.id);
-                        } else {
-                          newSelected.add(photo.id);
-                        }
-                        setSelectedPhotos(newSelected);
-                      }}
-                    >
-                      <img
-                        src={photo.image_url}
-                        alt="Untagged photo"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.style.backgroundColor = '#f3f4f6';
-                          e.currentTarget.style.display = 'flex';
-                          e.currentTarget.style.alignItems = 'center';
-                          e.currentTarget.style.justifyContent = 'center';
-                          e.currentTarget.innerHTML = '📷';
-                        }}
-                      />
-                      
-                      {/* Selection checkbox */}
-                      <div className="absolute top-1 left-1">
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                          selectedPhotos.has(photo.id)
-                            ? 'bg-orange-500 border-orange-500 text-white'
-                            : 'bg-white border-gray-300'
-                        }`}>
-                          {selectedPhotos.has(photo.id) && '✓'}
-                        </div>
-                      </div>
-                      
-                      {/* Quick actions - vises på hover */}
-                      <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-1">
-                        <button
-                          className="w-5 h-5 bg-green-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-green-600 transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedPhotos(new Set([photo.id]));
-                            setShowBulkTagDialog(true);
-                          }}
-                          title="Tag til prosjekt"
-                        >
-                          🏷️
-                        </button>
-                        <button
-                          className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // TODO: Delete photo
-                            console.log('Delete photo:', photo.id);
-                          }}
-                          title="Slett bilde"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        <Card className="border-orange-200 bg-orange-50 hover:shadow-md transition-shadow cursor-pointer">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm font-medium text-orange-600 mb-1">BILDER</div>
+                <div className="text-3xl font-bold text-orange-800">{stats.untagged_photos}</div>
+                <div className="text-xs text-orange-600 mt-2">Uten prosjekt</div>
               </div>
-              
-              <div className="text-xs text-muted-foreground">
-                Klikk for å velge bilder, eller hover for hurtigtagging
-              </div>
+              <span className="text-3xl">📷</span>
             </div>
-          ) : (
-            <div className="text-center py-4">
-              <div className="text-sm text-muted-foreground">
-                Ingen utaggede bilder - alt er organisert! 🎉
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="w-full mt-4 text-orange-700 hover:text-orange-800"
+              onClick={() => router.push('/photo-inbox')}
+            >
+              📸 Galleri →
+            </Button>
+          </CardContent>
+        </Card>
 
-      {/* 📋 UNTAGGED BEFARINGER - Tilsvarende foto-innboks */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardHeader>
-          <CardTitle className="text-blue-700 flex items-center">
-            📋 UNTAGGED BEFARINGER
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {stats.untagged_befaringer > 0 ? (
-            <div className="space-y-3">
-              
-              {/* Show untagged befaringer */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Uten prosjekt: {stats.untagged_befaringer} befaringer</span>
-                  <div className="flex items-center space-x-2">
-                    {selectedBefaringer.size > 0 && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-xs"
-                        onClick={() => setShowBulkMoveDialog(true)}
-                      >
-                        Flytt {selectedBefaringer.size} til prosjekt
-                      </Button>
-                    )}
-                    <Button 
-                      variant="link" 
-                      size="sm" 
-                      className="text-blue-600 text-xs"
-                      onClick={() => router.push('/befaring?filter=uten_prosjekt')}
-                    >
-                      Se alle →
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {untaggedBefaringer.slice(0, 6).map((befaring) => (
-                    <div
-                      key={befaring.id}
-                      className={`p-3 rounded border-2 cursor-pointer transition-colors group ${
-                        selectedBefaringer.has(befaring.id) 
-                          ? 'border-blue-500 bg-blue-100' 
-                          : 'border-blue-200 hover:border-blue-300 bg-white'
-                      }`}
-                      onClick={() => {
-                        const newSelected = new Set(selectedBefaringer);
-                        if (newSelected.has(befaring.id)) {
-                          newSelected.delete(befaring.id);
-                        } else {
-                          newSelected.add(befaring.id);
-                        }
-                        setSelectedBefaringer(newSelected);
-                      }}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <h4 className="font-medium text-sm line-clamp-1">{befaring.title}</h4>
-                        <div className={`w-3 h-3 rounded-full flex items-center justify-center text-xs ${
-                          selectedBefaringer.has(befaring.id)
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-200'
-                        }`}>
-                          {selectedBefaringer.has(befaring.id) && '✓'}
-                        </div>
-                      </div>
-                      
-                      {befaring.description && (
-                        <p className="text-xs text-gray-600 line-clamp-2 mb-2">
-                          {befaring.description}
-                        </p>
-                      )}
-                      
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>{befaring.befaring_date ? new Date(befaring.befaring_date).toLocaleDateString('no-NO') : 'Ikke satt'}</span>
-                        <span className="capitalize">{befaring.status}</span>
-                      </div>
-                      
-                      {/* Quick actions - vises på hover */}
-                      <div className="mt-2 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <MoveToProjectDialog
-                          befaringId={befaring.id}
-                          befaringTitle={befaring.title}
-                          currentProjectId={null}
-                          onSuccess={() => {
-                            // Reload data after successful move
-                            if (profile?.org_id) {
-                              loadProjects();
-                            }
-                          }}
-                        >
-                          <button
-                            className="flex-1 px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition-colors"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            🏷️ Flytt til prosjekt
-                          </button>
-                        </MoveToProjectDialog>
-                        <button
-                          className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600 transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/fri-befaring/${befaring.id}`);
-                          }}
-                        >
-                          👁️ Se
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        <Card className="border-purple-200 bg-purple-50 hover:shadow-md transition-shadow cursor-pointer">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm font-medium text-purple-600 mb-1">BEFARINGER</div>
+                <div className="text-3xl font-bold text-purple-800">{stats.untagged_befaringer}</div>
+                <div className="text-xs text-purple-600 mt-2">Uten prosjekt</div>
               </div>
-              
-              <div className="text-xs text-muted-foreground">
-                Klikk for å velge befaringer, eller hover for hurtigflytting
-              </div>
+              <ClipboardCheck className="h-8 w-8 text-purple-400" />
             </div>
-          ) : (
-            <div className="text-center py-4">
-              <div className="text-sm text-muted-foreground">
-                Ingen untaggede befaringer - alt er organisert! 🎉
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="w-full mt-4 text-purple-700 hover:text-purple-800"
+              onClick={() => router.push('/befaring?filter=uten_prosjekt')}
+            >
+              Se alle →
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* 📊 KPI OVERVIEW - Kondensert versjon */}
+      {/* 📅 SISTE AKTIVITETER */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">📊 KPI OVERVIEW</CardTitle>
+          <CardTitle className="text-lg flex items-center justify-between">
+            <span>📅 SISTE AKTIVITET</span>
+            {activityFeed.length > 0 && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setActivityFeed([])}
+              >
+                Clear
+              </Button>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-5">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{stats.active_projects}</div>
-              <div className="text-sm text-muted-foreground">Aktive</div>
+          {loadingActivities ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <span className="ml-2 text-muted-foreground">Laster aktiviteter...</span>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">-</div>
-              <div className="text-sm text-muted-foreground">Oppgaver</div>
+          ) : activityFeed.length > 0 ? (
+            <div className="space-y-2">
+              {activityFeed.map((activity, idx) => {
+                const timeAgo = getTimeAgo(activity.created_at);
+                return (
+                  <div 
+                    key={`${activity.type}-${activity.id}-${idx}`}
+                    className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-transparent hover:border-gray-200"
+                    onClick={() => {
+                      if (activity.related_url) {
+                        router.push(activity.related_url);
+                      }
+                    }}
+                  >
+                    <div className="flex-shrink-0 mt-0.5">
+                      {getActivityIcon(activity.type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium">{activity.description}</div>
+                      <div className="text-xs text-muted-foreground">{timeAgo}</div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">-</div>
-              <div className="text-sm text-muted-foreground">Befaringer</div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Ingen aktiviteter enda</p>
+              <p className="text-xs mt-1">Aktiviteter vises her når de oppstår</p>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">{stats.untagged_photos}</div>
-              <div className="text-sm text-muted-foreground">Bilder</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{stats.untagged_befaringer}</div>
-              <div className="text-sm text-muted-foreground">Untagged</div>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 

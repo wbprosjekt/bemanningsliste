@@ -30,6 +30,7 @@ interface Oppgave {
   status: string;
   prioritet: string;
   frist?: string;
+  underleverandor?: string;
 }
 
 interface OppgaveDialogProps {
@@ -86,7 +87,8 @@ export default function OppgaveDialog({
     description: '',
     status: 'apen',
     prioritet: 'medium',
-    frist: null as Date | null
+    frist: null as Date | null,
+    underleverandor: ''
   });
   const { toast } = useToast();
 
@@ -102,7 +104,8 @@ export default function OppgaveDialog({
           description: oppgave.description || '',
           status: oppgave.status,
           prioritet: oppgave.prioritet,
-          frist: oppgave.frist ? new Date(oppgave.frist) : null
+          frist: oppgave.frist ? new Date(oppgave.frist) : null,
+          underleverandor: oppgave.underleverandor || ''
         });
       } else {
         // Create mode
@@ -113,7 +116,8 @@ export default function OppgaveDialog({
           description: '',
           status: 'apen',
           prioritet: 'medium',
-          frist: null
+          frist: null,
+          underleverandor: ''
         });
       }
     }

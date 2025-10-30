@@ -390,7 +390,7 @@ export default function FriBefaringMain({ befaringId, orgId, userId }: FriBefari
   }
 
   return (
-    <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6">
+    <div className="container mx-auto p-3 pt-20 md:p-6 md:pt-24 space-y-4 md:space-y-6">
       {/* Header */}
       <div className="space-y-4">
         {/* Top row: Back button and title */}

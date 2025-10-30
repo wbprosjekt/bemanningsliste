@@ -409,7 +409,7 @@ export default function BefaringDetail({
   const closedOppgaver = allOppgaver.filter(o => o.status === 'lukket');
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+    <div className="container mx-auto p-4 pt-20 sm:p-6 sm:pt-24 space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-2 sm:space-x-4">

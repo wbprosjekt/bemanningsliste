@@ -14,6 +14,7 @@ import { CookieConsentProvider } from "@/components/providers/CookieConsentProvi
 import { CookieSettingsButton } from "@/components/CookieSettingsButton";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 import { FEATURE_GLOBAL_NAV } from "@/config";
+import { RecentSearchProvider } from "@/components/providers/RecentSearchProvider";
 
 interface RootProvidersProps {
   children: React.ReactNode;
@@ -56,14 +57,16 @@ export default function RootProviders({ children }: RootProvidersProps) {
         <AuthProvider>
           <TooltipProvider>
             <CookieConsentProvider>
-              {!FEATURE_GLOBAL_NAV && <NavigationWrapper />}
-              <OfflineBanner />
-              <CookieConsentBanner />
-              <CookieSettingsButton />
-              <ShadcnToaster />
-              <Sonner />
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              {children as any}
+              <RecentSearchProvider>
+                {!FEATURE_GLOBAL_NAV && <NavigationWrapper />}
+                <OfflineBanner />
+                <CookieConsentBanner />
+                <CookieSettingsButton />
+                <ShadcnToaster />
+                <Sonner />
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {children as any}
+              </RecentSearchProvider>
             </CookieConsentProvider>
           </TooltipProvider>
         </AuthProvider>
