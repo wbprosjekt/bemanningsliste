@@ -21,3 +21,4 @@ Se `STATUS_BOBBLER_PLAN.md` for full implementeringsplan.
 - Status-bobler skal IKKE synkroniseres med Tripletex
 - Skal kunne kopieres og flyttes mellom personer/datoer (samme som prosjektbobler)
 
+

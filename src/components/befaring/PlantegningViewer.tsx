@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import pdfjsLib from '@/lib/pdfjs-config';
+import { loadPdfjs } from '@/lib/pdfjs-config';
 import { supabase } from '@/integrations/supabase/client';
 import { useCookieConsent } from '@/components/providers/CookieConsentProvider';
 
@@ -511,15 +511,14 @@ export default function PlantegningViewer({
         }
         renderTaskRef.current = null;
       }
-      
-      // Check if pdfjsLib is loaded
+      // Lazy-load PDF.js (always await)
+      const pdfjsLib = await loadPdfjs();
       if (!pdfjsLib) {
         console.error('PDF.js not loaded');
         setImageError(true);
         isRenderingRef.current = false;
         return;
       }
-      
       // Load PDF
       const loadingTask = pdfjsLib.getDocument(currentImageUrl);
       const pdf = await loadingTask.promise;

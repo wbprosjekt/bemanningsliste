@@ -43,3 +43,8 @@ WHERE tablename = 'oppgave_bilder';
 
 
 
+
+
+
+
+

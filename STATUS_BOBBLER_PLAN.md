@@ -145,3 +145,4 @@ export function getBubbleColor(entry: StaffingEntry, projectColors: Record<numbe
 - Status-bobler skal kunne kopieres og flyttes mellom personer/datoer (samme som prosjektbobler)
 - Standard farger er røde, men kan endres via fri-boble fargepalett senere
 
+

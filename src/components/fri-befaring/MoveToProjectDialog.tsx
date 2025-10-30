@@ -283,7 +283,41 @@ export default function MoveToProjectDialog({
       
       console.log('Database update successful!');
 
-      // 4. Update project's last_synced to reflect activity
+      // 4. Get ttx_project_cache.id (UUID) from tripletex_project_id (INT)
+      const { data: projectCache, error: projectCacheError } = await supabase
+        .from('ttx_project_cache')
+        .select('id')
+        .eq('tripletex_project_id', projectId)
+        .eq('org_id', orgId)
+        .single();
+
+      if (projectCacheError) {
+        console.warn('Could not find project cache:', projectCacheError);
+      } else if (projectCache?.id) {
+        // 5. Log activity in project_activity table
+        const { error: activityError } = await supabase
+          .from('project_activity')
+          .insert({
+            project_id: projectCache.id,
+            org_id: orgId,
+            activity_type: currentProjectId ? 'befaring_moved' : 'befaring_created',
+            description: currentProjectId 
+              ? `Befaring "${befaringTitle}" ble flyttet til dette prosjektet`
+              : `Fri befaring "${befaringTitle}" ble knyttet til dette prosjektet`,
+            related_id: befaringId,
+            related_type: 'befaring',
+            created_by: userId
+          });
+
+        if (activityError) {
+          console.warn('Could not create activity log:', activityError);
+          // Don't throw error - this is not critical
+        } else {
+          console.log('Activity logged successfully!');
+        }
+      }
+
+      // 6. Update project's last_synced to reflect activity
       console.log('Updating project last_synced...');
       const { error: projectUpdateError } = await supabase
         .from('ttx_project_cache')
@@ -299,7 +333,7 @@ export default function MoveToProjectDialog({
         console.log('Project last_synced updated successfully!');
       }
 
-      // 5. Success feedback
+      // 7. Success feedback
       const successProjectName = selectedProject.project_name ?? '';
       const successProjectNumber = selectedProject.project_number?.toString() ?? '';
       const cleanProjectName = successProjectNumber && successProjectName.startsWith(`${successProjectNumber} `) 

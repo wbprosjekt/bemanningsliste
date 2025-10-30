@@ -36,6 +36,9 @@ interface CreateBefaringDialogProps {
   userId: string;
   onSuccess: () => void;
   variant?: 'header' | 'fab' | 'inline';
+  open?: boolean; // Controlled mode - if provided, controls dialog state
+  onOpenChange?: (open: boolean) => void; // Controlled mode callback
+  initialProjectId?: number | null; // Pre-select project by tripletex_project_id
 }
 
 interface BefaringFormData {
@@ -66,8 +69,20 @@ const BEFARING_TYPES = [
   { value: 'annet', label: 'Annet' },
 ];
 
-export default function CreateBefaringDialog({ orgId, userId, onSuccess, variant = 'fab' }: CreateBefaringDialogProps) {
-  const [open, setOpen] = useState(false);
+export default function CreateBefaringDialog({ 
+  orgId, 
+  userId, 
+  onSuccess, 
+  variant = 'fab',
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  initialProjectId
+}: CreateBefaringDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  // Use controlled state if provided, otherwise use internal state
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = controlledOnOpenChange || setInternalOpen;
   const [loading, setLoading] = useState(false);
   const [projects, setProjects] = useState<TripletexProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
@@ -81,8 +96,18 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess, variant
     sted: '',
     befaring_date: new Date(),
     befaring_type: 'forbefaring',
-    tripletex_project_id: null,
+    tripletex_project_id: initialProjectId || null,
   });
+
+  // Update formData when initialProjectId changes
+  useEffect(() => {
+    if (initialProjectId !== undefined) {
+      setFormData(prev => ({
+        ...prev,
+        tripletex_project_id: initialProjectId
+      }));
+    }
+  }, [initialProjectId]);
 
   const loadTripletexProjects = async () => {
     setProjectsLoading(true);
@@ -152,6 +177,36 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess, variant
         .single();
 
       if (error) throw error;
+
+      // Log activity when befaring is created
+      if (data?.id && formData.tripletex_project_id) {
+        // Get project_id (UUID) from tripletex_project_id (INT)
+        const { data: projectCache } = await supabase
+          .from('ttx_project_cache')
+          .select('id')
+          .eq('tripletex_project_id', formData.tripletex_project_id)
+          .eq('org_id', orgId)
+          .single();
+
+        if (projectCache?.id) {
+          const { error: activityError } = await supabase
+            .from('project_activity')
+            .insert({
+              project_id: projectCache.id,
+              org_id: orgId,
+              activity_type: 'befaring_created',
+              description: `Ny befaring "${formData.title.trim()}" opprettet`,
+              related_id: data.id,
+              related_type: 'befaring',
+              created_by: userId
+            });
+
+          if (activityError) {
+            console.warn('Could not log activity:', activityError);
+            // Don't throw - non-critical
+          }
+        }
+      }
 
       toast({
         title: 'Befaring opprettet',
@@ -237,9 +292,12 @@ export default function CreateBefaringDialog({ orgId, userId, onSuccess, variant
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {renderTriggerButton()}
-      </DialogTrigger>
+      {/* Only show trigger button if not in controlled mode */}
+      {controlledOpen === undefined && (
+        <DialogTrigger asChild>
+          {renderTriggerButton()}
+        </DialogTrigger>
+      )}
       
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>

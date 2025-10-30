@@ -119,3 +119,6 @@ Vi har et problem med tilbakekalling (recall) av vehicle compensation entries (s
 
 **Dette dokumentet beskriver problemet og løsningsforslag. Vurder tilnærmingen og gi feedback på implementeringsplanen.**
 
+
+
+

@@ -13,13 +13,14 @@ interface ProjectPhotoUploadProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orgId: string;
+  initialProjectId?: string; // Optional: pre-select project
 }
 
 type UploadMode = 'with-project' | 'without-project';
 
-export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: ProjectPhotoUploadProps) {
+export default function ProjectPhotoUpload({ open, onOpenChange, orgId, initialProjectId }: ProjectPhotoUploadProps) {
   const [uploadMode, setUploadMode] = useState<UploadMode>('with-project');
-  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [selectedProject, setSelectedProject] = useState<string>(initialProjectId || '');
   const [comment, setComment] = useState<string>('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -63,6 +64,14 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
           }));
         
         setProjects(sanitizedProjects);
+        
+        // Set initial project if provided and found in list
+        if (initialProjectId && !selectedProject) {
+          const foundProject = sanitizedProjects.find(p => p.id === initialProjectId);
+          if (foundProject) {
+            setSelectedProject(initialProjectId);
+          }
+        }
       } catch (error) {
         console.error('Error loading projects:', error);
         toast({
@@ -76,7 +85,7 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
     };
     
     loadProjects();
-  }, [open, orgId]);
+  }, [open, orgId, initialProjectId]);
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
@@ -141,6 +150,8 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
     setUploading(true);
 
     try {
+      const uploadedImageIds: string[] = [];
+      
       for (const file of selectedFiles) {
         // Check file size before compression (max 8MB for optimal compression)
         const maxSize = 8 * 1024 * 1024; // 8MB
@@ -177,7 +188,7 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
           .getPublicUrl(filePath);
 
         // Insert into database
-        const { error: insertError } = await supabase
+        const { error: insertError, data: insertedImage } = await supabase
           .from('oppgave_bilder')
           .insert({
             prosjekt_id: uploadMode === 'with-project' ? selectedProject : null,
@@ -190,9 +201,35 @@ export default function ProjectPhotoUpload({ open, onOpenChange, orgId }: Projec
             file_format: 'webp',
             is_optimized: true,
             comment: uploadMode === 'without-project' ? comment : null
-          } as any);
+          } as any)
+          .select()
+          .single();
 
         if (insertError) throw insertError;
+        
+        if (insertedImage?.id) {
+          uploadedImageIds.push(insertedImage.id);
+        }
+      }
+
+      // Log activity if images were uploaded to a project (only once, after all uploads)
+      if (uploadMode === 'with-project' && selectedProject && user?.id && uploadedImageIds.length > 0) {
+        const { error: activityError } = await supabase
+          .from('project_activity')
+          .insert({
+            project_id: selectedProject,
+            org_id: orgId,
+            activity_type: 'image_uploaded',
+            description: `${uploadedImageIds.length} ${uploadedImageIds.length === 1 ? 'bilde lastet opp' : 'bilder lastet opp'}`,
+            related_id: uploadedImageIds[0], // Use first image ID
+            related_type: 'bilde',
+            created_by: user.id
+          });
+
+        if (activityError) {
+          console.warn('Could not log activity:', activityError);
+          // Don't throw - non-critical
+        }
       }
 
       toast({
