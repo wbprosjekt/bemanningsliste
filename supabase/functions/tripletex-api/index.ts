@@ -506,10 +506,16 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
     console.log('Tripletex API response', { status: response.status, url });
 
     if (!response.ok) {
-      // Optional: throw on 429/5xx to let exponentialBackoff handle it
+      // ALWAYS throw on 429/5xx to let exponentialBackoff handle retries
       if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
-        const err: Error = new Error(responseData?.message || `HTTP ${response.status}`);
-        err.status = response.status;
+        const errorMessage = responseData?.message || `HTTP ${response.status}`;
+        const err: Error = new Error(errorMessage);
+        (err as any).status = response.status;
+        // Include Retry-After header if present
+        const retryAfter = response.headers.get('Retry-After');
+        if (retryAfter) {
+          (err as any).retryAfter = parseInt(retryAfter, 10);
+        }
         throw err;
       }
       
@@ -553,8 +559,13 @@ async function callTripletexAPI(endpoint: string, method: string = 'GET', body?:
       headers: Object.fromEntries(response.headers.entries())
     };
   } catch (error: unknown) {
+    // Re-throw 429 errors so exponentialBackoff can retry them
+    if ((error as any)?.status === 429) {
+      console.log('429 Rate limit error from Tripletex API, will be retried by exponentialBackoff');
+      throw error;
+    }
     console.error('Network error calling Tripletex API:', error);
-    return { success: false, error: error.message ?? String(error) };
+    return { success: false, error: (error as Error)?.message ?? String(error), status: (error as any)?.status };
   }
 }
 
@@ -698,6 +709,66 @@ async function fetchAllTripletexEmployees(orgId: string) {
   } as const;
 }
 
+// === Global caches (shared across all actions in this Edge Function instance) ===
+// These caches reduce API calls dramatically when sending multiple entries with same entities
+const participantCache = new Map<string, { ok: boolean, participantId?: number, timestamp: number }>();
+const entityCache = new Map<string, { success: boolean, data?: unknown, timestamp: number }>();
+const CACHE_TTL = 60000; // 60 seconds cache TTL
+
+function getParticipantCacheKey(orgId: string, projectId: number, employeeId: number): string {
+  return `participant:${orgId}-${projectId}-${employeeId}`;
+}
+
+function getEntityCacheKey(type: 'employee' | 'project' | 'activity', orgId: string, id: number): string {
+  return `${type}:${orgId}-${id}`;
+}
+
+function getCachedParticipant(orgId: string, projectId: number, employeeId: number): { ok: boolean, participantId?: number } | null {
+  const key = getParticipantCacheKey(orgId, projectId, employeeId);
+  const cached = participantCache.get(key);
+  
+  if (!cached) return null;
+  
+  // Check if cache is still valid (not expired)
+  const age = Date.now() - cached.timestamp;
+  if (age > CACHE_TTL) {
+    participantCache.delete(key);
+    return null;
+  }
+  
+  console.log(`✅ Using cached participant check for project ${projectId} + employee ${employeeId}`);
+  return { ok: cached.ok, participantId: cached.participantId };
+}
+
+function setCachedParticipant(orgId: string, projectId: number, employeeId: number, result: { ok: boolean, participantId?: number }): void {
+  const key = getParticipantCacheKey(orgId, projectId, employeeId);
+  participantCache.set(key, { ...result, timestamp: Date.now() });
+  console.log(`💾 Cached participant check for project ${projectId} + employee ${employeeId}: ${result.ok ? 'OK' : 'FAILED'}`);
+}
+
+function getCachedEntity(type: 'employee' | 'project' | 'activity', orgId: string, id: number): TripletexResponse | null {
+  const key = getEntityCacheKey(type, orgId, id);
+  const cached = entityCache.get(key);
+  
+  if (!cached) return null;
+  
+  // Check if cache is still valid (not expired)
+  const age = Date.now() - cached.timestamp;
+  if (age > CACHE_TTL) {
+    entityCache.delete(key);
+    return null;
+  }
+  
+  console.log(`✅ Using cached ${type} check for ID ${id}`);
+  return { success: cached.success, data: cached.data } as TripletexResponse;
+}
+
+function setCachedEntity(type: 'employee' | 'project' | 'activity', orgId: string, id: number, result: TripletexResponse): void {
+  const key = getEntityCacheKey(type, orgId, id);
+  entityCache.set(key, { success: result.success, data: result.data, timestamp: Date.now() });
+  console.log(`💾 Cached ${type} check for ID ${id}: ${result.success ? 'OK' : 'FAILED'}`);
+}
+
 // === helpers: participant & activity checks ===
 async function getProjectParticipantIds(orgId: string, projectId: number) {
   const res = await callTripletexAPI(`/project/${projectId}?fields=participants`, 'GET', undefined, orgId);
@@ -707,28 +778,86 @@ async function getProjectParticipantIds(orgId: string, projectId: number) {
 }
 
 async function isEmployeeParticipant(orgId: string, projectId: number, employeeId: number) {
-  const ids = await getProjectParticipantIds(orgId, projectId);
-  for (const pid of ids) {
-    const p = await callTripletexAPI(`/project/participant/${pid}?fields=employee`, 'GET', undefined, orgId);
-    const pEmpId = p?.data?.value?.employee?.id;
-    if (p.success && Number(pEmpId) === Number(employeeId)) {
-      return { found: true, participantId: pid };
+  try {
+    const ids = await getProjectParticipantIds(orgId, projectId);
+    for (const pid of ids) {
+      const p = await callTripletexAPI(`/project/participant/${pid}?fields=employee`, 'GET', undefined, orgId);
+      
+      // If callTripletexAPI got 429, it would have thrown (handled by exponentialBackoff wrapper)
+      // But check explicitly if we got an error response
+      if (p.status === 429 || (!p.success && (p.error?.includes('429') || p.error?.includes('Rate limit')))) {
+        const err: Error = new Error(p.error || 'HTTP 429');
+        (err as any).status = 429;
+        throw err;
+      }
+      
+      const pEmpId = p?.data?.value?.employee?.id;
+      if (p.success && Number(pEmpId) === Number(employeeId)) {
+        return { found: true, participantId: pid };
+      }
     }
+    return { found: false };
+  } catch (error: unknown) {
+    // Re-throw 429 errors to propagate to exponentialBackoff
+    if ((error as any)?.status === 429 || (error as Error)?.message?.includes('429')) {
+      throw error;
+    }
+    // For other errors, return not found (fail gracefully)
+    console.warn('Error checking participant, assuming not found:', error);
+    return { found: false };
   }
-  return { found: false };
 }
 
-async function ensureParticipant(orgId: string, projectId: number, employeeId: number) {
-  const existing = await isEmployeeParticipant(orgId, projectId, employeeId);
-  if (existing.found) return { ok: true, participantId: existing.participantId };
+async function ensureParticipant(orgId: string, projectId: number, employeeId: number, useCache: boolean = true) {
+  try {
+    // Check cache first if enabled
+    if (useCache) {
+      const cached = getCachedParticipant(orgId, projectId, employeeId);
+      if (cached !== null) {
+        return cached;
+      }
+    }
+    
+    const existing = await isEmployeeParticipant(orgId, projectId, employeeId);
+    if (existing.found) {
+      const result = { ok: true, participantId: existing.participantId };
+      if (useCache) setCachedParticipant(orgId, projectId, employeeId, result);
+      return result;
+    }
 
-  const body = { project: { id: Number(projectId) }, employee: { id: Number(employeeId) } };
-  const addRes = await callTripletexAPI('/project/participant', 'POST', body, orgId);
+    const body = { project: { id: Number(projectId) }, employee: { id: Number(employeeId) } };
+    const addRes = await callTripletexAPI('/project/participant', 'POST', body, orgId);
 
-  const after = await isEmployeeParticipant(orgId, projectId, employeeId);
-  if (after.found) return { ok: true, participantId: after.participantId };
+    // If callTripletexAPI returned 429, it would have thrown an exception (handled by exponentialBackoff)
+    // But if we get here with error, it's a different error
+    if (!addRes.success) {
+      // If it's a 429 error, re-throw to let exponentialBackoff handle it
+      if (addRes.status === 429 || addRes.error?.includes('429') || addRes.error?.includes('Rate limit')) {
+        const err: Error = new Error(addRes.error || 'HTTP 429');
+        (err as any).status = 429;
+        throw err;
+      }
+      const result = { ok: false, reason: addRes.error || 'could_not_add_participant' };
+      // Don't cache failures (only cache successes)
+      return result;
+    }
 
-  return { ok: false, reason: addRes.error || 'could_not_add_participant' };
+    const after = await isEmployeeParticipant(orgId, projectId, employeeId);
+    if (after.found) {
+      const result = { ok: true, participantId: after.participantId };
+      if (useCache) setCachedParticipant(orgId, projectId, employeeId, result);
+      return result;
+    }
+
+    return { ok: false, reason: addRes.error || 'could_not_add_participant' };
+  } catch (error: unknown) {
+    // Re-throw 429 errors to let exponentialBackoff handle retries
+    if ((error as any)?.status === 429 || (error as Error)?.message?.includes('429')) {
+      throw error;
+    }
+    // For other errors, return failure
+    return { ok: false, reason: (error as Error)?.message || 'unknown_error' };
+  }
 }
 
 async function ensureActivityOnProject(orgId: string, projectId: number, activityId: number) {
@@ -1720,6 +1849,32 @@ Deno.serve(async (req) => {
               continue;
             }
 
+            // Check if employee is participant on project (with caching, wrapped in exponentialBackoff for 429 handling)
+            const part = await exponentialBackoff(async () => {
+              return await ensureParticipant(orgId, Number(entry.projectId), Number(employeeData.tripletex_employee_id), true);
+            }, 3);
+            
+            // Handle result (exponentialBackoff returns the result directly, not wrapped)
+            const participantResult = (part as { ok?: boolean, participantId?: number, reason?: string }) || { ok: false };
+            
+            if (!participantResult.ok) {
+              // Check if it's a rate limit error after all retries
+              if (participantResult.reason?.includes('429') || participantResult.reason?.includes('Rate limit')) {
+                exportResults.push({ 
+                  id: entry.id, 
+                  success: false, 
+                  error: 'Tripletex rate limit nådd. Vennligst vent og prøv igjen.' 
+                });
+              } else {
+                exportResults.push({ 
+                  id: entry.id, 
+                  success: false, 
+                  error: participantResult.reason || 'Ansatt er ikke deltaker på prosjektet i Tripletex' 
+                });
+              }
+              continue;
+            }
+
             // Bygg Tripletex-entry for /timesheet/entry (ett og ett objekt)
             const entryDate = entry.date;
             const entryBody = {
@@ -1776,6 +1931,7 @@ Deno.serve(async (req) => {
 
       case 'verify-timesheet-entry': {
         const tripletexEntryId = payload?.tripletexEntryId;
+        const autoCleanup = payload?.autoCleanup !== false; // Default to true for automatic cleanup
 
         if (!tripletexEntryId) {
           return new Response(JSON.stringify({ error: 'Missing tripletexEntryId' }), {
@@ -1785,13 +1941,52 @@ Deno.serve(async (req) => {
         }
 
         const verifyResult = await callTripletexAPI(`/timesheet/entry/${tripletexEntryId}?fields=id,date,hours,employee,project,activity`, 'GET', undefined, orgId);
+        
+        const exists = verifyResult.success && verifyResult.data?.value;
+        const is404 = verifyResult.status === 404;
+        
+        // If entry doesn't exist (404) and autoCleanup is enabled, automatically reset the fields
+        if (is404 && autoCleanup) {
+          console.log(`ℹ️ Timesheet entry ${tripletexEntryId} not found in Tripletex (404) - auto-cleaning local references`);
+          
+          // Find and reset all vakt_timer entries with this tripletex_entry_id
+          const { data: affectedEntries, error: findError } = await supabase
+            .from('vakt_timer')
+            .select('id')
+            .eq('tripletex_entry_id', tripletexEntryId)
+            .eq('org_id', orgId);
+
+          if (!findError && affectedEntries && affectedEntries.length > 0) {
+            const entryIds = affectedEntries.map(e => e.id);
+            
+            // Reset sync fields for all affected entries
+            const { error: updateError } = await supabase
+              .from('vakt_timer')
+              .update({
+                tripletex_entry_id: null,
+                tripletex_synced_at: null,
+                sync_error: 'Entry not found in Tripletex (404) - automatically cleaned up'
+              })
+              .in('id', entryIds)
+              .eq('org_id', orgId);
+
+            if (updateError) {
+              console.error('Failed to auto-cleanup entries:', updateError);
+            } else {
+              console.log(`✅ Auto-cleaned ${affectedEntries.length} entries with missing Tripletex reference`);
+            }
+          }
+        }
+
         result = { 
           success: true, 
           data: { 
-            exists: verifyResult.success && verifyResult.data?.value,
+            exists: exists && !is404,
             entry: verifyResult.data?.value || null,
-            error: verifyResult.error || null
-          }
+            error: verifyResult.error || null,
+            was404: is404,
+            autoCleaned: is404 && autoCleanup
+          } 
         };
         break;
       }
@@ -2039,27 +2234,48 @@ Deno.serve(async (req) => {
             }
           }
 
-          // 1) Finnes entiteter?
-          const employeeCheck = await callTripletexAPI(`/employee/${employee_id}?fields=id,firstName,lastName`, 'GET', undefined, orgId);
+          // 1) Finnes entiteter? (with caching to reduce API calls)
+          let employeeCheck = getCachedEntity('employee', orgId, employee_id);
+          if (!employeeCheck) {
+            employeeCheck = await callTripletexAPI(`/employee/${employee_id}?fields=id,firstName,lastName`, 'GET', undefined, orgId);
+            setCachedEntity('employee', orgId, employee_id, employeeCheck);
+          }
           if (!employeeCheck.success) {
             return { success: false, error: 'Tripletex-ID finnes ikke', missing: 'employee', id: employee_id };
           }
-          const projectCheck = await callTripletexAPI(`/project/${project_id}?fields=id,number,name`, 'GET', undefined, orgId);
+          
+          let projectCheck = getCachedEntity('project', orgId, project_id);
+          if (!projectCheck) {
+            projectCheck = await callTripletexAPI(`/project/${project_id}?fields=id,number,name`, 'GET', undefined, orgId);
+            setCachedEntity('project', orgId, project_id, projectCheck);
+          }
           if (!projectCheck.success) {
             return { success: false, error: 'Tripletex-ID finnes ikke', missing: 'project', id: project_id };
           }
+          
           if (activity_id) {
-            const activityCheck = await callTripletexAPI(`/activity/${activity_id}?fields=id,name`, 'GET', undefined, orgId);
+            let activityCheck = getCachedEntity('activity', orgId, activity_id);
+            if (!activityCheck) {
+              activityCheck = await callTripletexAPI(`/activity/${activity_id}?fields=id,name`, 'GET', undefined, orgId);
+              setCachedEntity('activity', orgId, activity_id, activityCheck);
+            }
             if (!activityCheck.success) {
               return { success: false, error: 'Tripletex-ID finnes ikke', missing: 'activity', id: activity_id };
             }
           }
 
-          // 2) Sørg for deltaker
+          // 2) Sørg for deltaker (ensureParticipant handles 429 internally and throws, caught by exponentialBackoff wrapper)
           console.log('🔍 Checking if employee is participant on project:', { employeeId: employee_id, projectId: project_id });
+          
+          // ensureParticipant will throw on 429, which exponentialBackoff (wrapping this whole action) will retry
           const part = await ensureParticipant(orgId, Number(project_id), Number(employee_id));
+          
           if (!part.ok) {
             console.error('❌ Employee not participant:', { employeeId: employee_id, projectId: project_id, reason: part.reason });
+            // If reason is 429, it means all retries failed - return clear error
+            if (part.reason?.includes('429') || part.reason?.includes('Rate limit')) {
+              return { success: false, error: 'rate_limit_exceeded', projectId: project_id, employeeId: employee_id, details: 'Tripletex rate limit reached. Please wait and try again.' };
+            }
             return { success: false, error: 'employee_not_participant', projectId: project_id, employeeId: employee_id, details: part.reason };
           }
           console.log('✅ Employee is participant on project');
@@ -2864,6 +3080,13 @@ Deno.serve(async (req) => {
       case 'delete_timesheet_entry': {
         const { tripletex_entry_id, vakt_timer_id: deleteVaktTimerId } = payload;
         
+        console.log('🗑️ delete_timesheet_entry called:', {
+          tripletex_entry_id,
+          deleteVaktTimerId,
+          hasTripletexId: !!tripletex_entry_id,
+          hasVaktTimerId: !!deleteVaktTimerId
+        });
+        
         if (!tripletex_entry_id && !deleteVaktTimerId) {
           result = { success: false, error: 'Missing tripletex_entry_id or vakt_timer_id' };
           break;
@@ -2875,10 +3098,98 @@ Deno.serve(async (req) => {
           // Delete from Tripletex if we have the ID
           if (tripletex_entry_id) {
             deleteResponse = await callTripletexAPI(`/timesheet/entry/${tripletex_entry_id}`, 'DELETE', undefined, orgId);
+            
+            // Handle 404 gracefully: If entry doesn't exist in Tripletex, treat as successful deletion
+            // This can happen if entry was manually deleted in Tripletex or never existed
+            if (deleteResponse.status === 404) {
+              console.log(`ℹ️ Timesheet entry ${tripletex_entry_id} not found in Tripletex (404) - treating as successful deletion`);
+              deleteResponse.success = true;
+              deleteResponse.status = 200; // Normalize status for downstream logic
+            }
           }
 
-          // Also delete associated vehicle orderlines
+          // Also delete associated vehicle orderlines AND update vakt_timer entry
           if (deleteVaktTimerId) {
+            // FIRST: Update vakt_timer entry to null out tripletex fields
+            // We do this early to ensure it happens even if vehicle cleanup fails
+            console.log(`🔄 Updating vakt_timer ${deleteVaktTimerId} after recall (404 handled: ${deleteResponse.status === 404})`);
+            
+            // Get original values before restoring (also get current timer value)
+            const { data: originalValues, error: fetchError } = await supabase
+              .from('vakt_timer')
+              .select('original_timer, original_aktivitet_id, original_notat, original_status, timer')
+              .eq('id', deleteVaktTimerId)
+              .single();
+
+            if (fetchError) {
+              console.error('❌ Failed to fetch original values:', fetchError);
+              // Still try to null out tripletex fields even if we can't restore original values
+              const { error: nullUpdateError } = await supabase
+                .from('vakt_timer')
+                .update({
+                  tripletex_entry_id: null,
+                  tripletex_synced_at: null,
+                  sync_error: deleteResponse.status === 404 ? 'Entry not found in Tripletex (404) - cleaned up' : null
+                })
+                .eq('id', deleteVaktTimerId);
+              
+              if (nullUpdateError) {
+                console.error('❌ Failed to null out tripletex fields:', nullUpdateError);
+              } else {
+                console.log('✅ Nullified tripletex fields for entry (could not restore original values)');
+              }
+            } else {
+              console.log('📋 Original values found:', {
+                original_status: originalValues?.original_status,
+                original_timer: originalValues?.original_timer,
+                has_original: !!originalValues
+              });
+
+              // Update local entry to mark as deleted/reset sync status and restore original values
+              // IMPORTANT: timer cannot be null (NOT NULL constraint), so use current timer if original is null
+              const updateData: any = {
+                tripletex_entry_id: null,
+                tripletex_synced_at: null,
+                sync_error: deleteResponse.status === 404 ? 'Entry not found in Tripletex (404) - cleaned up' : null,
+                status: originalValues?.original_status || 'utkast'
+              };
+              
+              // Only update timer if original_timer exists and is not null
+              // Otherwise keep current timer value (cannot be null due to NOT NULL constraint)
+              if (originalValues?.original_timer !== null && originalValues?.original_timer !== undefined) {
+                updateData.timer = originalValues.original_timer;
+              }
+              
+              // Only update aktivitet_id if original exists
+              if (originalValues?.original_aktivitet_id !== null && originalValues?.original_aktivitet_id !== undefined) {
+                updateData.aktivitet_id = originalValues.original_aktivitet_id;
+              }
+              
+              // Only update notat if original exists (notat can be null, so we check for undefined)
+              if (originalValues?.original_notat !== undefined) {
+                updateData.notat = originalValues.original_notat;
+              }
+
+              const { error: updateError, data: updateDataResult } = await supabase
+                .from('vakt_timer')
+                .update(updateData)
+                .eq('id', deleteVaktTimerId)
+                .select('id, tripletex_entry_id, status, timer');
+
+              if (updateError) {
+                console.error('❌ Failed to update local entry after Tripletex deletion:', updateError);
+              } else {
+                console.log('✅ Successfully updated vakt_timer entry:', {
+                  id: updateDataResult?.[0]?.id,
+                  tripletex_entry_id_after: updateDataResult?.[0]?.tripletex_entry_id,
+                  status_after: updateDataResult?.[0]?.status,
+                  timer_after: updateDataResult?.[0]?.timer,
+                  was_404: deleteResponse.status === 404
+                });
+              }
+            }
+
+            // NOW: Handle vehicle cleanup (this can return early, but vakt_timer is already updated)
             // Get vakt_id from vakt_timer
             const { data: timerData, error: timerError } = await supabase
               .from('vakt_timer')
@@ -3292,7 +3603,11 @@ Deno.serve(async (req) => {
             }
           }
 
-        if (deleteResponse.success && deleteVaktTimerId) {
+        // Always update the entry if we have vakt_timer_id, even if deleteResponse was 404
+        // (404 means entry doesn't exist in Tripletex, so we should still null out our reference)
+        if (deleteVaktTimerId) {
+          console.log(`🔄 Updating vakt_timer ${deleteVaktTimerId} after recall (404 handled: ${deleteResponse.status === 404})`);
+          
           // Get original values before restoring
           const { data: originalValues, error: fetchError } = await supabase
             .from('vakt_timer')
@@ -3301,34 +3616,66 @@ Deno.serve(async (req) => {
             .single();
 
           if (fetchError) {
-            console.error('Failed to fetch original values:', fetchError);
+            console.error('❌ Failed to fetch original values:', fetchError);
+            // Still try to null out tripletex fields even if we can't restore original values
+            const { error: nullUpdateError } = await supabase
+              .from('vakt_timer')
+              .update({
+                tripletex_entry_id: null,
+                tripletex_synced_at: null,
+                sync_error: deleteResponse.status === 404 ? 'Entry not found in Tripletex (404) - cleaned up' : null
+              })
+              .eq('id', deleteVaktTimerId);
+            
+            if (nullUpdateError) {
+              console.error('❌ Failed to null out tripletex fields:', nullUpdateError);
+            } else {
+              console.log('✅ Nullified tripletex fields for entry (could not restore original values)');
+            }
+            
             return { 
               success: true,
               warning: 'Entry deleted from Tripletex but could not restore original values'
             };
           }
 
+          console.log('📋 Original values found:', {
+            original_status: originalValues?.original_status,
+            original_timer: originalValues?.original_timer,
+            has_original: !!originalValues
+          });
+
           // Update local entry to mark as deleted/reset sync status and restore original values
-          const { error: updateError } = await supabase
+          const { error: updateError, data: updateData } = await supabase
             .from('vakt_timer')
             .update({
               tripletex_entry_id: null,
               tripletex_synced_at: null,
-              sync_error: null,
+              sync_error: deleteResponse.status === 404 ? 'Entry not found in Tripletex (404) - cleaned up' : null,
               status: originalValues?.original_status || 'utkast',
               timer: originalValues?.original_timer || null,
               aktivitet_id: originalValues?.original_aktivitet_id || null,
               notat: originalValues?.original_notat || null
             })
-            .eq('id', deleteVaktTimerId);
+            .eq('id', deleteVaktTimerId)
+            .select('id, tripletex_entry_id, status');
 
           if (updateError) {
-            console.error('Failed to update local entry after Tripletex deletion:', updateError);
+            console.error('❌ Failed to update local entry after Tripletex deletion:', updateError);
             return { 
               success: true,
               warning: 'Entry deleted from Tripletex but local status not updated'
             };
           }
+
+          console.log('✅ Successfully updated vakt_timer entry:', {
+            id: updateData?.[0]?.id,
+            tripletex_entry_id_after: updateData?.[0]?.tripletex_entry_id,
+            status_after: updateData?.[0]?.status,
+            was_404: deleteResponse.status === 404
+          });
+        } else {
+          console.warn('⚠️ No vakt_timer_id provided - cannot update local entry');
         }
 
           return deleteResponse.success 
