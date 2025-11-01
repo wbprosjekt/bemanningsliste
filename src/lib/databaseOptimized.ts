@@ -73,7 +73,9 @@ export async function loadStaffingDataOptimized(
           id,
           tripletex_project_id,
           project_number,
-          project_name
+          project_name,
+          is_active,
+          is_closed
         ),
         vakt_timer (
           id,
@@ -145,6 +147,8 @@ export async function loadStaffingDataOptimized(
           project_number: entry.project.project_number || 0,
           project_name: entry.project.project_name || '',
           color: undefined, // Color will be fetched separately if needed
+          is_active: entry.project.is_active ?? null,
+          is_closed: entry.project.is_closed ?? null,
         } : null,
         activities,
         totalHours,
@@ -441,4 +445,3 @@ export async function loadUserProfileOptimized(userId: string): Promise<any> {
  * - Better developer experience
  * - Prevents cache inconsistency issues
  */
-

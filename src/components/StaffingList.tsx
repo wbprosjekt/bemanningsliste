@@ -15,7 +15,7 @@ import { getPersonDisplayName, generateProjectColor, getContrastColor, formatTim
 import ProjectSearchDialog from './ProjectSearchDialog';
 import ColorPickerDialog from './ColorPickerDialog';
 import TimeEntry from './TimeEntry';
-import { startOfISOWeek, addWeeks, addDays, isValid as isValidDate } from 'date-fns';
+import { startOfISOWeek, addWeeks, addDays, isValid as isValidDate, getISOWeekYear } from 'date-fns';
 import { toLocalDateString, toLocalDateTimeString } from '@/lib/utils';
 import { 
   loadFreeLinesOptimized, 
@@ -39,6 +39,8 @@ interface StaffingEntry {
     project_name: string;
     project_number: number;
     color?: string;
+    is_active?: boolean | null;
+    is_closed?: boolean | null;
   } | null;
   activities: Array<{
     id: string;
@@ -81,6 +83,8 @@ interface Project {
   project_name: string;
   project_number: number;
   color?: string;
+  is_active?: boolean | null;
+  is_closed?: boolean | null;
 }
 
 interface Employee {
@@ -159,7 +163,7 @@ const EditLineNameForm = ({ initialName, onSave, onCancel }: {
   );
 };
 
-const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListProps) => {
+const StaffingList = ({ startWeek, startYear, weeksToShow = 7 }: StaffingListProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -268,57 +272,56 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
   const { week: safeStartWeek, year: safeStartYear } = coerceWeekRef({ week: startWeek, year: startYear });
 
   // Get multiple weeks of data with robust date handling
+  // Shows current week first, then weeks forward (7 weeks total)
   const getMultipleWeeksData = useCallback((): WeekData[] => {
     const weeks: WeekData[] = [];
-    let currentWeek = Math.max(1, Math.min(53, safeStartWeek)); // Clamp week to valid range
-    let currentYear = Math.max(1970, Math.min(3000, safeStartYear)); // Clamp year to reasonable range
-    
-    for (let i = 0; i < weeksToShow; i++) {
-      try {
-        // ISO Week 1 Monday via date-fns
-        const jan4 = new Date(currentYear, 0, 4);
-        const week1Monday = startOfISOWeek(jan4);
-        if (!isValidDate(week1Monday)) {
-          console.error(`Invalid week1Monday for year ${currentYear}`);
-          break;
+    const windowSize = Math.max(1, weeksToShow);
+
+    try {
+      const jan4 = new Date(safeStartYear, 0, 4);
+      const baseWeek1Monday = startOfISOWeek(jan4);
+      if (!isValidDate(baseWeek1Monday)) {
+        console.error(`Invalid ISO week reference for year ${safeStartYear}`);
+        return weeks;
+      }
+
+      // Start from the specified week (current week when user first loads)
+      const baseMonday = addWeeks(baseWeek1Monday, Math.max(0, safeStartWeek - 1));
+
+      // Generate weeks forward from the start week
+      for (let i = 0; i < windowSize; i++) {
+        const weekMonday = addWeeks(baseMonday, i);
+        if (!isValidDate(weekMonday)) {
+          continue;
         }
 
-        const targetMonday = addWeeks(week1Monday, currentWeek - 1);
-        if (!isValidDate(targetMonday)) {
-          console.error(`Invalid targetMonday for week ${currentWeek}, year ${currentYear}`);
-          break;
-        }
+        const isoYear = getISOWeekYear(weekMonday);
+        const isoWeek = getWeekNumber(weekMonday);
 
-        // Generate 7 days
         const dates: Date[] = [];
         for (let j = 0; j < 7; j++) {
-          const date = addDays(targetMonday, j);
-          if (isValidDate(date)) dates.push(date);
+          const date = addDays(weekMonday, j);
+          if (isValidDate(date)) {
+            dates.push(date);
+          }
         }
 
         if (dates.length === 7) {
-          weeks.push({ week: currentWeek, year: currentYear, dates });
+          weeks.push({ week: isoWeek, year: isoYear, dates });
         }
-
-        // Next week with 53-week check
-        currentWeek++;
-        if (currentWeek > 53) {
-          currentYear++;
-          currentWeek = 1;
-        } else if (currentWeek > 52) {
-          const dec31 = new Date(currentYear, 11, 31);
-          const lastWeek = getWeekNumber(dec31);
-          if (currentWeek > lastWeek) {
-            currentYear++;
-            currentWeek = 1;
-          }
-        }
-      } catch (error) {
-        console.error(`Error generating week data for week ${currentWeek}, year ${currentYear}:`, error);
-        break;
       }
+      
+      // Sort weeks by year and week number to ensure correct order
+      weeks.sort((a, b) => {
+        if (a.year !== b.year) {
+          return a.year - b.year;
+        }
+        return a.week - b.week;
+      });
+    } catch (error) {
+      console.error(`Error generating week data from week ${safeStartWeek}, year ${safeStartYear}:`, error);
     }
-    
+
     return weeks;
   }, [safeStartWeek, safeStartYear, weeksToShow]);
 
@@ -407,6 +410,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                 tripletex_project_id: number; 
                 project_name: string; 
                 project_number: number; 
+                is_active?: boolean | null;
+                is_closed?: boolean | null;
               }; 
               activities?: unknown[] 
             };
@@ -457,7 +462,9 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
                 tripletex_project_id: vaktData.project.tripletex_project_id,
                 project_name: vaktData.project.project_name || `Prosjekt ${vaktData.project.project_number}`,
                 project_number: vaktData.project.project_number,
-                color: projectColors[vaktData.project.tripletex_project_id] || '#6366f1'
+                color: projectColors[vaktData.project.tripletex_project_id] || '#6366f1',
+                is_active: vaktData.project.is_active ?? null,
+                is_closed: vaktData.project.is_closed ?? null,
               } : null,
               activities,
               totalHours,
@@ -1204,6 +1211,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       return;
     }
 
+    if (entry.project?.is_closed === true || entry.project?.is_active === false) {
+      toast({
+        title: "Prosjekt avsluttet",
+        description: "Prosjektet er lukket i Tripletex og kan ikke ta imot flere timer.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setSendingToTripletex(prev => new Set(prev).add(entry.id));
 
     try {
@@ -1341,6 +1357,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
       let notFoundActivities = 0;
       let verifiedHours = 0;
       let notFoundHours = 0;
+      let autoCleanedCount = 0;
 
       for (const activity of entry.activities) {
         if (activity.tripletex_entry_id) {
@@ -1348,7 +1365,8 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             body: {
               action: 'verify-timesheet-entry',
               tripletexEntryId: activity.tripletex_entry_id,
-              orgId: profile?.org_id
+              orgId: profile?.org_id,
+              autoCleanup: true // Enable automatic cleanup of missing entries
             }
           });
 
@@ -1357,7 +1375,11 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
             continue;
           }
 
-          if (data?.data?.exists) {
+          if (data?.data?.autoCleaned) {
+            autoCleanedCount++;
+            notFoundActivities++;
+            notFoundHours += activity.timer || 0;
+          } else if (data?.data?.exists) {
             verifiedActivities++;
             verifiedHours += activity.timer || 0;
           } else {
@@ -1367,7 +1389,15 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
         }
       }
 
-      if (verifiedActivities > 0 && notFoundActivities === 0) {
+      // If any entries were auto-cleaned, refresh the data to show updated status
+      if (autoCleanedCount > 0) {
+        revalidateInBackground();
+        toast({
+          title: "Timer automatisk oppdatert",
+          description: `${autoCleanedCount} ${autoCleanedCount === 1 ? 'aktivitet' : 'aktiviteter'} ikke funnet i Tripletex og er nå frigitt for redigering`,
+          variant: "default"
+        });
+      } else if (verifiedActivities > 0 && notFoundActivities === 0) {
         toast({
           title: "Bekreftet i Tripletex",
           description: `${verifiedHours} timer (${verifiedActivities} aktiviteter) er synkronisert med Tripletex`
@@ -2099,11 +2129,18 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
 
       {/* Multi-week Excel-like table */}
       <div className="space-y-8">
-        {multiWeekData.length > 0 ? multiWeekData.map(weekData => {
+        {multiWeekData.length > 0 ? multiWeekData.map((weekData, index) => {
           const safeWeek = coerceWeekRef(weekData);
+          const showYearHeader = index === 0 || coerceWeekRef(multiWeekData[index - 1]).year !== safeWeek.year;
           return (
-            <div key={`${safeWeek.year}-${safeWeek.week}`} className="border rounded-lg overflow-hidden bg-white shadow-sm">
-              <div className="overflow-x-auto">
+            <div key={`${safeWeek.year}-${safeWeek.week}`} className="space-y-2">
+              {showYearHeader && (
+                <div className="px-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  {safeWeek.year}
+                </div>
+              )}
+              <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-slate-100">
@@ -2685,6 +2722,7 @@ const StaffingList = ({ startWeek, startYear, weeksToShow = 6 }: StaffingListPro
               </table>
             </div>
           </div>
+        </div>
         );
         }) : (
           <div className="text-center py-8">

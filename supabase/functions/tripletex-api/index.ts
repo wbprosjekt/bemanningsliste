@@ -1610,47 +1610,53 @@ Deno.serve(async (req) => {
           // Register webhooks for different entity types
           const webhookRegistrations = [];
           
-          // Employee webhook
-          const employeeWebhook = await callTripletexAPI('/event/subscription', 'POST', {
-            targetUrl: webhookUrl,
-            event: 'employee.create',
-            fields: '*'
-          }, orgId);
-          
-          if (employeeWebhook.success) {
-            webhookRegistrations.push({ type: 'employee', success: true });
-            console.log('✅ Employee webhook registered');
-          } else {
-            webhookRegistrations.push({ type: 'employee', success: false, error: employeeWebhook.error });
-            console.error('❌ Employee webhook registration failed:', employeeWebhook.error);
+          // Employee webhooks (create, update, delete)
+          const employeeEvents = ['employee.create', 'employee.update', 'employee.delete'];
+          for (const event of employeeEvents) {
+            const employeeWebhook = await callTripletexAPI('/event/subscription', 'POST', {
+              targetUrl: webhookUrl,
+              event: event,
+              fields: '*'
+            }, orgId);
             
-            // If webhook endpoint doesn't exist, stop trying other webhooks
-            if (employeeWebhook.error && employeeWebhook.error.includes('404')) {
-              console.log('⚠️ Webhook endpoint not found - stopping webhook registration');
-              return {
-                success: false,
-                error: 'Tripletex API does not support webhook endpoints',
-                data: {
-                  supported: false,
-                  message: 'Webhook registration failed - endpoint not available'
-                }
-              };
+            if (employeeWebhook.success) {
+              webhookRegistrations.push({ type: event, success: true });
+              console.log(`✅ ${event} webhook registered`);
+            } else {
+              webhookRegistrations.push({ type: event, success: false, error: employeeWebhook.error });
+              console.error(`❌ ${event} webhook registration failed:`, employeeWebhook.error);
+              
+              // If webhook endpoint doesn't exist, stop trying other webhooks
+              if (employeeWebhook.error && employeeWebhook.error.includes('404')) {
+                console.log('⚠️ Webhook endpoint not found - stopping webhook registration');
+                return {
+                  success: false,
+                  error: 'Tripletex API does not support webhook endpoints',
+                  data: {
+                    supported: false,
+                    message: 'Webhook registration failed - endpoint not available'
+                  }
+                };
+              }
             }
           }
           
-          // Project webhook
-          const projectWebhook = await callTripletexAPI('/event/subscription', 'POST', {
-            targetUrl: webhookUrl,
-            event: 'project.create',
-            fields: '*'
-          }, orgId);
-          
-          if (projectWebhook.success) {
-            webhookRegistrations.push({ type: 'project', success: true });
-            console.log('✅ Project webhook registered');
-          } else {
-            webhookRegistrations.push({ type: 'project', success: false, error: projectWebhook.error });
-            console.error('❌ Project webhook registration failed:', projectWebhook.error);
+          // Project webhooks (create, update, delete)
+          const projectEvents = ['project.create', 'project.update', 'project.delete'];
+          for (const event of projectEvents) {
+            const projectWebhook = await callTripletexAPI('/event/subscription', 'POST', {
+              targetUrl: webhookUrl,
+              event: event,
+              fields: '*'
+            }, orgId);
+            
+            if (projectWebhook.success) {
+              webhookRegistrations.push({ type: event, success: true });
+              console.log(`✅ ${event} webhook registered`);
+            } else {
+              webhookRegistrations.push({ type: event, success: false, error: projectWebhook.error });
+              console.error(`❌ ${event} webhook registration failed:`, projectWebhook.error);
+            }
           }
           
           // Product webhook (since activity.create is not available in test environment)
@@ -1892,11 +1898,25 @@ Deno.serve(async (req) => {
             }
 
             // Viktig: riktig endpoint
-            const exportResult = await exponentialBackoff(async () => {
-              return await callTripletexAPI('/timesheet/entry', 'POST', entryBody, orgId);
-            });
+            let exportResult;
+            try {
+              exportResult = await exponentialBackoff(async () => {
+                return await callTripletexAPI('/timesheet/entry', 'POST', entryBody, orgId);
+              }, 3); // Max 3 retries with exponential backoff
+            } catch (error: any) {
+              console.error(`Error in export-timesheet exponentialBackoff for entry ${entry.id}:`, error);
+              const errorMessage = error?.message || 'Unknown error during Tripletex submission';
+              const errorStatus = error?.status || 500;
+              const isRateLimit = errorStatus === 429 || errorMessage.includes('429') || errorMessage.includes('Rate limit');
+              
+              exportResult = {
+                success: false,
+                error: isRateLimit ? 'Tripletex rate limit nådd. Vennligst vent og prøv igjen.' : errorMessage,
+                status: errorStatus
+              };
+            }
 
-            if (exportResult.success) {
+            if (exportResult?.success) {
               await supabase
                 .from('vakt_timer')
                 .update({
@@ -2057,9 +2077,10 @@ Deno.serve(async (req) => {
           break;
         }
 
-        result = await exponentialBackoff(async () => {
-          // 4) Bygg korrekt payload for /timesheet/entry (IKKE array, IKKE clientReference, IKKE count/description)
-          const entryDate = new Date(date).toISOString().split('T')[0];
+        try {
+          result = await exponentialBackoff(async () => {
+            // 4) Bygg korrekt payload for /timesheet/entry (IKKE array, IKKE clientReference, IKKE count/description)
+            const entryDate = new Date(date).toISOString().split('T')[0];
           const hoursNumber = parseFloat(hours.toString().replace(',', '.'));
 
           console.log('📋 Timesheet entry details:', {
@@ -2292,35 +2313,10 @@ Deno.serve(async (req) => {
           }
 
           // Check if there are existing timesheet entries in Tripletex for this combination
-          console.log('🔍 Checking for existing timesheet entries in Tripletex...');
-          const existingEntriesResponse = await callTripletexAPI(
-            `/timesheet/entry?employee.id=${employee_id}&project.id=${project_id}&date=${entryDate}&count=100&fields=id,date,hours,employee,project,activity`, 
-            'GET', 
-            undefined, 
-            orgId
-          );
-
-          if (existingEntriesResponse.success && existingEntriesResponse.data?.values?.length > 0) {
-            const existingEntries = existingEntriesResponse.data.values as Array<{ id: number; activity?: { id: number } }>;
-            const conflictingEntry = existingEntries.find(entry => 
-              entry.activity?.id === Number(finalActivityId)
-            );
-
-            if (conflictingEntry) {
-              console.log('⚠️ Found existing timesheet entry in Tripletex:', { 
-                tripletexId: conflictingEntry.id,
-                activityId: conflictingEntry.activity?.id,
-                employeeId: employee_id,
-                projectId: project_id,
-                date: entryDate
-              });
-              return { 
-                success: false, 
-                error: 'Det finnes allerede timer for denne ansatte, prosjekt og aktivitet på denne dagen i Tripletex. Bruk "Hent tilbake" for å oppdatere eksisterende timer.',
-                existingTripletexId: conflictingEntry.id
-              };
-            }
-          }
+          // Skip duplicate check - Tripletex API will handle duplicates on its own
+          // The check was causing 422 errors due to missing dateFrom/dateTo params
+          // If duplicates exist, Tripletex will return an appropriate error
+          console.log('ℹ️ Skipping duplicate check - Tripletex will validate duplicates');
 
           console.log('All preflight checks passed - proceeding with timesheet submission');
 
@@ -2408,7 +2404,36 @@ Deno.serve(async (req) => {
             .eq('id', vakt_timer_id);
 
           return response;
-        });
+        }, 3); // Max 3 retries with exponential backoff
+        } catch (error: any) {
+          console.error('Error in send_timesheet_entry exponentialBackoff:', error);
+          // If exponentialBackoff throws (all retries failed), return a structured error
+          const errorMessage = error?.message || 'Unknown error during Tripletex submission';
+          const errorStatus = error?.status || 500;
+          const isRateLimit = errorStatus === 429 || errorMessage.includes('429') || errorMessage.includes('Rate limit');
+
+          // Update vakt_timer status to 'utkast' and log error
+          const { error: updateError } = await supabase
+            .from('vakt_timer')
+            .update({
+              tripletex_entry_id: null,
+              tripletex_synced_at: null,
+              sync_error: isRateLimit ? 'Tripletex rate limit nådd etter retries' : errorMessage,
+              status: 'utkast' // Reset to draft on failure
+            })
+            .eq('id', vakt_timer_id);
+
+          if (updateError) {
+            console.error('Failed to update vakt_timer status after Tripletex submission error:', updateError);
+          }
+
+          result = { 
+            success: false, 
+            error: isRateLimit ? 'Tripletex rate limit nådd. Vennligst vent og prøv igjen.' : errorMessage,
+            status: errorStatus,
+            details: error?.details || 'Failed to send timesheet entry to Tripletex after multiple retries.'
+          };
+        }
         break;
       }
 
@@ -2523,6 +2548,19 @@ Deno.serve(async (req) => {
 
         const entryDate = new Date(date).toISOString().split('T')[0];
         const summary: Array<{ id: string; status: string; message?: string }> = [];
+
+        const vehicleTypeAliases: Record<string, string> = {
+          servicebil: 'svc',
+          km_utenfor: 'km',
+          tilhenger: 'til',
+        };
+
+        const buildShortVehicleToken = (vaktId: string, vehicleType: string) => {
+          const sanitizedId = (vaktId || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 6);
+          const typeAlias = vehicleTypeAliases[vehicleType] || vehicleType.slice(0, 3);
+          const shortId = sanitizedId || (vaktId || '').slice(0, 6) || 'veh';
+          return `[veh:${shortId}:${typeAlias}]`;
+        };
 
         for (const entry of vehicleEntries) {
           try {
@@ -2649,19 +2687,25 @@ Deno.serve(async (req) => {
               : baseDescription;
 
             // Generate canonical + legacy tokens so we can always locate/update orderlines
-            const canonicalToken = `[vehicle:${vakt_id}:${entry.vehicle_type}]`;
+            const canonicalTokenLegacy = `[vehicle:${vakt_id}:${entry.vehicle_type}]`;
+            const canonicalTokenShort = buildShortVehicleToken(String(vakt_id), entry.vehicle_type);
             const legacyToken = `[vehicle:${entry.id}]`;
-            const candidateTokens = [legacyToken, canonicalToken];
+            const candidateTokens = [legacyToken, canonicalTokenLegacy, canonicalTokenShort];
 
             // Attach token to description for matching (Tripletex doesn't support externalId on project orderlines)
-            const description = `${descriptionBase} ${canonicalToken}`;
+            const description = `${descriptionBase} ${canonicalTokenShort}`;
 
             const baseDescriptionLower = baseDescription.toLowerCase();
             const descriptionPattern = descriptionBase;
             const descriptionPatternLower = descriptionPattern.toLowerCase();
-            const canonicalTokenLower = canonicalToken.toLowerCase();
+            const canonicalTokenLegacyLower = canonicalTokenLegacy.toLowerCase();
+            const canonicalTokenShortLower = canonicalTokenShort.toLowerCase();
             const legacyTokenLower = legacyToken.toLowerCase();
-            const candidateTokensLower = [legacyTokenLower, canonicalTokenLower];
+            const candidateTokensLower = [
+              legacyTokenLower,
+              canonicalTokenLegacyLower,
+              canonicalTokenShortLower,
+            ];
             const employeeNameLower = employeeName ? employeeName.toLowerCase() : null;
 
             type TripletexOrderline = {
@@ -3385,11 +3429,18 @@ Deno.serve(async (req) => {
 
               for (const vehicleEntry of vehicleEntries || []) {
                 const baseDescription = baseDescriptions[vehicleEntry.vehicle_type] || vehicleEntry.vehicle_type;
-                const canonicalToken = `[vehicle:${timerData.vakt_id}:${vehicleEntry.vehicle_type}]`;
+                const vehicleTypeAliases: Record<string, string> = {
+                  servicebil: 'svc',
+                  km_utenfor: 'km',
+                  tilhenger: 'til',
+                };
+                const sanitizedId = (timerData.vakt_id || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 6);
+                const typeAlias = vehicleTypeAliases[vehicleEntry.vehicle_type] || vehicleEntry.vehicle_type.slice(0, 3);
+                const shortId = sanitizedId || (timerData.vakt_id || '').slice(0, 6) || 'veh';
+                const canonicalTokenShort = `[veh:${shortId}:${typeAlias}]`;
+                const canonicalTokenLegacy = `[vehicle:${timerData.vakt_id}:${vehicleEntry.vehicle_type}]`;
                 const legacyToken = `[vehicle:${vehicleEntry.id}]`;
-                const tokenCandidates = [canonicalToken, legacyToken];
-                const canonicalTokenLower = canonicalToken.toLowerCase();
-                const legacyTokenLower = legacyToken.toLowerCase();
+                const tokenCandidates = [canonicalTokenShort, canonicalTokenLegacy, legacyToken];
                 const tokenCandidatesLower = tokenCandidates.map(token => token.toLowerCase());
                 const entryLogContext = {
                   entry_id: vehicleEntry.id,

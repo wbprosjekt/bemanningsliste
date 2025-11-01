@@ -78,10 +78,14 @@ Bemanningsliste (`/bemanningsliste`) har allerede implementert best practices so
   - Timer (time/minutter input)
   - Prosjekt (dropdown)
   - Aktivitet (dropdown)
-  - Notat (textarea)
-  - Kjøretøy-valg (checkboxes: Servicebil, Km utenfor, Tilhenger)
-  - Distance input (hvis relevant)
-  - Lagre / Avbryt
+- Notat (textarea)
+- Kjøretøy-valg (checkboxes: Servicebil, Km utenfor, Tilhenger)
+- Distance input (hvis relevant)
+- Lagre / Avbryt
+- Lagring skjer via en dedikert Supabase-mutasjon (`updateTimerEntry`) som oppdaterer både `vakt_timer` og tilhørende `vehicle_entries`.
+- Optimistisk oppdatering: oppdater lokal klientstate/UI først, men rull tilbake ved feil (vis toast) og kjør `revalidatePath`/refetch når mutasjonen lykkes.
+- Sendte timer er skrivebeskyttet i første iterasjon; vis en modal/advarsel som forklarer hvordan de kan sendes på nytt senere.
+- Etter lagring: invalider eller refetch timer-listen; gjenåpning av allerede sendte timer håndteres i en senere iterasjon når policy er avklart.
 
 ### 2. API Strategi - Gjenbruk fra Bemanningsliste
 
@@ -284,66 +288,76 @@ SELECT ...,
     'type', ve.vehicle_type,
     'distance_km', ve.distance_km,
     'tripletex_entry_id', ve.tripletex_entry_id
-  )) FILTER (WHERE ve.id IS NOT NULL), '[]'::json) as vehicles
+  ) ORDER BY ve.vehicle_type, ve.distance_km) FILTER (WHERE ve.id IS NOT NULL), '[]'::json) as vehicles
 FROM vakt_timer vt
 ...
 GROUP BY vt.id, v.id, p.id, proj.id, act.id
 ```
 
+> Merk: `ORDER BY` inne i aggregasjonen gir deterministisk rekkefølge i UI, og `DISTINCT` sørger for at duplikate `vehicle_entries` ikke vises to ganger.
+
 ## Implementasjonsplan
 
+_Statusnotat: Checkboxene under beskriver planlagte oppgaver som gjenstår._
+
 ### Fase 1: Database & Query
-1. ✅ Utvid `loadTimerEntries` query til å inkludere `vehicle_entries`
-2. ✅ Håndter multiple vehicle entries per vakt (JSON aggregation)
-3. ✅ Oppdater `TimerEntry` interface med `vehicles` array
+- [ ] Utvid `loadTimerEntries` query til å inkludere `vehicle_entries`
+- [ ] Håndter multiple vehicle entries per vakt (JSON aggregation)
+- [ ] Oppdater `TimerEntry` interface med `vehicles` array
 
 ### Fase 2: Filtrering
-1. ✅ Legg til hurtigknapper: "Denne måneden", "Forrige måned", "Denne uken", "Dag"
-2. ✅ Auto-fyll datoer når knapper klikkes
-3. ✅ Implementer `setPeriodFilter()` funksjon
+- [ ] Legg til hurtigknapper: "Denne måneden", "Forrige måned", "Denne uken", "Dag"
+- [ ] Auto-fyll datoer når knapper klikkes
+- [ ] Implementer `setPeriodFilter()` funksjon
 
 ### Fase 3: API Integrasjon - TripletexRateLimiter
-1. ✅ Import `TripletexRateLimiter` i timer-godkjenning page
-2. ✅ Definer key: `const rateLimitKey = \`tripletex_send_${orgId}\`;`
-3. ✅ Sjekk cooldown før ALLE sending-operasjoner
-4. ✅ Vis toast hvis cooldown aktiv
+- [ ] Import `TripletexRateLimiter` i timer-godkjenning page
+- [ ] Definer key: `const rateLimitKey = \`tripletex_send_${orgId}\`;`
+- [ ] Sjekk cooldown før ALLE sending-operasjoner
+- [ ] Vis toast hvis cooldown aktiv
 
 ### Fase 4: Tabell Forbedringer
-1. ✅ Legg til "Kjøretøy"-kolonne med badge-visning
-2. ✅ Forbedre "Aktivitet"-kolonne med ikoner/badges
-3. ✅ Legg til "Aksjon"-kolonne med ✏️ og 📤 knapper
+- [ ] Legg til "Kjøretøy"-kolonne med badge-visning
+- [ ] Forbedre "Aktivitet"-kolonne med ikoner/badges
+- [ ] Legg til "Aksjon"-kolonne med ✏️ og 📤 knapper
 
 ### Fase 5: Per-linje Tripletex Sending
-1. ✅ Lag `sendSingleTimerToTripletex(entry)` funksjon
-2. ✅ Bruk `send_timesheet_entry` action (SAMME som bemanningsliste)
-3. ✅ Parse retryInfo fra response
-4. ✅ Sett cooldown: `TripletexRateLimiter.setLimit(key, retryAfter)`
-5. ✅ Legg til loading state per rad
-6. ✅ Legg til 📤 knapp i tabell (per rad) med cooldown state
+- [ ] Lag `sendSingleTimerToTripletex(entry)` funksjon
+- [ ] Bruk `send_timesheet_entry` action (SAMME som bemanningsliste)
+- [ ] Parse retryInfo fra response
+- [ ] Sett cooldown: `TripletexRateLimiter.setLimit(key, retryAfter)`
+- [ ] Legg til loading state per rad
+- [ ] Legg til 📤 knapp i tabell (per rad) med cooldown state
 
 ### Fase 6: Batch Sending Forbedring
-1. ✅ Legg til cooldown check i eksisterende `sendToTripletex()`
-2. ✅ Parse retryInfo fra batch response
-3. ✅ Sett cooldown etter batch sending
-4. ✅ Forbedre error handling med cooldown messages
-5. ✅ Disable batch-knapp under cooldown med countdown
+- [ ] Legg til cooldown check i eksisterende `sendToTripletex()`
+- [ ] Parse retryInfo fra batch response
+- [ ] Sett cooldown etter batch sending
+- [ ] Forbedre error handling med cooldown messages
+- [ ] Disable batch-knapp under cooldown med countdown
 
 ### Fase 7: Redigeringsdialog
-1. ✅ Lag `EditTimerSheet` komponent (lik `TimeEntrySheet`)
-2. ✅ Åpne ved ✏️-knapp eller dobbeltklikk
-3. ✅ Støtt redigering av: timer, prosjekt, aktivitet, notat, kjøretøy
-4. ✅ Integrer med eksisterende vehicle entries logikk
+- [ ] Lag `EditTimerSheet` komponent (lik `TimeEntrySheet`)
+- [ ] Åpne ved ✏️-knapp eller dobbeltklikk
+- [ ] Støtt redigering av: timer, prosjekt, aktivitet, notat, kjøretøy
+- [ ] Integrer med eksisterende vehicle entries logikk
+- [ ] Koble til Supabase-mutasjon som oppdaterer `vakt_timer` og tilhørende `vehicle_entries`
+- [ ] Blokker redigering for timer som allerede er sendt (vis advarsel med info om videre prosess)
+- [ ] Planlegg senere støtte for å reåpne/sendt -> pending (krever klar policy før implementasjon)
+- [ ] Oppdater lokal klientstate optimistisk og revalidate/refresh data etter vellykket lagring
 
 ### Fase 8: UI States & Loading
-1. ✅ Disable per-linje knapper under cooldown
-2. ✅ Vis countdown: `"Vent {countdown}s"`
-3. ✅ Loading states per rad (spinner/disabled)
-4. ✅ Loading state for batch-operasjoner
+- [ ] Disable per-linje knapper under cooldown
+- [ ] Vis countdown: `"Vent {countdown}s"`
+- [ ] Loading states per rad (spinner/disabled)
+- [ ] Loading state for batch-operasjoner
+- [ ] Sikre at TripletexRateLimiter state re-hydrerer riktig etter lagring (invalidate query/refetch)
 
 ### Fase 9: Error Handling
-1. ✅ Gjenbruk samme error messages som bemanningsliste
-2. ✅ Håndter spesifikke feiltyper (period_locked, employee_not_participant, etc.)
-3. ✅ Vis cooldown i error toast hvis relevant
+- [ ] Gjenbruk samme error messages som bemanningsliste
+- [ ] Håndter spesifikke feiltyper (period_locked, employee_not_participant, etc.)
+- [ ] Vis cooldown i error toast hvis relevant
+- [ ] Inkluder rollback av optimistiske endringer ved feil i Supabase-mutasjonen
 
 ## Tekniske Detaljer
 
@@ -365,7 +379,7 @@ SELECT ...,
     'type', ve.vehicle_type,
     'distance_km', ve.distance_km,
     'tripletex_entry_id', ve.tripletex_entry_id
-  )) FILTER (WHERE ve.id IS NOT NULL), '[]'::json) as vehicles
+  ) ORDER BY ve.vehicle_type, ve.distance_km) FILTER (WHERE ve.id IS NOT NULL), '[]'::json) as vehicles
 FROM vakt_timer vt
 ...
 GROUP BY vt.id, ...
@@ -376,6 +390,9 @@ GROUP BY vt.id, ...
 - Disable knapper under cooldown
 - Vis countdown per rad når sending pågår
 - Samme key-strategi: `tripletex_send_{orgId}` (delt cooldown)
+- RateLimiter bruker `localStorage`; initialisering og polling må derfor skje innenfor `useEffect`/client components. Husk å rydde opp intervaller ved unmount; multi-tab-sync via `storage`-event kan vurderes senere.
+- Undersøk først om bemanningsliste allerede eksponerer en util/hook for countdown før vi lager nytt; hvis ikke, kan en enkel `useTripletexCooldown`-hook introduseres senere.
+- Multi-tab-synkronisering er nice-to-have; første versjon kan nøye seg med enkel countdown i aktiv fane og legge full sync i backlog.
 
 ### Hurtigknapper Logikk
 ```typescript
@@ -488,6 +505,15 @@ setSendingStates(prev => {
 ### Lav Prioritet:
 1. **Batch-forbedringer** - Fungerer allerede, men kan optimaliseres
 
+## Akseptanse- og Testplan
+
+1. Redigeringsflyt: Bekreft at sendte timer er låst med tydelig beskjed, og at endring av usendte timer persisteres i Supabase med revalidate/oppdatering av UI.
+2. Per-linje sending: Send en enkel entry og verifiser at countdown oppdateres i aktiv fane og blokkerer nye forsøk til tiden er ute.
+3. Batch-operasjon: Velg flere rader, send til Tripletex og bekreft at rate limit deler cooldown med bemanningsliste-siden.
+4. Kjøretøy-data: Test rad med flere vehicle entries og valider at rekkefølge og badge-visning er identisk på hver oppdatering.
+5. Feilhåndtering: Simuler Tripletex 429-respons og Supabase-feil ved lagring; UI skal vise feilmelding, rulle tilbake optimistiske endringer og starte ny cooldown hvis Retry-After finnes.
+6. (Backlog) Multi-tab-scenario: Valider at opplåsing fungerer på tvers av faner når vi senere prioriterer full synkronisering.
+
 ## Neste Steg
 
 1. ✅ Review denne komplett planen
@@ -495,4 +521,3 @@ setSendingStates(prev => {
 3. ⏳ Test sammen med bemanningsliste (delt cooldown)
 4. ⏳ Dokumenter endringer i kode
 5. ⏳ Test i staging før produksjon
-

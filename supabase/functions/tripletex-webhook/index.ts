@@ -173,6 +173,8 @@ async function handleWebhookEvent(payload: TripletexWebhookPayload) {
         return await handleCustomerWebhook(event, id, payload.value);
       
       case 'timesheetEntry':
+        // NOTE: timesheetEntry events are NOT available in Tripletex webhook API
+        // This handler is kept for potential future use if Tripletex adds support
         return await handleTimesheetWebhook(event, id, payload.value);
       
       default:
@@ -358,8 +360,10 @@ async function handleCustomerWebhook(event: string, id: number, customerData?: a
   return { success: true };
 }
 
+// NOTE: This handler is currently not used as Tripletex does not provide timesheetEntry webhook events
+// Kept for potential future use if Tripletex adds support for timesheet webhooks
 async function handleTimesheetWebhook(event: string, id: number, timesheetData?: any) {
-  console.log(`⏰ Timesheet webhook: ${event} for timesheet entry ${id}`);
+  console.log(`⏰ Timesheet webhook: ${event} for timesheet entry ${id} (NOTE: Not currently supported by Tripletex)`);
   
   try {
     // For timesheet entries, we typically don't cache them

@@ -18,6 +18,28 @@ const getWeeksInYear = (targetYear: number) => {
   return getWeekNumber(dec28);
 };
 
+const shiftWeek = (year: number, week: number, delta: number) => {
+  let newYear = year;
+  let newWeek = week + delta;
+  let weeksInYear = getWeeksInYear(newYear);
+
+  while (newWeek > weeksInYear) {
+    newWeek -= weeksInYear;
+    newYear += 1;
+    weeksInYear = getWeeksInYear(newYear);
+  }
+
+  while (newWeek < 1) {
+    newYear -= 1;
+    weeksInYear = getWeeksInYear(newYear);
+    newWeek += weeksInYear;
+  }
+
+  return { year: newYear, week: newWeek };
+};
+
+const WEEKS_WINDOW = 7;
+
 export default function BemanningslisteWeekPage() {
   const params = useParams<{ year: string; week: string }>();
   const router = useRouter();
@@ -39,33 +61,27 @@ export default function BemanningslisteWeekPage() {
     ? defaultWeek
     : Math.max(1, Math.min(weeksInCurrentYear, parsedWeek));
 
+  // Range: current week first, then WEEKS_WINDOW-1 weeks forward
+  const rangeStart = { year: currentYear, week: currentWeek };
+  const rangeEnd = shiftWeek(currentYear, currentWeek, WEEKS_WINDOW - 1);
+
   useEffect(() => {
     const invalid = Number.isNaN(parsedYear) || Number.isNaN(parsedWeek);
     const noParams = !params?.year || !params?.week;
 
+    // Always redirect to current week if no params or invalid params
     if (invalid || noParams) {
-      router.replace(`/admin/bemanningsliste/${currentYear}/${String(currentWeek).padStart(2, "0")}`);
+      router.replace(`/admin/bemanningsliste/${defaultYear}/${String(defaultWeek).padStart(2, "0")}`);
+      return;
     }
-  }, [parsedYear, parsedWeek, router, currentYear, currentWeek, params?.year, params?.week]);
+
+    // If user has a specific week in URL, respect it (existing behavior)
+    // The centering logic in StaffingList will handle displaying it correctly
+  }, [parsedYear, parsedWeek, router, defaultYear, defaultWeek, params?.year, params?.week]);
 
   const navigateWeeks = (delta: number) => {
-    let newYear = currentYear;
-    let newWeek = currentWeek + delta;
-    let weeksInYear = getWeeksInYear(newYear);
-
-    while (newWeek > weeksInYear) {
-      newWeek -= weeksInYear;
-      newYear += 1;
-      weeksInYear = getWeeksInYear(newYear);
-    }
-
-    while (newWeek < 1) {
-      newYear -= 1;
-      weeksInYear = getWeeksInYear(newYear);
-      newWeek += weeksInYear;
-    }
-
-    router.push(`/admin/bemanningsliste/${newYear}/${newWeek.toString().padStart(2, "0")}`);
+    const { year, week } = shiftWeek(currentYear, currentWeek, delta);
+    router.push(`/admin/bemanningsliste/${year}/${week.toString().padStart(2, "0")}`);
   };
 
   return (
@@ -74,17 +90,17 @@ export default function BemanningslisteWeekPage() {
         <div className="border-b bg-card p-4">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center justify-between gap-2 sm:justify-start">
-              <Button variant="outline" onClick={() => navigateWeeks(-6)}>
+              <Button variant="outline" onClick={() => navigateWeeks(-3)}>
                 <ChevronLeft className="h-4 w-4" />
-                Forrige 6 uker
+                Forrige 3 uker
               </Button>
-              <Button variant="outline" onClick={() => navigateWeeks(6)}>
-                Neste 6 uker
+              <Button variant="outline" onClick={() => navigateWeeks(3)}>
+                Neste 3 uker
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
             <div className="text-center text-lg font-medium sm:flex-1 sm:text-right">
-              Fra uke {currentWeek}, {currentYear}
+              Viser uker {String(rangeStart.week).padStart(2, "0")}/{rangeStart.year} – {String(rangeEnd.week).padStart(2, "0")}/{rangeEnd.year}
             </div>
             <div className="flex items-center justify-between gap-2 sm:justify-end">
               <Button
@@ -99,7 +115,7 @@ export default function BemanningslisteWeekPage() {
           </div>
         </div>
 
-        <StaffingList startWeek={currentWeek} startYear={currentYear} weeksToShow={6} />
+        <StaffingList startWeek={currentWeek} startYear={currentYear} weeksToShow={WEEKS_WINDOW} />
       </div>
 
       {orgId && (
